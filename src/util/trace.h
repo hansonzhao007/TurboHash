@@ -51,13 +51,13 @@ public:
     return seed_;
   }
 
-  uint64_t Random64() {
+  inline uint64_t Random64() {
     // 62 bit random value;
     const uint64_t rand64 = (((uint64_t)Random()) << 31) + ((uint64_t)Random());
     return rand64;
   }
 
-  double RandomDouble() {
+  inline double RandomDouble() {
     // random between 0.0 - 1.0
     const double r = (double)Random64();
     const double rd = r / kRAND64_MAX_D;
@@ -75,7 +75,10 @@ class TraceUniform: public Trace {
 public:
   explicit TraceUniform(int seed, uint64_t minimum = 0, uint64_t maximum = kRANDOM_RANGE);
   ~TraceUniform() {}
-  uint64_t Next() override;
+  inline uint64_t Next() override {
+    const uint64_t off = (uint64_t)(RandomDouble() * gi_->gen.uniform.interval);
+    return gi_->gen.uniform.min + off;
+  }
 };
 
 class TraceZipfian: public Trace {

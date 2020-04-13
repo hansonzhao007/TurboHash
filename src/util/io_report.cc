@@ -1,5 +1,5 @@
 #include "io_report.h"
-
+#include <inttypes.h>
 // DEFINE_int32(stats_interval,  1000000,  "Interval that print status");
 // DEFINE_int64(report_interval, 0,       "report speed time interval in second");
 int64_t report_interval = 0;
@@ -7,7 +7,7 @@ int32_t stats_interval = 1000000;
 
 namespace util {
 
-Stats::Stats() { Start(); }
+Stats::Stats() { id_ = 0; Start(); }
 Stats::Stats(int id) { id_ = id; Start(); }
 
 void Stats::Start() {
@@ -56,7 +56,7 @@ void Stats::PrintSpeed(int64_t done, uint64_t now) {
     int64_t usecs_since_last = now - last_report_finish_;
     std::string cur_time = Env::Default()->TimeToString(now/1000000);
     fprintf(stdout,
-            "%s ... thread %d: (%" PRIu64 ",%" PRIu64 ") ops and "
+            "%s ... thread %u: (%" PRIu64 ",%" PRIu64 ") ops and "
             "(%.1f,%.1f) ops/second in (%.6f,%.6f) seconds\n",
             cur_time.c_str(), 
             id_,
@@ -112,6 +112,7 @@ void Stats::Report(const Slice& name) {
 
     std::string extra;
     double elapsed = (finish_ - start_) * 1e-6;
+    // printf("start time: %.2f - end time: %.2f/ duration: %.2f\n", start_, finish_, elapsed);
     if (bytes_.load() > 0) {
     // Rate is computed on actual elapsed time, not the sum of per-thread
     // elapsed times.

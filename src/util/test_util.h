@@ -5,9 +5,13 @@
 #ifndef STORAGE_LEVELDB_UTIL_TESTUTIL_H_
 #define STORAGE_LEVELDB_UTIL_TESTUTIL_H_
 
+#include <immintrin.h>
+
 #include "env.h"
 #include "slice.h"
 #include "random.h"
+
+#define force_inline __attribute__((always_inline)) inline
 
 namespace util {
 
@@ -57,6 +61,9 @@ class RandomGenerator {
     return Slice(data_.data() + pos_ - len, len);
   }
 };
+
+
+
 
 }
 

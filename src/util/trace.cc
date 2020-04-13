@@ -59,10 +59,10 @@ TraceUniform::TraceUniform(int seed, uint64_t minimum, uint64_t maximum):
     gi_->type = GEN_UNIFORM;
 }
 
-uint64_t TraceUniform::Next() {
-    const uint64_t off = (uint64_t)(RandomDouble() * gi_->gen.uniform.interval);
-    return gi_->gen.uniform.min + off;
-}
+// uint64_t TraceUniform::Next() {
+//     const uint64_t off = (uint64_t)(RandomDouble() * gi_->gen.uniform.interval);
+//     return gi_->gen.uniform.min + off;
+// }
 
 // zipfian
 TraceZipfian::TraceZipfian(int seed, uint64_t minimum, uint64_t maximum):

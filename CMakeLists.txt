@@ -25,8 +25,9 @@ link_directories(/usr/local/lib)
 
 # add pthread support
 find_package(Threads REQUIRED)
-SET(CMAKE_CXX_FLAGS -pthread)
 
+# Check if the compiler has AVX512 support.
+set(CMAKE_CXX_FLAGS "-pthread -mavx512f -msse4.1 -msse2 -mavx")
 
 # check existence of jemalloc
 include(CheckIncludeFile)
@@ -46,7 +47,7 @@ function(db_test test_file)
   get_filename_component(test_target_name "${test_file}" NAME_WE)
   set (case_name test_${test_target_name})
   add_executable("${case_name}" "${test_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} pmem)  # boost_thread boost_system
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util pmem vmem)  # boost_thread boost_system
   target_sources("${case_name}"
       PRIVATE
       "${test_file}"
@@ -58,7 +59,7 @@ function(db_exe src_file)
   get_filename_component(target_name "${src_file}" NAME_WE)
   set (case_name ${target_name})
   add_executable("${case_name}" "${src_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} pmem)
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util pmem vmem)
   target_sources("${case_name}"
       PRIVATE
       "${src_file}"

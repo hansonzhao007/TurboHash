@@ -6,6 +6,8 @@
 #include <string.h>
 #include <libpmem.h>
 #include <libvmmalloc.h>
+#include <libvmem.h>
+
 
 #include "util/env.h"
 
@@ -13,7 +15,14 @@
 #define PMEM_LEN 1024
 
 // Maximum length of our buffer
-#define MAX_BUF_LEN 30
+#define MAX_BUF_LEN 64
+
+struct PersistStruct
+{
+    /* data */
+    char name[64];
+    double num;
+};
 
 /****************************
 * This function writes the "Hello..." string to persistent memory.
@@ -34,11 +43,15 @@ void write_hello_string (char *buf, char *path)
     /* store a string to the persistent memory */
     strcpy(pmemaddr, buf);
 
+    PersistStruct* data = (PersistStruct*)(pmemaddr + 128);
+    memcpy(data->name, "Write Struct.", 64);
+    data->num = 3.14159;
+
     /* flush above strcpy to persistence */
-    if (is_pmem)
-        pmem_persist(pmemaddr, mapped_len);
-    else
-        pmem_msync(pmemaddr, mapped_len);
+    // if (is_pmem)
+    //     pmem_persist(pmemaddr, sizeof(buf));
+    // else
+    //     pmem_msync(pmemaddr, mapped_len);
 
     /* output a string from the persistent memory to console */
     printf("\nWrite the (%s) string to persistent memory.\n", pmemaddr);
@@ -63,6 +76,9 @@ void read_hello_string(char *path)
 
     /* Reading the string from persistent-memory and write to console */
     printf("\nRead the (%s) string from persistent memory.\n", pmemaddr);
+
+    PersistStruct* data = (PersistStruct*)(pmemaddr + 128);
+    printf("Read struct. name: %s, num: %f\n", data->name, data->num);
     return;
 }
 
@@ -78,7 +94,7 @@ int main(int argc, char *argv[])
     char *path = argv[2];
 
     // Create the string to save to persistent memory
-    char buf[MAX_BUF_LEN] = "Hello Persistent Memory!!!";
+    char buf[MAX_BUF_LEN] = "Hello Persistent Memory. Xingsheng Test!!!";
     if (strcmp (argv[1], "-w") == 0) {
         write_hello_string (buf, path);
     }
