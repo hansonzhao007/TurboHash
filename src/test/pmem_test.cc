@@ -1,76 +1,62 @@
-/*
- * Copyright 2014-2017, Intel Corporation
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in
- *       the documentation and/or other materials provided with the
- *       distribution.
- *
- *     * Neither the name of the copyright holder nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
-/*
- * manpage.c -- simple example for the libvmem man page
- */
-
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
-#include <libvmem.h>
+#include <libpmem.h>
 
-int
-main(int argc, char *argv[])
+#include <time.h>
+#include "util/pmm_util.h"
+
+#define PMEM_LEN ((size_t)8*1024*1024*1024)
+#define RAND_STRING_16 ("OPTANEW optanew ")
+#define RAND_STRING_END_16 ("XXXXXXX xxxxxxx\n")
+#define RAND_STRING_32 ("OPTANEW optanew OPTANEW optanew ")
+#define RAND_STRING_END_32 ("XXXXXXX xxxxxxx XXXXXXX xxxxxxx\n")
+#define RAND_STRING_64 ("OPTANEW optanew OPTANEW optanew OPTANEW optanew OPTANEW optanew ")
+#define RAND_STRING_END_64 ("XXXXXXX xxxxxxx XXXXXXX xxxxxxx XXXXXXX xxxxxxx XXXXXXX xxxxxxx\n")
+#define STRING_LEN (64)
+#define CACHELINE_SIZE (64)
+#define WRITE_UNIT_SIZE (256)
+
+#define WRITE_SIZE 256
+
+using namespace util;
+int main(int argc, char *argv[])
 {
-	VMEM *vmp;
-	char *ptr;
-    if (argc < 2) {
-        printf("usage: %s [w/r]\n", argv[0]);
-        exit(0);
-    }
-    /* create minimum size pool of memory */
-	if ((vmp = vmem_create("/mnt/pmem0",
-					VMEM_MIN_POOL)) == NULL) {
-		perror("vmem_create");
-		exit(1);
-	}
-    
-    if (*argv[1] == 'w') {
+        Env::Default()->PinCore(0);
+        int fd;
+        char *pmemaddr;
+        int is_pmem;
+        size_t mapped_len;
+        int write_size = WRITE_SIZE;
+        struct timespec start_tv, end_tv;
+        pmemaddr = (char*)pmem_map_file("/mnt/pmem0/zwh_mapped", PMEM_LEN, PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem);
+        printf("Write size: %d\n", write_size);
+        size_t round = PMEM_LEN / WRITE_SIZE;
+        size_t string_num_per_round = WRITE_SIZE / STRING_LEN;
+        pmem_drain();
+        clock_gettime(CLOCK_REALTIME, &start_tv);
 
-    }
-	
+        util::IPMWatcher watcher("profilerWPQ");
+        for (size_t i = 0; i < round; i++) {
+                pmem_memset(pmemaddr+i*WRITE_SIZE, 0, 256, PMEM_F_MEM_NONTEMPORAL);
+                // for (size_t j = 0; j < string_num_per_round - 1; j = j + 1) {
+                //         pmem_memcpy(pmemaddr+i*WRITE_SIZE+j*STRING_LEN, RAND_STRING_64, STRING_LEN, PMEM_F_MEM_NOFLUSH|PMEM_F_MEM_NODRAIN);
+                // }
+                // pmem_memcpy(pmemaddr+i*WRITE_SIZE+(string_num_per_round-1)*STRING_LEN, RAND_STRING_END_64, STRING_LEN, PMEM_F_MEM_NOFLUSH|PMEM_F_MEM_NODRAIN);
+                // pmem_flush(pmemaddr+i*WRITE_SIZE, WRITE_SIZE);
+        }
+        // pmem_drain();
+        clock_gettime(CLOCK_REALTIME, &end_tv);
+        long time_span = (end_tv.tv_sec - start_tv.tv_sec) * 1000000000 + (end_tv.tv_nsec - start_tv.tv_nsec);
+        printf("start time: %ld, %ld\n", start_tv.tv_sec, start_tv.tv_nsec);
+        printf("end time: %ld, %ld\n", end_tv.tv_sec, end_tv.tv_nsec);
+        printf("total time spent: %ld ns\n", time_span);
 
-	if ((ptr = (char*) vmem_malloc(vmp, 100)) == NULL) {
-		perror("vmem_malloc");
-		exit(1);
-	}
-
-	strcpy(ptr, "hello, world");
-
-	/* give the memory back */
-	vmem_free(vmp, ptr);
-
-	/* ... */
-
-	vmem_delete(vmp);
+        pmem_unmap(pmemaddr, PMEM_LEN);
+        return 0;
 }

@@ -65,6 +65,33 @@ Env::~Env() {
     delete logger_;
 }
 
+std::string Env::Execute(const std::string& cmd) {
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    return result;
+}
+
+void Env::PinCore(int i) {
+    // ------------------- pin current thread to core i -------------------
+    printf("Pin thread: %2d.\n", i);
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(i, &cpuset);
+    pthread_t thread;
+    thread = pthread_self();
+    int rc = pthread_setaffinity_np(thread,
+                                    sizeof(cpu_set_t), &cpuset);
+    if (rc != 0) {
+        fprintf(stderr,"Error calling pthread_setaffinity_np: %d \n", rc);
+    }
+}
 bool Env::FileExists(const std::string& filename) {
     return ::access(filename.c_str(), F_OK) == 0;
 }
@@ -160,25 +187,7 @@ Status Env::RenameFile(const std::string& from, const std::string& to) {
 // Default implementation simply relies on NowMicros.
 // In platform-specific implementations, NowNanos() should return time points
 // that are MONOTONIC.
-uint64_t Env::NowNanos() {
-#if defined(OS_LINUX) || defined(OS_FREEBSD) || defined(OS_AIX)
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec;
-#elif defined(OS_SOLARIS)
-    return gethrtime();
-#elif defined(__MACH__)
-    clock_serv_t cclock;
-    mach_timespec_t ts;
-    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
-    clock_get_time(cclock, &ts);
-    mach_port_deallocate(mach_task_self(), cclock);
-    return static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec;
-#else
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(
-    std::chrono::steady_clock::now().time_since_epoch()).count();
-#endif
-}
+
 
 // Converts seconds-since-Jan-01-1970 to a printable string
 std::string Env::TimeToString(uint64_t secondsSince1970) {

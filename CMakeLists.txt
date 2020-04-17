@@ -1,33 +1,40 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.14)
 # set the project name
 project (pmem VERSION 0.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
+if(COMPILER_SUPPORTS_MARCH_NATIVE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+endif()
+
+# ------------------------ Intel PCM ---------------------------
+add_custom_command(OUTPUT libPCM.a
+                    COMMAND make lib
+                    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/pcm)
+add_custom_target(pcm DEPENDS libPCM.a)
+
+# -------------------------- gflags ----------------------------
+# add gflags library
+add_subdirectory(lib/gflags)
+list(APPEND THIRDPARTY_LIBS gflags)
+include_directories(
+    "${CMAKE_BINARY_DIR}/lib/gflags/include"
+)
+
 # default using release mode
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
 
-# For the static library:
-include_directories(/usr/local/include)
-include_directories(/usr/include)
-
-# In GCC, this will invoke the "-I" command
-include_directories(
-  "${PROJECT_SOURCE_DIR}/src"
-)
-
-# add system local lib
-link_directories(/usr/lib)
-link_directories(/usr/local/lib)
-
 # add pthread support
 find_package(Threads REQUIRED)
 
 # Check if the compiler has AVX512 support.
-set(CMAKE_CXX_FLAGS "-pthread -mavx512f -msse4.1 -msse2 -mavx")
+set(CMAKE_CXX_FLAGS "-pthread -mavx512f")
 
 # check existence of jemalloc
 include(CheckIncludeFile)
@@ -36,6 +43,21 @@ if(HAVE_JEMALLOC)
   add_definitions(-DJEMALLOC)
   message("has jemalloc")
 endif()
+
+# In GCC, this will invoke the "-I" command
+include_directories(
+  "/usr/include"
+  "/usr/local/include"
+  "${PROJECT_SOURCE_DIR}/src"
+  "${PROJECT_SOURCE_DIR}/lib/pcm"
+)
+
+# add system local lib
+link_directories(/usr/lib)
+link_directories(/usr/local/lib)
+link_directories(${PROJECT_SOURCE_DIR}/lib/pcm)
+
+list(APPEND THIRDPARTY_LIBS pmem vmem PCM)
 
 # all the binary will be in the build folder
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -47,7 +69,7 @@ function(db_test test_file)
   get_filename_component(test_target_name "${test_file}" NAME_WE)
   set (case_name test_${test_target_name})
   add_executable("${case_name}" "${test_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util pmem vmem)  # boost_thread boost_system
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util )  # boost_thread boost_system
   target_sources("${case_name}"
       PRIVATE
       "${test_file}"
@@ -59,7 +81,7 @@ function(db_exe src_file)
   get_filename_component(target_name "${src_file}" NAME_WE)
   set (case_name ${target_name})
   add_executable("${case_name}" "${src_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util pmem vmem)
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util)
   target_sources("${case_name}"
       PRIVATE
       "${src_file}"

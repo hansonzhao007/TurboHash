@@ -1,3 +1,25 @@
+// MIT License
+
+// Copyright (c) [2020] [xingshengzhao@gmail.com]
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,375 +31,977 @@
 #include <libpmem.h>
 #include <libvmmalloc.h>
 #include <random>
+#include <iostream>
+#include <memory>
 #include <numeric>
 #include <linux/membarrier.h>
+#include <functional>
+
+#include "cpucounters.h"
 
 #include "util/env.h"
-#include "util/io_report.h"
 #include "util/test_util.h"
 #include "util/trace.h"
+#include "util/pmm_util.h"
 
 
+#include "gflags/gflags.h"
+using GFLAGS_NAMESPACE::ParseCommandLineFlags;
+using GFLAGS_NAMESPACE::RegisterFlagValidator;
+using GFLAGS_NAMESPACE::SetUsageMessage;
 
-/* using 1k of pmem for this example */
-#define PMEM_LEN ((4ULL << 30))  // 4 GB file
+// ******** 6 type ********
+// fillrandomNT
+// fillrandomWB
+// fillseqNT
+// fillseqWB
+// readrandomNT
+// readseqNT
+DEFINE_string(type, "fillrandomNT", "");
 
-// Maximum length of our buffer
+// ********  mode ********
+// single: execute one type of bench using FLAGS_thread
+// matrix: iterate every thread and every buffer size, generate a result matrix
+// row_block: iterate all buffer size giving thread num, generate a result row
+// row_thread: ierate all thread giving buffer size, generate a result row
+// wa: test write amplification
+// profileWPQ: profiler write pending queue size
+// rw: test throughput mixing read and write
+DEFINE_string(mode, "row_thread", "");
+
+DEFINE_bool(pmdk, false, "use pmdk lib or not");
+DEFINE_string(path, "/mnt/pmem0/test.data", "default file path");
+DEFINE_int64(filesize, 2ULL << 30, "default file size");
+DEFINE_int32(block_size, 256, "unit size");
+DEFINE_int32(offset_interval, -1, "offset set interval unit, if not set, will equal to block_size");
+DEFINE_int32(thread, 8, "thread num");
+DEFINE_int32(num, 100000000, "number of operations");
+
+// XPBuffer profiling
+DEFINE_int32(n_end, 1024, "maximum interval size, uint: 256 byte");
+DEFINE_int32(n_start, 1,  "start   interval size, uint: 256 byte");
+DEFINE_int32(repeat, 1000000, "repeat overwrite current interval");
+
+DEFINE_bool(load, true, "use avx512 load instruction or not for read");
+DEFINE_bool(initfile, false, "initial file or not");
+
+// Maximum length of write buffer size
 std::vector<uint64_t> kBufferVector = 
-    {64, 128, 256, 512, 1 << 10, 2 << 10, 4 << 10, 8 << 10, 16 << 10, 32 << 10};
+    {64, 128, 256, 512, 1 << 10, 2 << 10, 4 << 10, 8 << 10, 16 << 10, 32 << 10, 64 << 10, 128 << 10, 256 << 10, 512 << 10, 1 << 20, 2 << 20};
+
+// the core id that thread should be pinned
+// use numactl --hardware command to check numa node info
+static int kThreadIDs[16] = {16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7};
+// static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 
 using namespace util;
+using namespace std::placeholders;
 
-// Number of thread
-int kThread = 2;
+class Benchmark {
+public:
 
-// Number of operations
-const uint64_t kNum = 10000000;
-
-static int threadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7,
-                            16,17,18,19,20,21,22,23};
-
-util::RandomGenerator gen;
-
-volatile bool kRunning = true;
-
-static __inline void MFence() {
-    __asm__ __volatile__ ("mfence" ::: "memory");
-  }
-
-force_inline void 
-LoadNT(const char *src, uint64_t MAX_BUF_LEN) {
-    static thread_local char dest[2048<<10];
-    memcpy(dest, src, MAX_BUF_LEN);
-    // MFence();
-}
-
-static void sig_int(int sig)
-{
-	printf("Exiting on signal %d\n", sig);
-	kRunning = false;
-}
-static void arm_sig_int(void)
-{
-	struct sigaction act;
-	memset(&act, 0, sizeof(act));
-	act.sa_handler = sig_int;
-	act.sa_flags = SA_RESTART;
-	sigaction(SIGINT, &act, NULL);
-}
-
-force_inline void RandomWrite(
-    std::vector<std::thread>& workers,
-    std::vector<double>& results,
-    uint64_t MAX_BUF_LEN,
-    int i,
-    char* pmemaddr,
-    bool is_seq = false,
-    uint32_t flag = PMEM_F_MEM_NONTEMPORAL) {
-    
-    // Create a cpu_set_t object representing a set of CPUs. Clear it and mark
-    // only CPU i as set.
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(threadIDs[i], &cpuset);
-    int rc = pthread_setaffinity_np(workers[i].native_handle(),
-                                    sizeof(cpu_set_t), &cpuset);
-    if (rc != 0) {
-        fprintf(stderr,"Error calling pthread_setaffinity_np: %d \n", rc);
-    }
-    
-    util::Slice value(gen.Generate(MAX_BUF_LEN));
-    util::TraceUniform rnd(123321 + i);
-    uint64_t*  offsets = new uint64_t [kNum];
-    if (!is_seq) {
-        for (size_t k = 0; k < kNum; ++k) {
-            offsets[k] = (rnd.Next() % (PMEM_LEN - MAX_BUF_LEN)) / MAX_BUF_LEN * MAX_BUF_LEN;
+Benchmark(const std::string& path) {
+    stats_ = std::vector<BenchData> (FLAGS_thread);
+    for (int i = 0; i < FLAGS_thread; i++) {
+        // for each thread, create a pmem file
+        char* pmem_addr = nullptr;
+        std::string filename = path+std::to_string(i);
+        if ((pmem_addr = (char *)pmem_map_file(filename.c_str(), FLAGS_filesize, PMEM_FILE_CREATE, 0666, &mapped_len_, &is_pmem_)) == NULL) {
+            perror("pmem_map_file");
+            exit(1);
         }
-    }
-    else {
-        uint64_t off = (rnd.Next() % (PMEM_LEN - MAX_BUF_LEN)) / MAX_BUF_LEN * MAX_BUF_LEN;
-        for (size_t k = 0; k < kNum; ++k) {
-            offsets[k] = off;
-            off += MAX_BUF_LEN;
-            if (off >= PMEM_LEN - MAX_BUF_LEN) {
-                off = 0;
-            }
+        if (FLAGS_initfile) {
+            printf("Initial file: %s. ", filename.c_str());
+            pmem_memset(pmem_addr, 0, FLAGS_filesize, PMEM_F_MEM_NONTEMPORAL);
         }
-    }
-    
-    printf("Start test\n");
-    uint64_t k = 0;
-    auto time_start = util::Env::Default()->NowMicros();
-    auto start = time_start;
-    uint64_t left_byte = PMEM_LEN;
-    for (; k < kNum && kRunning && left_byte > 0; k++)
-    {
-        pmem_memmove(pmemaddr + offsets[k], value.data() + (k % 128), MAX_BUF_LEN, flag);
-        DEBUG("write offset: %lu", offsets[k]);
-        if (k != 0 && k % 1000000 == 0) {
-            auto end = util::Env::Default()->NowMicros();
-            double throughput = (MAX_BUF_LEN * 1000000)/ ((end - start) / 1000000.0) / 1024.0 / 1024.0;
-            fprintf(stderr, "Write throughput (%2d): %.2f MB/s, latency(%.4f)\r", i, throughput, (end - start) / 1000000.0);
-            fflush(stderr);
-            start = end;
-        }
-        left_byte -= MAX_BUF_LEN;
-    }
-    auto time_end = util::Env::Default()->NowMicros();
-    double throughput = (MAX_BUF_LEN * k)/ ((time_end - time_start) / 1000000.0) / 1024.0 / 1024.0;
-    if (!is_seq) printf("Avg Random Write throughput (%2d - %lu byte): %.2f MB/s\n", i, MAX_BUF_LEN, throughput);
-    else         printf("Avg Sequential Write throughput (%2d - %lu byte): %.2f MB/s\n", i, MAX_BUF_LEN, throughput);
-    results[i] = throughput;
-    delete[] offsets;
-}
-
-void RandomWriteBench(char* pmemaddr, bool is_seq = false, bool is_wb = false) {
-    std::vector<uint64_t> buf_lens = kBufferVector;
-    std::vector<std::vector<double> > result_table;
-    
-
-    // iterate to kThread
-    for (int thread_num = 1; thread_num <= kThread; thread_num++) {
-        std::vector<double> final_results(buf_lens.size());
-        int results_len = final_results.size();
-        uint32_t flag = is_wb ? PMEM_F_MEM_WB : PMEM_F_MEM_NONTEMPORAL;
-        for (size_t i = 0; i < buf_lens.size(); ++i) {
-            auto BUF_LEN = buf_lens[i];
-            std::vector<std::thread> workers(thread_num);
-            std::vector<double> results(thread_num);
-            
-            kRunning = true;
-            for (int t = 0; t < thread_num; t++) {
-                workers[t] = std::thread([&, t]
-                {
-                    RandomWrite(workers, results, BUF_LEN, t, pmemaddr, is_seq, flag);
-                });
-            }
-            std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
-            {
-                t.join();
-            });
-            double final_throughput = std::accumulate(results.begin(), results.end(), 0);
-            final_results[i] = final_throughput;
-            if (!is_seq) printf("----------- Random Write Throughput (%lu): %.2f MB/s ------------\n", BUF_LEN, final_throughput);
-            else         printf("----------- Sequential Write Throughput (%lu): %.2f MB/s ------------\n", BUF_LEN, final_throughput);
-        }
-
-        printf("\033[32mFinal Results (Thread: %2d, %s Write)\033[0m\n", thread_num, is_seq ? "Sequential" : "Random");
-        printf("\033[34m");
-        for (int i = 0; i < results_len; ++i) {
-            printf("|--- %5lu B ---", buf_lens[i]);
-        }
-        printf("|\n");
-        for (int i = 0; i < results_len; ++i) {
-            printf("|%10.1f MB/s", final_results[i]);
-        }
-        printf("|\033[0m\n");
-        fflush(nullptr);
-        result_table.push_back(final_results);
-    }
-
-    printf("\033[32mFinal Results Table (%s Write. %s)\033[0m\n", is_seq ? "Sequential" : "Random", is_wb ? "WB" : "NT");
-    printf("\033[34m");
-    for (int i = 0; i < buf_lens.size(); ++i) {
-        printf("|--- %5lu B ---", buf_lens[i]);
-    }
-    printf("|\n");
-    int t = 1;
-    for (auto& res : result_table) {
-        for (int i = 0; i < res.size(); ++i) {
-            printf("|%10.1f MB/s", res[i]);
-        }
-        printf("| %2d\n", t++);
-    }
-    
-    printf("|\033[0m\n");
-    fflush(nullptr);
-}
-
-force_inline void RandomRead(
-    std::vector<std::thread>& workers,
-    std::vector<double>& results,
-    uint64_t MAX_BUF_LEN,
-    int i,
-    char* pmemaddr,
-    bool is_seq = false) {
-    
-    // Create a cpu_set_t object representing a set of CPUs. Clear it and mark
-    // only CPU i as set.
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(threadIDs[i], &cpuset);
-    int rc = pthread_setaffinity_np(workers[i].native_handle(),
-                                    sizeof(cpu_set_t), &cpuset);
-    if (rc != 0) {
-        fprintf(stderr,"Error calling pthread_setaffinity_np: %d \n", rc);
-    }
-    
-    util::Slice value(gen.Generate(MAX_BUF_LEN));
-    util::TraceUniform rnd(123321 + i * 333);
-    uint64_t*  offsets = new uint64_t [kNum];
-    if (!is_seq) {
-        for (size_t k = 0; k < kNum; ++k) {
-            offsets[k] = (rnd.Next() % (PMEM_LEN - MAX_BUF_LEN)) / MAX_BUF_LEN * MAX_BUF_LEN;
-        }
-    }
-    else {
-        uint64_t off = (rnd.Next() % (PMEM_LEN - MAX_BUF_LEN)) / MAX_BUF_LEN * MAX_BUF_LEN;
-        for (size_t k = 0; k < kNum; ++k) {
-            offsets[k] = off;
-            off += MAX_BUF_LEN;
-            if (off >= PMEM_LEN - MAX_BUF_LEN) {
-                off = 0;
-            }
-        }
-    }
-    
-    printf("Start test\n");
-    uint64_t k = 0;
-    auto time_start = util::Env::Default()->NowMicros();
-    auto start = time_start;
-    uint64_t left_byte = PMEM_LEN;
-    for (; k < kNum && kRunning && left_byte > 0; k++)
-    {
-        LoadNT(pmemaddr + offsets[k], MAX_BUF_LEN);
-        DEBUG("read offset: %lu", offsets[k]);
-        if (k != 0 && k % 1000000 == 0) {
-            auto end = util::Env::Default()->NowMicros();
-            double throughput = (MAX_BUF_LEN * 1000000)/ ((end - start) / 1000000.0) / 1024.0 / 1024.0;
-            fprintf(stderr, "Read throughput (%2d): %.2f MB/s, latency(%.4f)\r", i, throughput, (end - start) / 1000000.0);
-            fflush(stderr);
-            start = end;
-        }
-        left_byte -= MAX_BUF_LEN;
-    }
-    auto time_end = util::Env::Default()->NowMicros();
-    double throughput = (MAX_BUF_LEN * k)/ ((time_end - time_start) / 1000000.0) / 1024.0 / 1024.0;
-    if (!is_seq) printf("Avg Random Read throughput (%2d - %lu byte): %.2f MB/s\n", i, MAX_BUF_LEN, throughput);
-    else         printf("Avg Sequential Read throughput (%2d - %lu byte): %.2f MB/s\n", i, MAX_BUF_LEN, throughput);
-    results[i] = throughput;
-    delete[] offsets;
-}
-
-void RandomReadBench(char* pmemaddr, bool is_seq = false) {
-    std::vector<uint64_t> buf_lens = kBufferVector;
-    std::vector<std::vector<double> > result_table;
-    // iterate to kThread
-    for (int thread_num = 1; thread_num <= kThread; thread_num++) {
-        std::vector<double> final_results(buf_lens.size());
-        int results_len = final_results.size();
-        for (size_t i = 0; i < buf_lens.size(); ++i) {
-            auto BUF_LEN = buf_lens[i];
-            std::vector<std::thread> workers(thread_num);
-            std::vector<double> results(thread_num);
+        printf("pmem addr %2d: %lx\n", i, (uint64_t) pmem_addr);
+        pmem_memset(pmem_addr, 0, 4096, PMEM_F_MEM_NONTEMPORAL);
         
-            kRunning = true;
-            for (int i = 0; i < thread_num; i++) {
-                workers[i] = std::thread([&, i]
-                {
-                    RandomRead(workers, results, BUF_LEN, i, pmemaddr, is_seq);
-                });
-            }
-            std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
-            {
-                t.join();
-            });
-            double final_throughput = std::accumulate(results.begin(), results.end(), 0);
-            if (!is_seq) printf("----------- Random Read Throughput (%lu): %.2f MB/s ------------\n", BUF_LEN, final_throughput);
-            else         printf("----------- Sequential Read Throughput (%lu): %.2f MB/s ------------\n", BUF_LEN, final_throughput);
-            final_results[i] = final_throughput;
-        }
-
-
-        printf("\033[32mFinal Results (Thread: %2d, %s Read)\033[0m\n", thread_num, is_seq ? "Sequential" : "Random");
-        printf("\033[34m");
-        for (int i = 0; i < results_len; ++i) {
-            printf("|--- %5lu B ---", buf_lens[i]);
-        }
-        printf("|\n");
-        for (int i = 0; i < results_len; ++i) {
-            printf("|%10.1f MB/s", final_results[i]);
-        }
-        printf("|\033[0m\n");
-        fflush(nullptr);
-        result_table.push_back(final_results);
+        pmem_addrs_.push_back(pmem_addr);
     }
     
-    printf("\033[32mFinal Results Table (%s Read)\033[0m\n", is_seq ? "Sequential" : "Random");
-    printf("\033[34m");
-    for (int i = 0; i < buf_lens.size(); ++i) {
-        printf("|--- %5lu B ---", buf_lens[i]);
+    auto pcm_ = PCM::getInstance();
+    auto status = pcm_->program();
+    if (status != PCM::Success)
+    {
+        std::cout << "Error opening PCM: " << status << std::endl;
+        if (status == PCM::PMUBusy)
+            pcm_->resetPMU();
+        else
+            exit(0);
     }
-    printf("|\n");
-    int t = 1;
-    for (auto& res : result_table) {
-        for (int i = 0; i < res.size(); ++i) {
-            printf("|%10.1f MB/s", res[i]);
-        }
-        printf("| %2d\n", t++);
-    }
-    
-    printf("|\033[0m\n");
-    fflush(nullptr);
 }
 
-int main(int argc, char *argv[])
-{
-    
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <filename> thread_num\n", argv[0]);
-        exit(0);
+~Benchmark() {
+    for (char* pmem_addr : pmem_addrs_)
+        pmem_unmap(pmem_addr, mapped_len_);
+}
+
+
+// Return the throughput when using block_size to randomly write PMM
+double FillRandomWB(uint64_t block_size, int thread_index, int thread_num) {
+    printf("===== FillRandomWB, Thread: %d, Block Size: %10lu =====\r", thread_index, block_size);
+    if (TheadCheck(thread_index) < 0) {
+        exit(1);
     }
-    // initial interrupt function 
-    arm_sig_int();
+    // pin current thread to kThreadIDs[thread_index]
+    PinCore(kThreadIDs[thread_index]);
 
-    char *path = argv[1];
-    char *pmemaddr;
-    size_t mapped_len;
-    int is_pmem;
+    TraceUniform trace(999 * thread_index + 123, 0, FLAGS_filesize - block_size);
+    // choose which store function we should use
+    void(*func)(char*,int);
+    uint64_t off_interval = FLAGS_offset_interval < 0 ? block_size : FLAGS_offset_interval;
+    uint64_t mask = PMMMask(off_interval);
+    if (64 == block_size) {
+        func = Store64_WB;
+    } else if (128 == block_size) {
+        func = Store128_WB;
+    } else if (256 == block_size) {
+        func = Store256_WB;
+    } else if (512 == block_size) {
+        func = Store512_WB;
+    } else if (
+        block_size % 1024 == 0 &&
+        block_size > 0) {
+        func = StoreNKB_WB;
+    }
 
-    kThread = std::stoi(argv[2]);
+    // start fill random blocks
+ 
+    int64_t k = 0;
+    int64_t left_byte = FLAGS_filesize / thread_num;
+    int N = block_size / 1024;
+    char* pmem_addr = pmem_addrs_[thread_index];
+    auto time_start = util::Env::Default()->NowMicros();
+    for (; k < FLAGS_num  && left_byte > 0; k++) {
+        uint64_t next = trace.Next();
+        uint64_t offset = (next & mask);
+        // INFO("Offset: %lx. next: %lu", offset, next);
+        char* addr = pmem_addr + offset;
+        if (FLAGS_pmdk)
+            pmem_memset(addr, 0, block_size, PMEM_F_MEM_WB);
+        else
+            func(addr, N);
+        left_byte -= block_size;
+    }
+    _mm_sfence();
+    auto time_end = util::Env::Default()->NowMicros();
+    double writes  = (block_size * k) / 1024.0 / 1024.0;
+    double time   = (time_end - time_start) / 1000000.0;
+    double throughput = writes / time;
+    printf("Avg Random Write(WB), Write: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", writes, time, thread_index, block_size, off_interval, throughput);
+    return throughput;
+}
 
-    // size_t left_len = PMEM_LEN;
-    // int fd = open(path, O_CREAT | O_DIRECT | O_TRUNC, 0666);
-    // if (fd < 0) {
-    //     perror(strerror(-fd));
-    // }
-    // while (left_len > 0) {
-    //    int res = write(fd, (void*) gen.Generate(1 << 20).data(), 1 << 20);
-    //    if (res < 0) {
-    //        perror(strerror(-res));
-    //        exit(1);
-    //    }
-    // }
-    // close(fd);
+void LatencyProfiling() {
 
-    /* create a pmem file and memory map it */
-    if ((pmemaddr = (char *)pmem_map_file(path, PMEM_LEN, PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
-        perror("pmem_map_file");
+}
+
+ 
+void XPBufferSizeProfiler() {
+    PinCore(kThreadIDs[0]);
+    char* pmemaddr = pmem_addrs_[0];
+    // use N number of continous 256 byte interval
+    // In the first round, update the first half 128 byte of the 256 byte
+    // Then in the second round, update the last half 128 byte of the 256 byte
+    IPMWatcher watcher("wa");
+    for (int N = FLAGS_n_start; N <= FLAGS_n_end; N++) {
+         printf("\n======= Interval N is: %4d (write %d byte) =======\n", N, N * 256);
+        WriteAmplificationWatcher wa_watcher(watcher);
+        util::PCMMetric pcm_monitor("wa");
+        int repeat = FLAGS_repeat;
+        int64_t left_byte = 100 << 20;
+        IPMWatcher watcher("bench_matrix");
+        auto start = watcher.Profiler();
+        auto time_start = Env::Default()->NowMicros();
+        while (repeat-- > 0 && left_byte > 0) {
+            for (int i = 0; i < N; ++i) {
+                // update first half 128 byte
+                uint64_t off = (i * 256);
+                char* dest = pmemaddr + off;
+                util::Store128_NT(dest);
+            };
+
+            for (int i = 0; i < N; ++i) {
+                // update last half 128 byte
+                uint64_t off = (i * 256);
+                char* dest = pmemaddr + off + 128;
+                util::Store128_NT(dest);
+            };
+            left_byte -= 256 * N;
+        }
+        auto time_end = Env::Default()->NowMicros();
+        auto end = watcher.Profiler();
+        auto duration = time_end - time_start;
+        IPMMetric metric(start[0], end[0]);
+        double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+        double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
+            dimm_read,
+            dimm_write,
+            duration/1000000.0);
+    }
+}
+
+// Return the throughput when using block_size to randomly write PMM
+double FillSeqWB(uint64_t block_size, int thread_index, int thread_num) {
+    printf("===== FillSeqWB, Thread index: %2d of %2d, Block Size: %10lu =====\r", thread_index, thread_num, block_size);
+    if (TheadCheck(thread_index) < 0) {
+        exit(1);
+    }
+    // pin current thread to kThreadIDs[thread_index]
+    PinCore(kThreadIDs[thread_index]);
+
+    
+    // choose which store function we should use
+    void(*func)(char*,int);
+    uint64_t off_interval = FLAGS_offset_interval < 0 ? block_size : FLAGS_offset_interval;
+    uint64_t mask = PMMMask(off_interval);
+    uint64_t start_off = (random() % (FLAGS_filesize / 2)) / off_interval * off_interval;
+    TraceSeq trace(start_off, off_interval, 0, FLAGS_filesize - off_interval);
+    if (64 == block_size) {
+        func = Store64_WB;
+    } else if (128 == block_size) {
+        func = Store128_WB;
+    } else if (256 == block_size) {
+        func = Store256_WB;
+    } else if (512 == block_size) {
+        func = Store512_WB;
+    } else if (
+        block_size % 1024 == 0 &&
+        block_size > 0) {
+        func = StoreNKB_WB;
+    }
+    else {
+        perror("Block size not support\n");
         exit(1);
     }
 
+    // start fill random blocks
+ 
+    int64_t k = 0;
+    int64_t left_byte = FLAGS_filesize / thread_num;
+    int N = block_size / 1024;
+    char* pmem_addr = pmem_addrs_[thread_index];
+    auto time_start = util::Env::Default()->NowMicros();
+    for (; k < FLAGS_num  && left_byte > 0; k++) {
+        uint64_t next = trace.Next();
+        uint64_t offset = (next & mask);
+        // INFO("Offset: %lx. next: %lu", offset, next);
+        char* addr = pmem_addr + offset;
+        if (FLAGS_pmdk)
+            pmem_memset(addr, 0, block_size, PMEM_F_MEM_WB);
+        else
+            func(addr, N);
+        left_byte -= block_size;
+    }
+    _mm_sfence();
+    auto time_end = util::Env::Default()->NowMicros();
+    double writes  = (block_size * k) / 1024.0 / 1024.0;
+    double time   = (time_end - time_start) / 1000000.0;
+    double throughput = writes / time;
+    printf("Avg Seq Write(WB), Write: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", writes, time, thread_index, block_size, off_interval, throughput);
+    return throughput;
+}
 
-    // random write bench
-    RandomWriteBench(pmemaddr, false, false);
+// Return the throughput when using block_size to randomly write PMM
+double FillSeqNT(uint64_t block_size, int thread_index, int thread_num) {
+    printf("===== FillSeqNT, Thread index: %2d of %2d, Block Size: %10lu =====\r", thread_index, thread_num, block_size);
+    if (TheadCheck(thread_index) < 0) {
+        exit(1);
+    }
+    // pin current thread to kThreadIDs[thread_index]
+    PinCore(kThreadIDs[thread_index]);
 
-    // sequential write bench
-    RandomWriteBench(pmemaddr, true,  false);
-
-    // random write bench
-    RandomWriteBench(pmemaddr, false, true);
-
-    // sequential write bench
-    RandomWriteBench(pmemaddr, true, true);
     
-    // random read bench
-    RandomReadBench(pmemaddr);
+    // choose which store function we should use
+    void(*func)(char*,int);
+    uint64_t off_interval = FLAGS_offset_interval < 0 ? block_size : FLAGS_offset_interval;
+    uint64_t mask = PMMMask(off_interval);
+    uint64_t start_off = (random() % (FLAGS_filesize / 2)) / off_interval * off_interval;
+    TraceSeq trace(start_off, off_interval, 0, FLAGS_filesize - off_interval);
+    if (64 == block_size) {
+        func = Store64_NT;
+    } else if (128 == block_size) {
+        func = Store128_NT;
+    } else if (256 == block_size) {
+        func = Store256_NT;
+    } else if (512 == block_size) {
+        func = Store512_NT;
+    } else if (
+        block_size % 1024 == 0 &&
+        block_size > 0) {
+        func = StoreNKB_NT;
+    }
+    else {
+        perror("Block size not support\n");
+        exit(1);
+    }
 
-    // sequential read bench
-    RandomReadBench(pmemaddr, true);
+    // start fill random blocks
+ 
+    int64_t k = 0;
+    int64_t left_byte = FLAGS_filesize / thread_num;
+    int N = block_size / 1024;
+    char* pmem_addr = pmem_addrs_[thread_index];
+    auto time_start = util::Env::Default()->NowMicros();
+    for (; k < FLAGS_num  && left_byte > 0; k++) {
+        uint64_t next = trace.Next();
+        uint64_t offset = (next & mask);
+        // INFO("Offset: %lx. next: %lu", offset, next);
+        char* addr = pmem_addr + offset;
+        if (FLAGS_pmdk)
+            pmem_memset(addr, 0, block_size, PMEM_F_MEM_NONTEMPORAL);
+        else
+            func(addr, N);
+        left_byte -= block_size;
+    }
+    _mm_sfence();
+    auto time_end = util::Env::Default()->NowMicros();
+    double writes  = (block_size * k) / 1024.0 / 1024.0;
+    double time   = (time_end - time_start) / 1000000.0;
+    double throughput = writes / time;
+    printf("Avg Seq Write(NT), Write: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", writes, time, thread_index, block_size, off_interval, throughput);
+    return throughput;
+}
+
+// Return the throughput when using block_size to randomly write data to PMM
+double FillRandomNT(uint64_t block_size, int thread_index, int thread_num) {
+    printf("===== FillRandomNT, Thread: %d, Block Size: %10lu =====\r", thread_index, block_size);
+    if (TheadCheck(thread_index) < 0) {
+        exit(1);
+    }
+    // pin current thread to kThreadIDs[thread_index]
+    PinCore(kThreadIDs[thread_index]);
+
+    TraceUniform trace(999 * thread_index + 123, 0, FLAGS_filesize - block_size);
+    // choose which store function we should use
+    void(*func)(char*,int);
+    uint64_t off_interval = FLAGS_offset_interval < 0 ? block_size : FLAGS_offset_interval;
+    uint64_t mask = PMMMask(off_interval);
+    if (64 == block_size) {
+        func = Store64_NT;
+    } else if (128 == block_size) {
+        func = Store128_NT;
+    } else if (256 == block_size) {
+        func = Store256_NT;
+    } else if (512 == block_size) {
+        func = Store512_NT;
+    } else if (
+        block_size % 1024 == 0 &&
+        block_size > 0) {
+        func = StoreNKB_NT;
+    }
+    else {
+        perror("Block size not support\n");
+        exit(1);
+    }
+
+    // start fill random blocks
+ 
+    int64_t k = 0;
+    int64_t left_byte = FLAGS_filesize / thread_num;
+    int N = block_size / 1024;
+    char* pmem_addr = pmem_addrs_[thread_index];
+    auto time_start = util::Env::Default()->NowMicros();
+    for (; k < FLAGS_num  && left_byte > 0; k++) {
+        uint64_t next = trace.Next();
+        uint64_t offset = (next & mask);
+        // INFO("Offset: %lx. next: %lu", offset, next);
+        char* addr = pmem_addr + offset;
+        if (FLAGS_pmdk)
+            pmem_memset(addr, 0, block_size, PMEM_F_MEM_NONTEMPORAL);
+        else 
+            func(addr, N);
+        left_byte -= block_size;
+    }
+    _mm_sfence();
+    auto time_end = util::Env::Default()->NowMicros();
+    double writes  = (block_size * k) / 1024.0 / 1024.0;
+    double time   = (time_end - time_start) / 1000000.0;
+    double throughput = writes / time;
+    printf("Avg Random Write(NT), Write: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", writes, time, thread_index, block_size, off_interval, throughput);
+    return throughput;
+}
+
+
+// Return the throughput when using block_size to randomly read data from PMM
+double ReadRandomNT(uint64_t block_size, int thread_index, int thread_num) {
+    printf("===== ReadRandomNT, Thread: %d, Block Size: %10lu =====\r", thread_index, block_size);
+    if (TheadCheck(thread_index) < 0) {
+        exit(1);
+    }
+    // pin current thread to kThreadIDs[thread_index]
+    PinCore(kThreadIDs[thread_index]);
+
+    TraceUniform trace(999 * thread_index + 123, 0, FLAGS_filesize - block_size);
+    // choose which store function we should use
+    void(*func)(char*,int);
+    uint64_t off_interval = FLAGS_offset_interval < 0 ? block_size : FLAGS_offset_interval;
+    uint64_t mask = PMMMask(off_interval);
+    if (64 == block_size) {
+        func = Load64_NT;
+    } else if (128 == block_size) {
+        func = Load128_NT;
+    } else if (256 == block_size) {
+        func = Load256_NT;
+    } else if (512 == block_size) {
+        func = Load512_NT;
+    } else if (
+        block_size % 1024 == 0 &&
+        block_size > 0) {
+        func = LoadNKB_NT;
+    }
+    else {
+        perror("Block size not support\n");
+        exit(1);
+    }
+
+    // start read random blocks
+    int64_t k = 0;
+    int64_t left_byte = FLAGS_filesize / thread_num;
+    int N = block_size / 1024;
+    char* pmem_addr = pmem_addrs_[thread_index];
+    auto time_start = util::Env::Default()->NowMicros();
+    char buffer[4 << 20]; // initial a 4MB buffer
+    for (; k < FLAGS_num  && left_byte > 0; k++) {
+        uint64_t next = trace.Next();
+        uint64_t offset = (next & mask);
+        // INFO("Offset: %lx. next: %lu", offset, next);
+        char* addr = pmem_addr + offset;
+        if (FLAGS_load)
+            func(addr, N);
+        else
+            memcpy(buffer, addr, block_size);
+        left_byte -= block_size;
+    }
+    _mm_lfence();
+    auto time_end = util::Env::Default()->NowMicros();
+    double reads  = (block_size * k) / 1024.0 / 1024.0;
+    double time   = (time_end - time_start) / 1000000.0;
+    double throughput = reads / time;
+    printf("Avg Random Read(%s), Read: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", FLAGS_load ? "NT": "memcpy", reads, time, thread_index, block_size, off_interval, throughput);
+    return throughput;
+}
+
+// Return the throughput when using block_size to sequentially read data from PMM
+double ReadSeqNT(uint64_t block_size, int thread_index, int thread_num) {
+    printf("===== ReadSeqNT, Thread index: %2d of %2d, Block Size: %10lu =====\r", thread_index, thread_num, block_size);
+    if (TheadCheck(thread_index) < 0) {
+        exit(1);
+    }
+    // pin current thread to kThreadIDs[thread_index]
+    PinCore(kThreadIDs[thread_index]);
 
     
-    pmem_unmap(pmemaddr, PMEM_LEN);
+    // choose which store function we should use
+    void(*func)(char*,int);
+    uint64_t off_interval = FLAGS_offset_interval < 0 ? block_size : FLAGS_offset_interval;
+    uint64_t start_off = (random() % (FLAGS_filesize / 2)) / off_interval * off_interval;
+    TraceSeq trace(start_off, off_interval, 0, FLAGS_filesize - off_interval);
+
+    uint64_t mask = PMMMask(off_interval);
+    if (64 == block_size) {
+        func = Load64_NT;
+    } else if (128 == block_size) {
+        func = Load128_NT;
+    } else if (256 == block_size) {
+        func = Load256_NT;
+    } else if (512 == block_size) {
+        func = Load512_NT;
+    } else if (
+        block_size % 1024 == 0 &&
+        block_size > 0) {
+        func = LoadNKB_NT;
+    }
+    else {
+        perror("Block size not support\n");
+        exit(1);
+    }
+
+    // start read sequential blocks
+    int64_t k = 0;
+    int64_t left_byte = FLAGS_filesize / thread_num;
+    int N = block_size / 1024;
+    char* pmem_addr = pmem_addrs_[thread_index];
+    auto time_start = util::Env::Default()->NowMicros();
+    char buffer[4 << 20]; // initial a 4 MB buffer
+    for (; k < FLAGS_num  && left_byte > 0; k++) {
+        uint64_t next = trace.Next();
+        uint64_t offset = (next & mask);
+        // INFO("Offset: %lx. next: %lu", offset, next);
+        char* addr = pmem_addr + offset;
+        if (FLAGS_load)
+            func(addr, N);
+        else
+            memcpy(buffer, addr, block_size);
+        left_byte -= block_size;
+    }
+    _mm_lfence();
+    auto time_end = util::Env::Default()->NowMicros();
+    double reads  = (block_size * k) / 1024.0 / 1024.0;
+    double time   = (time_end - time_start) / 1000000.0;
+    double throughput = reads / time;
+    printf("Avg Seq Read(%s), Read: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", FLAGS_load ? "NT": "memcpy", reads, time, thread_index, block_size, off_interval, throughput);
+    return throughput;
+}
+
+int TheadCheck(int thread_index) {
+    if (thread_index >= 16) {
+        perror("Too much thread\n");
+        return -1;
+    }
+    return 0;
+}
+enum BenchType {T_BenchFillRandomNT, T_BenchFillRandomWB, T_BenchFillSeqNT, T_BenchFillSeqWB, T_BenchReadRandomNT, T_BenchReadSeqNT};
+
+static enum BenchType DecodeStringToType(const std::string& type) {
+    if (type == "fillrandomNT") {
+        return T_BenchFillRandomNT;
+    } 
+    else if (type == "fillrandomWB") {
+        return T_BenchFillRandomWB;
+    }
+    else if (type == "fillseqNT") {
+        return T_BenchFillSeqNT;
+    }
+    else if (type == "fillseqWB") {
+        return T_BenchFillSeqWB;
+    }
+    else if (type == "readrandomNT") {
+        return T_BenchReadRandomNT;
+    }
+    else 
+        return T_BenchReadSeqNT;
+}
+
+std::string DecodeTypeToString(BenchType type) {
+    // printf("Decode type: %d\n", type);
+    std::string res = "not support";
+    switch (type)
+    {
+    case T_BenchFillRandomNT:
+        res = "Fill Random NT";
+        break;
+    
+    case T_BenchFillRandomWB:
+        res = "Fill Random WB";
+        break;
+
+    case T_BenchFillSeqNT:
+        res = "Fill Sequential NT";
+        break;
+
+    case T_BenchFillSeqWB:
+        res = "Fill Sequential WB";
+        break;
+
+    case T_BenchReadRandomNT:
+        res = "Read Random";
+        break;
+    
+    case T_BenchReadSeqNT:
+        res = "Read Sequential";
+        break;
+
+    default:
+        break;
+    }
+    return res;
+}
+
+
+std::function<double(uint64_t, int, int)> DecodeBenchFunc(BenchType bench_type) {
+    std::function<double(uint64_t, int, int)> bench_func;
+    switch (bench_type)
+    {
+    case T_BenchFillRandomNT:
+        bench_func = std::bind(&Benchmark::FillRandomNT, this, _1, _2, _3);
+        break;
+    
+    case T_BenchFillSeqNT:
+        bench_func = std::bind(&Benchmark::FillSeqNT, this, _1, _2, _3);
+        break;
+    
+    case T_BenchFillRandomWB:
+        bench_func = std::bind(&Benchmark::FillRandomWB, this, _1, _2, _3);
+        break;
+
+    case T_BenchFillSeqWB:
+        bench_func = std::bind(&Benchmark::FillSeqWB, this, _1, _2, _3);
+        break;
+
+    case T_BenchReadRandomNT:
+        bench_func = std::bind(&Benchmark::ReadRandomNT, this, _1, _2, _3);
+        break;
+    
+    case T_BenchReadSeqNT:
+        bench_func = std::bind(&Benchmark::ReadSeqNT, this, _1, _2, _3);
+        break;
+
+    default:
+        bench_func = std::bind(&Benchmark::FillRandomNT, this, _1, _2, _3);
+        break;
+    }
+    return bench_func;
+}
+
+void BenchSingle(BenchType bench_type) {
+    printf("===== BenchSingle =====\r");
+    auto bench_func = DecodeBenchFunc(bench_type);
+    int thread_num = FLAGS_thread;
+    std::vector<std::thread> workers(thread_num);
+    std::vector<double> tmp(thread_num);
+    {
+        PCMMetric pcm_monitor("single");
+        // ------------------- benchmark function -------------------
+        for (int t = 0; t < thread_num; t++) {
+            workers[t] = std::thread([&, t]
+            {
+                // core function
+                tmp[t] = bench_func(FLAGS_block_size, t, thread_num);
+            });
+        }
+        std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
+        {
+            t.join();
+        });
+    }
+    double final_throughput = std::accumulate(tmp.begin(), tmp.end(), 0);
+    printf("\033[32m\nMode: single\nResult (%s. PMDK: %s)\033[0m\n", DecodeTypeToString(bench_type).c_str(), FLAGS_pmdk ? "true": "false");
+    printf("\033[34m");
+    printf("Block Size: %8d, Thread: %2d, Throughput: %6.2f \033[0m\n", FLAGS_block_size, FLAGS_thread, final_throughput);
+    fflush(nullptr);
+}
+
+void BenchMatrix(BenchType bench_type) {
+    auto bench_func = DecodeBenchFunc(bench_type);
+
+    std::vector<std::vector<double> > result_matrix_read;
+    std::vector<std::vector<double> > result_matrix_write;
+    for (int thread_num = 1; thread_num <= FLAGS_thread; thread_num++) {
+        std::vector<double> read_throughputs(kBufferVector.size());
+        std::vector<double> write_throughputs(kBufferVector.size());
+        // iterate all block size
+        for (size_t i = 0; i < kBufferVector.size(); ++i) {
+            auto block_size = kBufferVector[i];
+            std::vector<std::thread> workers(thread_num);
+            std::vector<double> tmp(thread_num);
+            
+            IPMWatcher watcher("bench_matrix");
+            PCMMetric pcm_monitor("bench_matrix");
+            auto start = watcher.Profiler();
+            auto time_start = Env::Default()->NowMicros();
+            // ------------------- benchmark function -------------------
+            for (int t = 0; t < thread_num; t++) {
+                workers[t] = std::thread([&, t]
+                {
+                    // core function
+                    tmp[t] = bench_func(block_size, t, thread_num);
+                });
+            }
+            std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
+            {
+                t.join();
+            });
+            _mm_sfence();
+            auto time_end = Env::Default()->NowMicros();
+            auto end = watcher.Profiler();
+            auto duration = time_end - time_start;
+            IPMMetric metric(start[0], end[0]);
+            double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+            double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+            printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
+                dimm_read,
+                dimm_write,
+                duration/1000000.0);
+            read_throughputs[i] = dimm_read;
+            write_throughputs[i] = dimm_write;
+        }
+
+        // print read result for all block size
+        printf("\033[32m\nMode: matrix\nFinal Results (%s. %2d threads. PMDK: %s)\033[0m\n", DecodeTypeToString(bench_type).c_str(), thread_num, FLAGS_pmdk ? "true" : "false");
+        printf("\033[34m\n");
+        for (int i = 0; i < kBufferVector.size(); ++i) {
+            printf("|-- %7lu B --", kBufferVector[i]);
+        }
+        printf("|\n");
+        for (int i = 0; i < kBufferVector.size(); i++) {
+            printf("|%10.1f MB/s", read_throughputs[i]);
+        }
+        printf("| Read\n");
+        for (int i = 0; i < kBufferVector.size(); i++) {
+            printf("|%10.1f MB/s", write_throughputs[i]);
+        }
+        printf("| Write\033[0m\n");
+        fflush(nullptr);
+        result_matrix_read.push_back(read_throughputs);
+        result_matrix_write.push_back(write_throughputs);
+    }
+
+    // print results matrix
+    printf("\033[32m\nMode: matrix\nResults Matrix (%s.)\033[0m\n", DecodeTypeToString(bench_type).c_str());
+    // print read matrix
+    printf("\033[34m Read Matrix:\n");
+    for (int i = 0; i < kBufferVector.size(); ++i) {
+        printf("|-- %7lu B --", kBufferVector[i]);
+    }
+    printf("|\n");
+    for (int t = 0; t < result_matrix_read.size(); ++t) {
+        for (int i = 0; i < kBufferVector.size(); i++) {
+            printf("|%10.1f MB/s", result_matrix_read[t][i]);
+        }
+        printf("| %2d\n", t + 1);
+    }
+    printf("|\033[0m\n");
+
+    // print write matrix
+    printf("\033[34m Write Matrix:\n");
+    for (int i = 0; i < kBufferVector.size(); ++i) {
+        printf("|-- %7lu B --", kBufferVector[i]);
+    }
+    printf("|\n");
+    for (int t = 0; t < result_matrix_write.size(); ++t) {
+        for (int i = 0; i < kBufferVector.size(); i++) {
+            printf("|%10.1f MB/s", result_matrix_write[t][i]);
+        }
+        printf("| %2d\n", t + 1);
+    }
+    printf("|\033[0m\n");
+
+    fflush(nullptr);
+}
+
+
+void BenchReadAndWrite(uint64_t block_size) {
+    auto read_func = DecodeBenchFunc(T_BenchReadRandomNT);
+    auto write_func = DecodeBenchFunc(T_BenchFillRandomNT);
+
+    int thread_num = FLAGS_thread;
+    std::vector<std::thread> workers(thread_num);
+    std::vector<double> read_throughput(thread_num, 0);
+    std::vector<double> write_throughput(thread_num, 0);
+    
+    IPMWatcher watcher("all_thread");        
+    PCMMetric pcm_monitor("all_thread");
+    auto start = watcher.Profiler();
+    auto time_start = Env::Default()->NowMicros();
+    // ------------------- benchmark function -------------------
+    for (int t = 0; t < thread_num; t++) {
+        workers[t] = std::thread([&, t]
+        {
+            // core function
+            if (t < thread_num / 4) {
+                write_throughput[t] = write_func(block_size, t, 2);
+            }
+            else {
+                read_throughput[t] = read_func(block_size, t, 2);
+            }
+            
+        });
+    }
+    std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
+    {
+        t.join();
+    });
+    _mm_sfence();
+    auto time_end = Env::Default()->NowMicros();
+    auto end = watcher.Profiler();
+    auto duration = time_end - time_start;
+    IPMMetric metric(start[0], end[0]);
+    double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+    double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+    printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
+        dimm_read,
+        dimm_write,
+        duration/1000000.0);
+}
+
+void BenchAllThread(BenchType bench_type, uint64_t block_size) {
+    printf("BenchAllThread. bench_type: %d, %s\n", bench_type, DecodeTypeToString(bench_type).c_str());
+    auto bench_func = DecodeBenchFunc(bench_type);
+    std::vector<double> results_read;
+    std::vector<double> results_write;
+    for (int thread_num = 1; thread_num <= FLAGS_thread; thread_num++) {
+        std::vector<std::thread> workers(thread_num);
+        std::vector<double> tmp(thread_num);
+        
+        IPMWatcher watcher("all_thread");            
+        PCMMetric pcm_monitor("all_thread");
+        auto start = watcher.Profiler();
+        auto time_start = Env::Default()->NowMicros();
+        // ------------------- benchmark function -------------------
+        for (int t = 0; t < thread_num; t++) {
+            workers[t] = std::thread([&, t]
+            {
+                // core function
+                tmp[t] = bench_func(block_size, t, thread_num);
+            });
+        }
+        std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
+        {
+            t.join();
+        });
+        _mm_sfence();
+        auto time_end = Env::Default()->NowMicros();
+        auto end = watcher.Profiler();
+        auto duration = time_end - time_start;
+        IPMMetric metric(start[0], end[0]);
+        double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+        double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
+            dimm_read,
+            dimm_write,
+            duration/1000000.0);
+        results_read.push_back(dimm_read);    
+        results_write.push_back(dimm_write);
+    }
+
+    // print result for all thread giving block_size
+    printf("\033[32m\nMode: row_thread\nFinal Results (%s. %2d threads, block size: %lu. PMDK: %s)\033[0m\n", DecodeTypeToString(bench_type).c_str(), FLAGS_thread, block_size, FLAGS_pmdk ? "true" : "false");
+    printf("\033[34m");
+    for (int i = 0; i < FLAGS_thread; ++i) {
+        printf("|---- %3d ----", i+1);
+    }
+    printf("|\n");
+    for (int i = 0; i < results_read.size(); i++) {
+        printf("|%8.1f MB/s", results_read[i]);
+    }
+    printf("| Read\n");
+    for (int i = 0; i < results_write.size(); i++) {
+        printf("|%8.1f MB/s", results_write[i]);
+    }
+    printf("| Write\033[0m\n");
+    fflush(nullptr);
+}
+
+void BenchAllBlockSize(BenchType bench_type, int thread_num) {
+    auto bench_func = DecodeBenchFunc(bench_type);
+    std::vector<double> throughputs_read(kBufferVector.size());
+    std::vector<double> throughputs_write(kBufferVector.size());
+    // iterate all block size
+    for (size_t i = 0; i < kBufferVector.size(); ++i) {
+        auto block_size = kBufferVector[i];
+        std::vector<std::thread> workers(thread_num);
+        std::vector<double> tmp(thread_num);
+        IPMWatcher watcher("all_block");
+        PCMMetric pcm_monitor("all_block");
+        auto start = watcher.Profiler();
+        auto time_start = Env::Default()->NowMicros();
+        // ------------------- benchmark function -------------------
+        for (int t = 0; t < thread_num; t++) {
+            workers[t] = std::thread([&, t]
+            {
+                // core function
+                tmp[t] = bench_func(block_size, t, thread_num);
+            });
+        }
+        std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
+        {
+            t.join();
+        });
+        _mm_sfence();
+        auto time_end = Env::Default()->NowMicros();
+        auto end = watcher.Profiler();
+        auto duration = time_end - time_start;
+        IPMMetric metric(start[0], end[0]);
+        double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+        double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
+            dimm_read,
+            dimm_write,
+            duration/1000000.0);
+        throughputs_read[i] = dimm_read;
+        throughputs_write[i] = dimm_write;
+    }
+
+    // print result for all block size
+    printf("\033[32m\nMode: row_block\nFinal Results (%s. %2d threads. PMDK: %s)\033[0m\n", DecodeTypeToString(bench_type).c_str(), thread_num, FLAGS_pmdk ? "true" : "false");
+    printf("\033[34m");
+    for (int i = 0; i < kBufferVector.size(); ++i) {
+        printf("|-- %7lu B --", kBufferVector[i]);
+    }
+    printf("|\n");
+    for (int i = 0; i < kBufferVector.size(); i++) {
+        printf("|%10.1f MB/s", throughputs_read[i]);
+    }
+    printf("| Read\n");
+    for (int i = 0; i < kBufferVector.size(); i++) {
+        printf("|%10.1f MB/s", throughputs_write[i]);
+    }
+    printf("| Write\033[0m\n");
+    fflush(nullptr);
+}
+
+private:
+
+    std::vector<uint64_t> GenerateOffsets(uint64_t num, bool is_seq, uint64_t MAX_BUF_LEN) {
+        std::vector<uint64_t> offsets(num);
+        if (!is_seq) {
+            for (size_t k = 0; k < FLAGS_num; ++k) {
+                offsets[k] = (random() % (FLAGS_filesize - MAX_BUF_LEN)) / MAX_BUF_LEN * MAX_BUF_LEN;
+            }
+        }
+        else {
+            uint64_t off = (random() % (FLAGS_filesize - MAX_BUF_LEN)) / MAX_BUF_LEN * MAX_BUF_LEN;
+            for (size_t k = 0; k < FLAGS_num; ++k) {
+                offsets[k] = off;
+                off += MAX_BUF_LEN;
+                if (off >= FLAGS_filesize - MAX_BUF_LEN) {
+                    off = 0;
+                }
+            }
+        }
+        return offsets;
+    }
+
+    void PinCore(int i ) {
+        // ------------------- pin current thread to core i -------------------
+        // printf("Pin thread: %2d.\n", i);
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(i, &cpuset);
+        pthread_t thread;
+        thread = pthread_self();
+        int rc = pthread_setaffinity_np(thread,
+                                        sizeof(cpu_set_t), &cpuset);
+        if (rc != 0) {
+            fprintf(stderr,"Error calling pthread_setaffinity_np: %d \n", rc);
+        }
+    }
+
+    struct BenchData {
+        std::vector<double> throughput;
+    };
+private:
+    util::RandomGenerator gen;
+    std::vector<char*> pmem_addrs_;
+    size_t mapped_len_;
+    int is_pmem_;
+    std::vector<BenchData> stats_;
+};
+
+
+int main(int argc, char *argv[])
+{
+    // Set the default logger to file logger
+    ParseCommandLineFlags(&argc, &argv, true);
+
+    Benchmark bench(FLAGS_path);
+
+    if (FLAGS_mode == "xpbuffer")  {
+        bench.XPBufferSizeProfiler();
+    } else if (FLAGS_mode == "row_block") {
+        bench.BenchAllBlockSize(Benchmark::DecodeStringToType(FLAGS_type), FLAGS_thread);
+    } else if (FLAGS_mode == "row_thread") {
+        bench.BenchAllThread(Benchmark::DecodeStringToType(FLAGS_type), FLAGS_block_size);
+    } else if (FLAGS_mode == "matrix" ) {
+        bench.BenchMatrix(Benchmark::DecodeStringToType(FLAGS_type));
+    } else if (FLAGS_mode == "single") {
+        bench.BenchSingle(Benchmark::DecodeStringToType(FLAGS_type));
+    } else if (FLAGS_mode == "rw") {
+        bench.BenchReadAndWrite(FLAGS_block_size);
+    }
+    
     return 0;
 }

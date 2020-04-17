@@ -6,6 +6,9 @@ int main() {
 
     Stats stats;
     util::Trace* trace = new util::TraceUniform(123);
+    for (int i = 0; i < 10000; i++) {
+        printf("randome: %f\n", trace->RandomDouble());
+    }
     uint64_t num = 0;
     stats.Start();
     for (uint64_t i = 0; i < 100000000; i++) {

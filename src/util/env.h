@@ -83,6 +83,8 @@ class Env {
   Env();
   ~Env();
 
+  std::string Execute(const std::string& cmd);
+  void PinCore(int i);
   uint32_t NextID() {return next_id_.fetch_add(1, std::memory_order_relaxed); }
   // Priority for scheduling job in thread pool
   enum Priority { BOTTOM, LOW, HIGH, USER, TOTAL };
@@ -142,7 +144,11 @@ class Env {
   // Default implementation simply relies on NowMicros.
   // In platform-specific implementations, NowNanos() should return time points
   // that are MONOTONIC.
-   uint64_t NowNanos();
+  inline uint64_t NowNanos() {
+      struct timespec ts;
+      clock_gettime(CLOCK_MONOTONIC, &ts);
+      return static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec;
+  }
 
   // Converts seconds-since-Jan-01-1970 to a printable string
    std::string TimeToString(uint64_t time);

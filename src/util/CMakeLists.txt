@@ -36,6 +36,8 @@ add_library(util STATIC
     ${UTIL_SRCS}
 )
 
+add_dependencies(util pcm)
+
 # Specify here the include directories exported by this library
 target_include_directories(util PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}

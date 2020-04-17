@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <vector>
+#include <thread>
 #include "geninfo.h"
 
 namespace util {
@@ -24,14 +25,18 @@ struct YCSB_Op {
 class Trace {
 public:
 
-  Trace(int seed):seed_(seed), init_(seed), gi_(nullptr){}
+  Trace(int seed):seed_(seed), init_(seed), gi_(nullptr){
+    if (seed_ == 0) {
+      seed_ = random();
+    }
+  }
   
   virtual ~Trace() {if(gi_ != nullptr) delete gi_;}
   virtual uint64_t Next() = 0;
   void Reset() {seed_ = init_;}
   uint32_t Random() {
-    static const uint32_t M = 2147483647L;   // 2^31-1
-    static const uint64_t A = 16807;  // bits 14, 8, 7, 5, 2, 1, 0
+    static thread_local const uint32_t M = 2147483647L;   // 2^31-1
+    static thread_local const uint64_t A = 16807;  // bits 14, 8, 7, 5, 2, 1, 0
     // We are computing
     //       seed_ = (seed_ * A) % M,    where M = 2^31-1
     //
@@ -64,21 +69,39 @@ public:
     return rd;
   }
 
-    
   int seed_;
   int init_;
   GenInfo* gi_;
 
 };
 
+class TraceSeq: public Trace {
+public:
+  explicit TraceSeq(uint64_t start_off = 0, uint64_t interval = 1, uint64_t minimum = 0, uint64_t maximum = kRANDOM_RANGE): Trace(0) {
+    start_off_ = start_off;
+    interval_  = interval;
+    min_ = minimum;
+    max_ = maximum;
+    cur_ = start_off_;
+  }
+  inline uint64_t Next() override {
+    cur_ += interval_;
+    cur_ %= max_;
+    return cur_;
+  }
+private:
+  uint64_t start_off_;
+  uint64_t interval_;
+  uint64_t min_;
+  uint64_t max_;
+  uint64_t cur_;
+};
 class TraceUniform: public Trace {
 public:
   explicit TraceUniform(int seed, uint64_t minimum = 0, uint64_t maximum = kRANDOM_RANGE);
   ~TraceUniform() {}
-  inline uint64_t Next() override {
-    const uint64_t off = (uint64_t)(RandomDouble() * gi_->gen.uniform.interval);
-    return gi_->gen.uniform.min + off;
-  }
+  uint64_t Next() override;
+  
 };
 
 class TraceZipfian: public Trace {

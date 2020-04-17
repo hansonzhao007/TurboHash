@@ -104,7 +104,7 @@ void CreataLinkedList() {
             cur = (Node*)(pmemaddr + offsets[i]);
             cur->id = i;
             cur->next_offset = 0;
-            printf("head addr: %lx\n", pmemaddr);
+            printf("head addr: %lx\n", (unsigned long)pmemaddr);
         }
         // printf("write addr: %lx\n", pmemaddr + offsets[i]);
     }
@@ -123,7 +123,7 @@ void ReadLinkedList() {
     }
 
     Node* head = (Node*)(pmemaddr);
-    printf("head addr: %lx\n", head);
+    printf("head addr: %lx\n", (unsigned long)head);
     uint64_t count = 0;
     Node* node = (Node*)(pmemaddr + head->next_offset);
     while (node->next_offset != 0) {
