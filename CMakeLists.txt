@@ -2,22 +2,25 @@ cmake_minimum_required(VERSION 3.14)
 # set the project name
 project (pmem VERSION 0.0.1 LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
 if(COMPILER_SUPPORTS_MARCH_NATIVE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 endif()
 
-# ------------------------ Intel PCM ---------------------------
+# default using release mode
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RelWithDebInfo)
+endif()
+
+# add Intel PCM library
 add_custom_command(OUTPUT libPCM.a
                     COMMAND make lib
                     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/pcm)
 add_custom_target(pcm DEPENDS libPCM.a)
 
-# -------------------------- gflags ----------------------------
 # add gflags library
 add_subdirectory(lib/gflags)
 list(APPEND THIRDPARTY_LIBS gflags)
@@ -25,16 +28,12 @@ include_directories(
     "${CMAKE_BINARY_DIR}/lib/gflags/include"
 )
 
-# default using release mode
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE RelWithDebInfo)
-endif()
-
 # add pthread support
 find_package(Threads REQUIRED)
+set(CMAKE_CXX_FLAGS "-pthread")
 
-# Check if the compiler has AVX512 support.
-set(CMAKE_CXX_FLAGS "-pthread -mavx512f")
+# add avx512 sse2 sse3 support
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -mavx512f -msse -msse2 -msse3")
 
 # check existence of jemalloc
 include(CheckIncludeFile)

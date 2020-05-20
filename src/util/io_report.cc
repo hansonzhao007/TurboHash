@@ -3,7 +3,7 @@
 // DEFINE_int32(stats_interval,  1000000,  "Interval that print status");
 // DEFINE_int64(report_interval, 0,       "report speed time interval in second");
 int64_t report_interval = 0;
-int32_t stats_interval = 1000000;
+int32_t stats_interval = 10000000;
 
 namespace util {
 
@@ -11,7 +11,7 @@ Stats::Stats() { id_ = 0; Start(); }
 Stats::Stats(int id) { id_ = id; Start(); }
 
 void Stats::Start() {
-    start_ = Env::Default()->NowMicros();
+    start_ = Env::Default()->NowNanos();
     next_report_time_ = start_ + report_interval * 1000000;
     next_report_ = 100;
     last_op_finish_ = start_;
@@ -37,7 +37,7 @@ void Stats::Merge(const Stats& other) {
 }
 
 void Stats::Stop() {
-    finish_ = Env::Default()->NowMicros();
+    finish_ = Env::Default()->NowNanos();
     seconds_ = (finish_ - start_) * 1e-6;
 }
 
@@ -53,8 +53,8 @@ void Stats::AppendWithSpace(std::string* str, Slice msg) {
 }
     
 void Stats::PrintSpeed(int64_t done, uint64_t now) {
-    int64_t usecs_since_last = now - last_report_finish_;
-    std::string cur_time = Env::Default()->TimeToString(now/1000000);
+    int64_t nsecs_since_last = now - last_report_finish_;
+    std::string cur_time = Env::Default()->TimeToString(now/1000000000);
     fprintf(stdout,
             "%s ... thread %u: (%" PRIu64 ",%" PRIu64 ") ops and "
             "(%.1f,%.1f) ops/second in (%.6f,%.6f) seconds\n",
@@ -62,10 +62,10 @@ void Stats::PrintSpeed(int64_t done, uint64_t now) {
             id_,
             done - last_report_done_, done,
             (done - last_report_done_) /
-            (usecs_since_last / 1000000.0),
-            done / ((now - start_) / 1000000.0),
-            (now - last_report_finish_) / 1000000.0,
-            (now - start_) / 1000000.0);
+            (nsecs_since_last / 1000000000.0),
+            done / ((now - start_) / 1000000000.0),
+            (now - last_report_finish_) / 1000000000.0,
+            (now - start_) / 1000000000.0);
     last_report_finish_ = now;
     last_report_done_ = done;
     fflush(stdout);
@@ -73,7 +73,7 @@ void Stats::PrintSpeed(int64_t done, uint64_t now) {
 
 void Stats::FinishedSingleOp() {
     int64_t done = done_.fetch_add(1, std::memory_order_relaxed);
-    uint64_t now = Env::Default()->NowMicros();
+    uint64_t now = Env::Default()->NowNanos();
     if (done >= next_report_) {
         if      (next_report_ < 1000)   next_report_ += 100;
         else if (next_report_ < 5000)   next_report_ += 500;
@@ -81,7 +81,8 @@ void Stats::FinishedSingleOp() {
         else if (next_report_ < 50000)  next_report_ += 5000;
         else if (next_report_ < 100000) next_report_ += 10000;
         else if (next_report_ < 500000) next_report_ += 50000;
-        else                            next_report_ += 100000;
+        else if (next_report_ < 1000000)next_report_ += 100000;
+        else                            next_report_ += 500000;
         fprintf(stderr, "... finished %llu ops%30s\r", (unsigned long long )done, "");
         fflush(stderr);
     }
@@ -111,22 +112,22 @@ void Stats::Report(const Slice& name) {
     if (done_ < 1) done_ = 1;
 
     std::string extra;
-    double elapsed = (finish_ - start_) * 1e-6;
+    double elapsed = (finish_ - start_);
     // printf("start time: %.2f - end time: %.2f/ duration: %.2f\n", start_, finish_, elapsed);
     if (bytes_.load() > 0) {
-    // Rate is computed on actual elapsed time, not the sum of per-thread
-    // elapsed times.
-    char rate[100];
-    snprintf(rate, sizeof(rate), "%6.1f MB/s",
-            (bytes_.load() / 1048576.0) / elapsed);
-    extra = rate;
+        // Rate is computed on actual elapsed time, not the sum of per-thread
+        // elapsed times.
+        char rate[100];
+        snprintf(rate, sizeof(rate), "%6.1f MB/s",
+                (bytes_.load() / 1048576.0) / elapsed * 1e9);
+        extra = rate;
     }
     AppendWithSpace(&extra, message_);
 
-    double throughput = (double)done_/elapsed;
-    fprintf(stdout, "\033[1;34m[%s]: %11.3f micros/op %ld ops/sec;%s%s\033[0m\n",
+    double throughput = (double)done_/elapsed * 1e9;
+    fprintf(stdout, "\033[1;34m[%s]: %11.3f nanos/op %ld ops/sec;%s%s\033[0m\n",
             name.ToString().c_str(),
-            elapsed * 1e6 / done_,
+            elapsed / done_,
             (long)throughput,
             (extra.empty() ? "" : " "),
             extra.c_str());

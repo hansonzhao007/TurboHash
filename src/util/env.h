@@ -26,6 +26,9 @@
 #include <string>
 #include <pthread.h>
 
+#define likely(x)       (__builtin_expect(false || (x), true))
+#define unlikely(x)     (__builtin_expect(x, 0))
+
 #define __FILENAME__ ((strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__))
 
 #define INFO(M, ...)\
@@ -147,7 +150,25 @@ class Env {
   inline uint64_t NowNanos() {
       struct timespec ts;
       clock_gettime(CLOCK_MONOTONIC, &ts);
-      return static_cast<uint64_t>(ts.tv_sec) * 1000000000 + ts.tv_nsec;
+      return static_cast<uint64_t>(ts.tv_sec) * 1000000000L + ts.tv_nsec;
+  }
+  
+  // In assembler language, the RDTSC instruction returns the value of the TSC directly in registers 
+  // edx:eax. However, since modern CPU’s support out-of-order execution, it has been common 
+  // practice to insert a serializing instruction (such as CPUID) prior to the RDTSC instruction in order 
+  // to ensure that the execution of RDTSC is not reordered by the processor.
+  
+  // More recent CPU’s include the RDTSCP instruction, which does any necessary serialization itself. 
+  // This avoids the overhead of the CPUID instruction, which can be considerable (and variable). If 
+  // your CPU supports RDTSCP, use that instead of the CPUID/RDTSC combination.
+  inline unsigned long long NowTick() {
+      unsigned int lo, hi;
+      asm volatile (
+        "rdtscp"
+      : "=a"(lo), "=d"(hi) /* outputs */
+      : "a"(0)             /* inputs */
+      : "%ebx", "%ecx");     /* clobbers*/
+      return ((unsigned long long)lo) | (((unsigned long long)hi) << 32);
   }
 
   // Converts seconds-since-Jan-01-1970 to a printable string

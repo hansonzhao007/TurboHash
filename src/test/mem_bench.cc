@@ -81,6 +81,7 @@ DEFINE_int32(num, 100000000, "number of operations");
 DEFINE_int32(n_end, 1024, "maximum interval size, uint: 256 byte");
 DEFINE_int32(n_start, 1,  "start   interval size, uint: 256 byte");
 DEFINE_int32(repeat, 1000000, "repeat overwrite current interval");
+DEFINE_int32(buffer, 12, "how many kilo byte of the probe buffer");
 
 DEFINE_bool(load, true, "use avx512 load instruction or not for read");
 DEFINE_bool(initfile, false, "initial file or not");
@@ -197,17 +198,137 @@ void LatencyProfiling() {
 
 }
 
+
+void XPBufferAssociateProfiler() {
+    
+    PinCore(kThreadIDs[0]);
+    char* pmemaddr = pmem_addrs_[0];
+
+    uint64_t buffer_size = FLAGS_buffer << 10;
+    uint64_t OFFSET = 14 << 10;
+    int repeat = 10000;
+    const uint64_t WRITE_LIMIT = 100 << 20;
+    printf("----- XPBuffer Size: %lu ------\n", buffer_size);
+    // write data with fixed OFFSET    
+    uint64_t writen = 0;
+    IPMWatcher watcher("xpbuffertype");
+    while (repeat-- > 0 && writen < WRITE_LIMIT) { 
+        uint64_t n = buffer_size / 64 / 4;
+        uint64_t off = 0;
+        while (n-- > 0) {
+            char* addr = pmemaddr + off;
+            Store64_NT(addr);
+            off += OFFSET;
+            writen += 64;
+        }
+        n = buffer_size / 64 / 4;
+        off = 0;
+        while (n-- > 0) {
+            char* addr = pmemaddr + off;
+            Store64_NT(addr + 64);
+            off += OFFSET;
+            writen += 64;
+        }
+        n = buffer_size / 64 / 4;
+        off = 0;
+        while (n-- > 0) {
+            char* addr = pmemaddr + off;
+            Store64_NT(addr + 128);
+            off += OFFSET;
+            writen += 64;
+        }
+        n = buffer_size / 64 / 4;
+        off = 0;
+        while (n-- > 0) {
+            char* addr = pmemaddr + off;
+            Store64_NT(addr + 192);
+            off += OFFSET;
+            writen += 64;
+        }
+    }            
+
+}
+
+
+void ReadBufferProfiler() {
+    PinCore(kThreadIDs[0]);
+    char* pmemaddr = pmem_addrs_[0];
+    // use N number of continous 256-byte interval, 
+    // construct 64 byte random write within the intervals
+    
+    for (int64_t N = FLAGS_n_start; N <= FLAGS_n_end; N++) 
+    {
+        printf("\n======= Interval N is: %4ld (read %ld byte) =======\n", N, N * 256);
+        IPMWatcher watcher("readBufferSize");
+        std::vector<uint64_t> offsets;
+        uint64_t interval_size = 256 * N;
+        uint64_t unit_count = interval_size / 64;
+        for (size_t i = 0; i < unit_count; ++i) {
+            offsets.push_back(i * 64);
+        }
+
+        int repeat = FLAGS_repeat;
+        int64_t READ = 100 << 20;
+        int64_t read_byte = 0;
+        char buffer[1 << 20];
+        ClearCache();
+        while (repeat-- > 0 && read_byte < READ)  {
+            // randomize the offset
+            std::random_shuffle(offsets.begin(), offsets.end());
+            for (uint64_t off : offsets) {
+                memcpy(buffer, pmemaddr + off, 64);
+                // util::Load64_NT(pmemaddr + off);
+                // _mm_lfence();
+            }
+            read_byte += interval_size;
+            ClearCache();
+        }
+        printf("finished read: %lu byte\n", read_byte);
+
+    }
+}
+ 
+
+void XPBufferTypeProfiler() {
+    PinCore(kThreadIDs[0]);
+    char* pmemaddr = pmem_addrs_[0];
+    // use N number of continous 256-byte interval, 
+    // construct 64 byte random write within the intervals
+    for (int N = FLAGS_n_start; N <= FLAGS_n_end; N++) {
+        printf("\n======= Interval N is: %4d (write %d byte) =======\n", N, N * 256);
+        IPMWatcher watcher("xpbuffertype");
+        std::vector<uint64_t> offsets;
+        uint64_t interval_size = 256 * N;
+        uint64_t unit_count = interval_size / 64;
+        for (size_t i = 0; i < unit_count; ++i) {
+            offsets.push_back(i * 64);
+        }
+
+        int repeat = FLAGS_repeat;
+        int64_t left_byte = 100 << 20;
+        while (repeat-- > 0 && left_byte > 0)  {
+            // randomize the offset
+            std::random_shuffle(offsets.begin(), offsets.end());
+
+            for (uint64_t off : offsets) {
+                util::Store64_NT(pmemaddr + off);
+            }
+            left_byte -= interval_size;
+        }
+
+    }
+}
  
 void XPBufferSizeProfiler() {
     PinCore(kThreadIDs[0]);
     char* pmemaddr = pmem_addrs_[0];
-    // use N number of continous 256 byte interval
+    // use N number of continous 256-byte interval
     // In the first round, update the first half 128 byte of the 256 byte
     // Then in the second round, update the last half 128 byte of the 256 byte
-    IPMWatcher watcher("wa");
+    // IPMWatcher watcher("wa");
     for (int N = FLAGS_n_start; N <= FLAGS_n_end; N++) {
-         printf("\n======= Interval N is: %4d (write %d byte) =======\n", N, N * 256);
-        WriteAmplificationWatcher wa_watcher(watcher);
+        printf("\n======= Interval N is: %4d (write %d byte) =======\n", N, N * 256);
+        // WriteAmplificationWatcher wa_watcher(watcher);
         util::PCMMetric pcm_monitor("wa");
         int repeat = FLAGS_repeat;
         int64_t left_byte = 100 << 20;
@@ -216,30 +337,41 @@ void XPBufferSizeProfiler() {
         auto time_start = Env::Default()->NowMicros();
         while (repeat-- > 0 && left_byte > 0) {
             for (int i = 0; i < N; ++i) {
-                // update first half 128 byte
+                // update first 64 byte
                 uint64_t off = (i * 256);
                 char* dest = pmemaddr + off;
-                util::Store128_NT(dest);
+                util::Store64_NT(dest);
             };
-
             for (int i = 0; i < N; ++i) {
-                // update last half 128 byte
+                // update second  64 byte
+                uint64_t off = (i * 256);
+                char* dest = pmemaddr + off + 64;
+                util::Store64_NT(dest);
+            };
+            for (int i = 0; i < N; ++i) {
+                // update third  64 byte
                 uint64_t off = (i * 256);
                 char* dest = pmemaddr + off + 128;
-                util::Store128_NT(dest);
+                util::Store64_NT(dest);
+            };
+            for (int i = 0; i < N; ++i) {
+                // update last  64 byte
+                uint64_t off = (i * 256);
+                char* dest = pmemaddr + off + 192;
+                util::Store64_NT(dest);
             };
             left_byte -= 256 * N;
         }
-        auto time_end = Env::Default()->NowMicros();
-        auto end = watcher.Profiler();
-        auto duration = time_end - time_start;
-        IPMMetric metric(start[0], end[0]);
-        double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-        double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
-            dimm_read,
-            dimm_write,
-            duration/1000000.0);
+        // auto time_end = Env::Default()->NowMicros();
+        // auto end = watcher.Profiler();
+        // auto duration = time_end - time_start;
+        // IPMMetric metric(start[0], end[0]);
+        // double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+        // double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
+        // printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
+        //     dimm_read,
+        //     dimm_write,
+        //     duration/1000000.0);
     }
 }
 
@@ -680,8 +812,8 @@ void BenchMatrix(BenchType bench_type) {
     std::vector<std::vector<double> > result_matrix_read;
     std::vector<std::vector<double> > result_matrix_write;
     for (int thread_num = 1; thread_num <= FLAGS_thread; thread_num++) {
-        std::vector<double> read_throughputs(kBufferVector.size());
-        std::vector<double> write_throughputs(kBufferVector.size());
+        std::vector<double> read_throughputs;
+        std::vector<double> write_throughputs;
         // iterate all block size
         for (size_t i = 0; i < kBufferVector.size(); ++i) {
             auto block_size = kBufferVector[i];
@@ -711,12 +843,16 @@ void BenchMatrix(BenchType bench_type) {
             IPMMetric metric(start[0], end[0]);
             double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
             double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-            printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
+            double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
+            double app_write = metric.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
+            printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s APP Write: %8.1f MB/s Time: %6.2fs. --------\033[0m\n", 
                 dimm_read,
                 dimm_write,
+                app_read,
+                app_write,
                 duration/1000000.0);
-            read_throughputs[i] = dimm_read;
-            write_throughputs[i] = dimm_write;
+            read_throughputs.push_back(app_read);    
+            write_throughputs.push_back(app_write);
         }
 
         // print read result for all block size
@@ -811,9 +947,13 @@ void BenchReadAndWrite(uint64_t block_size) {
     IPMMetric metric(start[0], end[0]);
     double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
     double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-    printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
+    double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
+    double app_write = metric.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
+    printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s, APP Write: %8.1f MB/s Time: %6.2fs. --------\033[0m\n", 
         dimm_read,
         dimm_write,
+        app_read,
+        app_write,
         duration/1000000.0);
 }
 
@@ -849,12 +989,16 @@ void BenchAllThread(BenchType bench_type, uint64_t block_size) {
         IPMMetric metric(start[0], end[0]);
         double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
         double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
+        double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
+        double app_write = metric.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
+        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s, APP Write: %8.1f MB/s Time: %6.2fs. --------\033[0m\n", 
             dimm_read,
             dimm_write,
+            app_read,
+            app_write,
             duration/1000000.0);
-        results_read.push_back(dimm_read);    
-        results_write.push_back(dimm_write);
+        results_read.push_back(app_read);    
+        results_write.push_back(app_write);
     }
 
     // print result for all thread giving block_size
@@ -877,8 +1021,8 @@ void BenchAllThread(BenchType bench_type, uint64_t block_size) {
 
 void BenchAllBlockSize(BenchType bench_type, int thread_num) {
     auto bench_func = DecodeBenchFunc(bench_type);
-    std::vector<double> throughputs_read(kBufferVector.size());
-    std::vector<double> throughputs_write(kBufferVector.size());
+    std::vector<double> throughputs_read;
+    std::vector<double> throughputs_write;
     // iterate all block size
     for (size_t i = 0; i < kBufferVector.size(); ++i) {
         auto block_size = kBufferVector[i];
@@ -907,12 +1051,16 @@ void BenchAllBlockSize(BenchType bench_type, int thread_num) {
         IPMMetric metric(start[0], end[0]);
         double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
         double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
+        double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
+        double app_write = metric.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
+        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s APP Write: %8.1f MB/s Time: %6.2fs. --------\033[0m\n", 
             dimm_read,
             dimm_write,
+            app_read,
+            app_write,
             duration/1000000.0);
-        throughputs_read[i] = dimm_read;
-        throughputs_write[i] = dimm_write;
+        throughputs_read.push_back(app_read);    
+        throughputs_write.push_back(app_write);
     }
 
     // print result for all block size
@@ -989,8 +1137,14 @@ int main(int argc, char *argv[])
 
     Benchmark bench(FLAGS_path);
 
-    if (FLAGS_mode == "xpbuffer")  {
+    if (FLAGS_mode == "readbuffersize") {
+        bench.ReadBufferProfiler();
+    } else if (FLAGS_mode == "xpbufferAssociate") {
+        bench.XPBufferAssociateProfiler();
+    } else if (FLAGS_mode == "xpbuffersize")  {
         bench.XPBufferSizeProfiler();
+    } else if (FLAGS_mode == "xpbuffertype" ) {
+        bench.XPBufferTypeProfiler();
     } else if (FLAGS_mode == "row_block") {
         bench.BenchAllBlockSize(Benchmark::DecodeStringToType(FLAGS_type), FLAGS_thread);
     } else if (FLAGS_mode == "row_thread") {

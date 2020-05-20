@@ -1,7 +1,7 @@
 db_test(hello_libpmem)
 db_test(trace_test)
-
-
+db_test(bitset_test)
+db_test(hash_test)
 
 db_exe(mem_bench)
 db_exe(pmem_test)

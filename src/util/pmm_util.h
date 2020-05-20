@@ -42,7 +42,7 @@
 // #define _mm_pcommit()\
 //     asm volatile(".byte 0x66, 0x0f, 0xae, 0xf8");
 
-#define FENCE_ALL
+// #define FENCE_ALL
 
 namespace util {
 
@@ -69,6 +69,15 @@ uint64_t PMMMask(size_t length) {
 force_inline void 
 MFence() {
     __asm__ __volatile__ ("mfence" ::: "memory");
+}
+
+void __attribute__((optimize("O0")))
+ClearCache() {
+    static const int size = 20*1024*1024; // Allocate 20M. Set much larger then L3
+    static char *c = (char *)malloc(size);
+    for (int i = 0; i < 1; i++)
+        memset(c, 0, size);
+    _mm_mfence();
 }
 
 inline void // __attribute__((optimize("O0"),always_inline))
@@ -576,8 +585,8 @@ public:
                 << "PCM Metrics:"
                 << "\n"
                 // << "\tL3 misses: " << getL3CacheMisses(*before_sstate, *after_sstate) << "\n"
-                // << "\tDRAM Reads (bytes): " << getBytesReadFromMC(*before_sstate, *after_sstate) << "\n"
-                // << "\tDRAM Writes (bytes): " << getBytesWrittenToMC(*before_sstate, *after_sstate) << "\n"
+                << "\tDRAM Reads (bytes): " << getBytesReadFromMC(before_sstate_, after_sstate_) << "\n"
+                << "\tDRAM Writes (bytes): " << getBytesWrittenToMC(before_sstate_, after_sstate_) << "\n"
                 << "\tNVM Reads (bytes): " << getBytesReadFromPMM(before_sstate_, after_sstate_) << "\n"
                 << "\tNVM Writes (bytes): " << getBytesWrittenToPMM(before_sstate_, after_sstate_) << std::endl;
     }
