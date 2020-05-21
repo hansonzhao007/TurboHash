@@ -28,6 +28,18 @@ include_directories(
     "${CMAKE_BINARY_DIR}/lib/gflags/include"
 )
 
+# Process Abseil's CMake build system
+add_subdirectory(lib/abseil-cpp)
+list(APPEND THIRDPARTY_LIBS absl::flat_hash_set)
+include_directories(
+    "${CMAKE_BINARY_DIR}/lib/abseil-cpp"
+)
+
+# Leveling-hash repo
+include_directories(
+    "${CMAKE_BINARY_DIR}/lib/leveling"
+)
+
 # add pthread support
 find_package(Threads REQUIRED)
 set(CMAKE_CXX_FLAGS "-pthread")
@@ -68,7 +80,7 @@ function(db_test test_file)
   get_filename_component(test_target_name "${test_file}" NAME_WE)
   set (case_name test_${test_target_name})
   add_executable("${case_name}" "${test_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util )  # boost_thread boost_system
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util pmemobj)  # boost_thread boost_system
   target_sources("${case_name}"
       PRIVATE
       "${test_file}"

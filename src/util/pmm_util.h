@@ -23,6 +23,7 @@
 #pragma once
 
 #include <immintrin.h>
+#include <xmmintrin.h>
 #include <sstream>
 #include <thread>
 #include "repeat_macro.h"
@@ -30,15 +31,15 @@
 #include "util/env.h"
 #define force_inline __attribute__((always_inline)) inline
 
-// #define _mm_clwb(addr)\
-//     asm volatile("clwb %0" : "+m" (*(volatile char *)(addr)));
+#define _mm_clwb(addr)\
+    asm volatile("clwb %0" : "+m" (*(volatile char *)(addr)));
 
-#define _mm_clflush(addr)\
-    asm volatile("clflush %0" : "+m" (*(volatile char *)addr));
+// #define _mm_clflush(addr) \
+//     asm volatile("clflush %0" : "+m" (*(volatile char *)addr));
 // #define _mm_clflushopt(addr)\
 //     asm volatile(".byte 0x66; clflush %0" : "+m" (*(volatile char *)(addr)));
-#define _mm_clwb(addr)\
-    asm volatile(".byte 0x66; xsaveopt %0" : "+m" (*(volatile char *)(addr)));
+// #define _mm_clwb(addr) \
+//     asm volatile(".byte 0x66; xsaveopt %0" : "+m" (*(volatile char *)(addr)));
 // #define _mm_pcommit()\
 //     asm volatile(".byte 0x66, 0x0f, 0xae, 0xf8");
 

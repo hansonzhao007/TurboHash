@@ -10,7 +10,7 @@
 #include "util/slice.h"
 #include "util/env.h"
 
-// #define DEBUG_OUT
+#define LTHASH_DEBUG_OUT
 
 namespace lthash {
 
@@ -349,10 +349,11 @@ private:
             probe.next(); 
         }
 
-        
-        #ifdef DEBUG_OUT
+        #if 0
+        #ifdef LTHASH_DEBUG_OUT
         printf("Fail to find one empty slot\n");
         printf("%s\n", PrintBucketMeta(bucket_i).c_str());
+        #endif
         #endif
         // only when all the probes fail and there is no empty slot
         // exists in this bucket. 
@@ -384,6 +385,7 @@ private:
                     if (likely(slotKeyEqual(slot, key))) {
                         return {{probe.offset().first, probe.offset().second, i, partial_hash.H1_, partial_hash.H2_} , true};
                     }
+                    #ifdef LTHASH_DEBUG_OUT
                     else {
                         printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Search key: %15s, H2: 0x%2x, H1: 0x%4x, Slot key: %15s, H1: 0x%4x\n", 
                             probe.offset().first, 
@@ -397,6 +399,7 @@ private:
                             slot.meta.H1
                             );
                     }
+                    #endif
                 }
             }
             // if this cell still has empty slot, then it means the key
