@@ -9,6 +9,7 @@
 #include "util/io_report.h"
 
 #include "absl/container/flat_hash_set.h"
+
 #include "gflags/gflags.h"
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::RegisterFlagValidator;
@@ -45,7 +46,7 @@ int main(int argc, char *argv[]) {
     ParseCommandLineFlags(&argc, &argv, true);
    
     {
-        auto res1 = lthash::MurMurHash3::hash("1234567890123456", 16, 666666);
+        auto res1 = lthash::MurMurHash3::hash("1234567890123456", 16);
         printf("murmur hash1: 0x%lx\nhash2: 0x%lx\n", res1.first, res1.second);
     }
 
@@ -54,14 +55,14 @@ int main(int argc, char *argv[]) {
         auto time_start = Env::Default()->NowNanos();
         volatile uint64_t res = 1;
         for (int i = 0; i < 100000000 && res > 0; ++i) {
-            res = lthash::MurMurHash3::hash("1234567890123456", 16, 0).second;
+            res = lthash::MurMurHash3::hash("1234567890123456", 16).second;
         }
         auto time_end   = Env::Default()->NowNanos();
         printf("murmurhash speed: %f ops/ns \n", (double)100000000/(time_end - time_start));
     }
 
     {
-        auto hash = lthash::MurMurHash3::hash("1234567890123456", 16, 888888);
+        auto hash = lthash::MurMurHash3::hash("1234567890123456", 16);
         lthash::ProbeWithinBucket probe(hash.first, 0x3, 0, 0);
         int i = 0;
         while (probe) {

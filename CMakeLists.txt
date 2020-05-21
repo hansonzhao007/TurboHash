@@ -12,7 +12,7 @@ endif()
 
 # default using release mode
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE RelWithDebInfo)
+  set(CMAKE_BUILD_TYPE Release) # RelWithDebInfo
 endif()
 
 # add Intel PCM library
@@ -37,7 +37,7 @@ include_directories(
 
 # Leveling-hash repo
 include_directories(
-    "${CMAKE_BINARY_DIR}/lib/leveling"
+    "lib/leveling"
 )
 
 # add pthread support

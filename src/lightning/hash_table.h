@@ -15,6 +15,9 @@
 namespace lthash {
 
 using Slice = util::Slice; 
+#define LTHASH_H3_SIZE uint64_t
+#define LTHASH_H2_SIZE uint8_t 
+#define LTHASH_H1_SIZE uint16_t
 
 union HashSlot
 {
@@ -26,9 +29,9 @@ union HashSlot
     } meta;
 };
 
-inline uint64_t H3(uint64_t hash) { return (hash >> 25);}
-inline uint8_t  H2(uint64_t hash) { return ((hash >> 17) & 0xFF);}
-inline uint16_t H1(uint64_t hash) { return ((hash >> 1 ) & 0xFFFF);}
+inline LTHASH_H3_SIZE H3(uint64_t hash) { return (hash >> 24);}
+inline LTHASH_H2_SIZE H2(uint64_t hash) { return ((hash >> 16) & 0xFF);}
+inline LTHASH_H1_SIZE H1(uint64_t hash) { return ((hash >> 0) & 0xFFFF);}
 
 // the inline hash function
 // 64 bit hash value
@@ -44,10 +47,9 @@ struct PartialHash {
         H1_ = H1(hash);
     };
 
-    uint64_t H3_;
-    uint8_t  H2_;
-    uint16_t H1_;
-    uint16_t key_fp_;
+    LTHASH_H3_SIZE H3_;
+    LTHASH_H2_SIZE H2_;
+    LTHASH_H1_SIZE H1_;
 };
 
 class SlotInfo {
@@ -55,9 +57,9 @@ public:
     uint32_t bucket;
     uint32_t associate;
     int slot;
-    uint16_t H1;
-    uint8_t  H2;
-    SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, uint8_t h2):
+    LTHASH_H1_SIZE H1;
+    LTHASH_H2_SIZE H2;
+    SlotInfo(uint32_t b, uint32_t a, int s, LTHASH_H1_SIZE h1, LTHASH_H2_SIZE h2):
         bucket(b),
         associate(a),
         slot(s),
@@ -242,7 +244,7 @@ private:
     }
 
     inline std::pair<uint64_t, uint64_t> twoHashValue(const Slice& key) {
-        auto res = Hasher::hash(key.data(), key.size(), key.size());
+        auto res = Hasher::hash(key.data(), key.size());
         return res;
     }
 
@@ -280,8 +282,8 @@ private:
         // set bitmap
         *bitmap = (*bitmap) | (1 << info.slot);
         // set H2
-        cell_addr += info.slot;
-        *cell_addr = info.H2;
+        cell_addr += info.slot; // move cell_addr one byte hash position
+        *cell_addr = info.H2;   // update the one byte hash
     }
 
     bool slotKeyEqual(const HashSlot& slot, const Slice& key) {
@@ -345,6 +347,7 @@ private:
                     return {{probe.offset().first, probe.offset().second, i, partial_hash.H1_, partial_hash.H2_}, true};
                 }
             }
+            Prefetch(cell_addr + kCellSize);
             // probe the next cell in the same bucket
             probe.next(); 
         }
@@ -358,6 +361,10 @@ private:
         // only when all the probes fail and there is no empty slot
         // exists in this bucket. 
         return {{}, false};
+    }
+
+    inline void Prefetch(char* addr) {
+        // _mm_prefetch(addr + kCellSize, _MM_HINT_T0);
     }
 
     std::pair<SlotInfo, bool> findSlot(const Slice& key) {
@@ -385,8 +392,9 @@ private:
                     if (likely(slotKeyEqual(slot, key))) {
                         return {{probe.offset().first, probe.offset().second, i, partial_hash.H1_, partial_hash.H2_} , true};
                     }
-                    #ifdef LTHASH_DEBUG_OUT
+                    
                     else {
+                        #ifdef LTHASH_DEBUG_OUT
                         printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Search key: %15s, H2: 0x%2x, H1: 0x%4x, Slot key: %15s, H1: 0x%4x\n", 
                             probe.offset().first, 
                             probe.offset().second, 
@@ -398,8 +406,9 @@ private:
                             extraceSlice(slot, key.size()).ToString().c_str(),
                             slot.meta.H1
                             );
+                        #endif
                     }
-                    #endif
+                    
                 }
             }
             // if this cell still has empty slot, then it means the key
@@ -407,6 +416,7 @@ private:
             if (likely(meta.EmptyBitSet())) {
                 return {{}, false};
             }
+            Prefetch(cell_addr + kCellSize);
             probe.next();
         }
         // after all the probe, no key exist

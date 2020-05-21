@@ -96,20 +96,19 @@ namespace lthash {
 
 class MurMurHash3 {
 public:
-    static inline std::pair<uint64_t, uint64_t> hash ( const void * key, int len, unsigned int seed)
+    static inline std::pair<uint64_t, uint64_t> hash ( const void * key, int len)
     {
+        static constexpr uint64_t m = UINT64_C(0xc6a4a7935bd1e995);
+        static constexpr uint64_t seed = UINT64_C(0xe17a1465);
+        uint64_t h = (seed ^ (len * m)) * (*(char*)(key)) * (*((char*)(key) + len - 1)) ;
+
+        
         uint64_t hash_otpt[2];   // allocate 128 bits
-        uint64_t hash_otpt1[2];  // allocate 128 bits
-        uint64_t hash_otpt2[2];  // allocate 128 bits
-        MurmurHash3_x64_128(key, len, seed + len + *(char*)key + *((char*)key + len - 1) , hash_otpt1);
-        // return {hash_otpt1[1], hash_otpt1[0]};
-        // Add more entropy with rotation
-        int rotation = (len & 0x1F);
-        return {rotl64(hash_otpt1[1], 64 - rotation), rotl64(hash_otpt1[0], rotation)};
-        // MurmurHash3_x64_128(key, len, INTMAX_MAX - seed, hash_otpt2);
-        // hash_otpt[1] = rotl64(hash_otpt1[1], len & 0x7) + rotl64(hash_otpt2[1], len & 0xF);
-        // hash_otpt[0] = rotl64(hash_otpt1[0], len & 0x3) + rotl64(hash_otpt2[0], len & 0x7);
-        // return {rotl64(hash_otpt[1], len & 0x3), rotl64(hash_otpt[0], len & 0xF)};
+        MurmurHash3_x64_128(key, len, h, hash_otpt);
+        return {hash_otpt[1], hash_otpt[0]};
+
+        // uint64_t hash = MurmurHash64A(key, len, h);
+        // return {hash, hash};
     }
 
     static inline void MurmurHash3_x64_128 ( const void * key, const int len,
@@ -189,6 +188,49 @@ public:
 
         ((uint64_t*)out)[0] = h1;
         ((uint64_t*)out)[1] = h2;
+    }
+
+    static inline uint64_t MurmurHash64A ( const void * key, int len, unsigned int seed )
+    {
+        const uint64_t m = 0xc6a4a7935bd1e995;
+        const int r = 47;
+
+        uint64_t h = seed ^ (len * m);
+
+        const uint64_t * data = (const uint64_t *)key;
+        const uint64_t * end = data + (len/8);
+
+        while(data != end)
+        {
+            uint64_t k = *data++;
+
+            k *= m;
+            k ^= k >> r;
+            k *= m;
+
+            h ^= k;
+            h *= m;
+        }
+
+        const unsigned char * data2 = (const unsigned char*)data;
+
+        switch(len & 7)
+        {
+        case 7: h ^= ((uint64_t)data2[6]) << 48;
+        case 6: h ^= ((uint64_t)data2[5]) << 40;
+        case 5: h ^= ((uint64_t)data2[4]) << 32;
+        case 4: h ^= ((uint64_t)data2[3]) << 24;
+        case 3: h ^= ((uint64_t)data2[2]) << 16;
+        case 2: h ^= ((uint64_t)data2[1]) << 8; 
+        case 1: h ^= ((uint64_t)data2[0]);
+            h *= m;
+        };
+
+        h ^= h >> r;
+        h *= m;
+        h ^= h >> r;
+
+        return h;
     }
 };
 

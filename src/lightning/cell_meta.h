@@ -113,7 +113,7 @@ private:
  *  | ----------------------- meta ------------------------| ----- slots ---- |
  *  | 2 byte bitmap | 14 byte: one byte hash for each slot | 8 byte * 14 slot |
  *  bitmap: 
- *      0  -  1 bit: not in use
+ *      0  -  1 bit: not in use: TODO (xingsheng) we may use this part to decide right shift length of the hash value to add more entropy
  *      2  - 15 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
  *  one byte hash:
  *      8 bit hash for the slot
@@ -127,6 +127,7 @@ public:
         meta_ = _mm_loadu_si128(reinterpret_cast<const __m128i*>(rep));
         bitmap_ = *(const uint32_t*)(rep); // the lowest 32bit is used as bitmap
         bitmap_ &= 0xFFFC;             // hide the 0, 1 bit in bitmap
+
     }
 
     // return a bitset, the position that matches the hash is set to 1
@@ -200,8 +201,8 @@ public:
     }
 
 private:
-    __m128i     meta_;      // 16 byte integer vector
-    uint16_t    bitmap_;    // 1: occupied, 0: empty or deleted
+    __m128i     meta_;          // 16 byte integer vector
+    uint16_t    bitmap_;        // 1: occupied, 0: empty or deleted
 };
 
 
