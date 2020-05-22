@@ -1,10 +1,10 @@
 db_test(hello_libpmem)
 db_test(trace_test)
 db_test(bitset_test)
-db_test(hash_test)
+db_test(spinlock_test)
 
+# run as sudo
+db_test(pmem_util_test)
+
+db_exe(hash_bench)
 db_exe(mem_bench)
-db_exe(pmem_test)
-db_exe(linked_list_test)
-db_exe(pmem_util_test)
-db_exe(write_amplification)

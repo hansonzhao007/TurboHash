@@ -1,4 +1,3 @@
-#include <emmintrin.h>
 #include <immintrin.h>
 #include <cstdlib>
 #include <unordered_set>
@@ -25,18 +24,19 @@ DEFINE_int32(probe_type, 0, "\
 DEFINE_int32(cell_type, 0, "\
     0: 128 byte cell, \
     1: 256 byte cell");
+DEFINE_bool(locate_cell_with_h1, false, "using partial hash h1 to locate cell inside bucket or not");
 
 lthash::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate) {
     if (0 == cell_type && 0 == probe_type)
-        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(bucket, associate);
+        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
     if (0 == cell_type && 1 == probe_type)
-        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeContinousTwoBucket>(bucket, associate);
+        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeContinousTwoBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
     if (1 == cell_type && 0 == probe_type)
-        return new lthash::DramHashTable<lthash::CellMeta256, lthash::ProbeWithinBucket>(bucket, associate);
+        return new lthash::DramHashTable<lthash::CellMeta256, lthash::ProbeWithinBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
     if (1 == cell_type && 1 == probe_type)
-        return new lthash::DramHashTable<lthash::CellMeta256, lthash::ProbeContinousTwoBucket>(bucket, associate);
+        return new lthash::DramHashTable<lthash::CellMeta256, lthash::ProbeContinousTwoBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
     else
-        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(bucket, associate);
+        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
 }
 
 template <class HashType>
@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
     {
         util::Stats stats;
         lthash::HashTable& hashtable = *HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
-        std::string key = "test";
+        std::string key = "ltkey";
         uint64_t i = 0;
         bool res = true;
         auto time_start = Env::Default()->NowNanos();
@@ -103,10 +103,12 @@ int main(int argc, char *argv[]) {
         time_end = Env::Default()->NowNanos();
         printf("lthash(%25s) - Load Factor: %.2f. Read     %10lu key, Speed: %5.2f Mops/s. Time: %lu ns\n", hashtable.ProbeStrategyName().c_str(), hashtable.LoadFactor(), i, (double)i / (time_end - time_start) * 1000.0, (time_end - time_start));
     }
-
+    
     HashSpeedTest<robin_hood::unordered_set<std::string> >("robin_hood::unordered_set", inserted_num);
     HashSpeedTest<absl::flat_hash_set<std::string> >("absl::flat_hash_set", inserted_num);
     HashSpeedTest<std::unordered_set<std::string> >("std::unordered_set", inserted_num);
+
+
     return 0;
 }
 

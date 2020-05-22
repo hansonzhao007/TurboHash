@@ -15,9 +15,6 @@
 namespace lthash {
 
 using Slice = util::Slice; 
-#define LTHASH_H3_SIZE uint64_t
-#define LTHASH_H2_SIZE uint8_t 
-#define LTHASH_H1_SIZE uint16_t
 
 union HashSlot
 {
@@ -29,27 +26,16 @@ union HashSlot
     } meta;
 };
 
-inline LTHASH_H3_SIZE H3(uint64_t hash) { return (hash >> 24);}
-inline LTHASH_H2_SIZE H2(uint64_t hash) { return ((hash >> 16) & 0xFF);}
-inline LTHASH_H1_SIZE H1(uint64_t hash) { return ((hash >> 0) & 0xFFFF);}
-
-// the inline hash function
-// 64 bit hash value
-// |  40 bit  |  8 bit  |  16 bit  |
-// |    H3    |    H2   |    H1    |
-// H3: is used to locate cell in each bucket, or it is index for associate
-// H2: is the one byte hash in the meta
-// H1: is the two byte hash stored in the non-used byte of the 8 byte-pointer
 struct PartialHash {
-    PartialHash(uint64_t hash, const Slice& key) {
-        H3_ = H3(hash);
-        H2_ = H2(hash);
-        H1_ = H1(hash);
+    PartialHash(uint64_t hash, const Slice& key, bool replace_h3_with_h1):
+        H1_(H1(hash)),
+        H2_(H2(hash)),
+        H3_(replace_h3_with_h1 ? H1_ : H3(hash)) {
     };
 
-    LTHASH_H3_SIZE H3_;
-    LTHASH_H2_SIZE H2_;
     LTHASH_H1_SIZE H1_;
+    LTHASH_H2_SIZE H2_;
+    LTHASH_H3_SIZE H3_;
 };
 
 class SlotInfo {
@@ -111,12 +97,13 @@ public:
         friend class DramHashTable;
     };
 
-    explicit DramHashTable(uint32_t bucket_count, uint32_t associate_count):
+    explicit DramHashTable(uint32_t bucket_count, uint32_t associate_count, bool use_h1_locate_cell):
         bucket_count_(bucket_count),
         bucket_mask_(bucket_count - 1),
         associate_count_(associate_count),
         associate_mask_(associate_count - 1),
-        capacity_(bucket_count * associate_count * CellMeta::SlotSize()) {
+        capacity_(bucket_count * associate_count * CellMeta::SlotSize()),
+        locate_cell_with_h1_(use_h1_locate_cell) {
         if (!isPowerOfTwo(bucket_count) ||
             !isPowerOfTwo(associate_count)) {
             printf("the hash table size setting is wrong. bucket: %u, associate: %u\n", bucket_count, associate_count);
@@ -215,7 +202,7 @@ public:
         char buffer[1024];
         sprintf(buffer, "----- bucket %10u -----\n", bucket_i);
         res += buffer;
-        ProbeStrategy probe(0, associate_mask_, bucket_i, bucket_count_);
+        ProbeStrategy probe(0, associate_mask_, bucket_i, bucket_count_, false);
         uint32_t i = 0;
         int count_sum = 0;
         while (probe) {
@@ -237,12 +224,8 @@ public:
             printf("%s\n", PrintBucketMeta(b).c_str());
         }
     }
+
 private:
-    // set meta after inserting value to slot
-    void setCellMeta(size_t i, uint32_t hash) {
-
-    }
-
     inline std::pair<uint64_t, uint64_t> twoHashValue(const Slice& key) {
         auto res = Hasher::hash(key.data(), key.size());
         return res;
@@ -296,7 +279,7 @@ private:
     const Slice extraceSlice(const HashSlot& slot, size_t len) {
         auto tmp = slot;
         tmp.meta.H1 = 0;
-        return Slice((const char*)tmp.entry, len);
+        return Slice((const char*)tmp.entry, strlen((const char*)tmp.entry));
     }
 
     // Store the value to media and return the pointer to the media position
@@ -317,12 +300,14 @@ private:
         auto hash_two = twoHashValue(key);
         uint32_t bucket_i = locateBucket(hash_two.first);
         auto associate_hash = hash_two.second;
-        PartialHash partial_hash(associate_hash, key);
+        PartialHash partial_hash(associate_hash, key, locate_cell_with_h1_);
         ProbeStrategy probe(partial_hash.H3_, associate_mask_, bucket_i, bucket_count_);
         
         while (probe) {
             char* cell_addr = locateCell(probe.offset());
+            // Here will aquire a bit lock when construct CellMeta
             CellMeta meta(cell_addr);
+
             // locate if there is any H2 match in this cell
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {
                 // i is the slot index in current cell, each slot
@@ -371,7 +356,7 @@ private:
         auto hash_two = twoHashValue(key);
         uint32_t bucket_i = locateBucket(hash_two.first);
         auto associate_hash = hash_two.second;
-        PartialHash partial_hash(associate_hash, key);
+        PartialHash partial_hash(associate_hash, key, locate_cell_with_h1_);
         ProbeStrategy probe(partial_hash.H3_, associate_mask_, bucket_i, bucket_count_);
 
         while (probe) {
@@ -392,19 +377,30 @@ private:
                     if (likely(slotKeyEqual(slot, key))) {
                         return {{probe.offset().first, probe.offset().second, i, partial_hash.H1_, partial_hash.H2_} , true};
                     }
-                    
                     else {
                         #ifdef LTHASH_DEBUG_OUT
-                        printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Search key: %15s, H2: 0x%2x, H1: 0x%4x, Slot key: %15s, H1: 0x%4x\n", 
+                        // printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Search key: %15s, H2: 0x%2x, H1: 0x%4x, Slot key: %15s, H1: 0x%4x\n", 
+                        //     probe.offset().first, 
+                        //     probe.offset().second, 
+                        //     i, 
+                        //     meta.BitMapToString().c_str(),
+                        //     key.ToString().c_str(),
+                        //     partial_hash.H2_,
+                        //     partial_hash.H1_,
+                        //     extraceSlice(slot, key.size()).ToString().c_str(),
+                        //     slot.meta.H1
+                        //     );
+                        
+                        Slice slot_key =  extraceSlice(slot, key.size());
+                        printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Search key: %15s, 0x%016lx, Slot key: %15s, 0x%016lx\n", 
                             probe.offset().first, 
                             probe.offset().second, 
                             i, 
                             meta.BitMapToString().c_str(),
                             key.ToString().c_str(),
-                            partial_hash.H2_,
-                            partial_hash.H1_,
-                            extraceSlice(slot, key.size()).ToString().c_str(),
-                            slot.meta.H1
+                            associate_hash,
+                            slot_key.ToString().c_str(),
+                            twoHashValue(slot_key).second
                             );
                         #endif
                     }
@@ -435,6 +431,7 @@ private:
     const size_t  associate_mask_  = 0;
     const size_t  capacity_ = 0;
     size_t        size_ = 0;
+    bool          locate_cell_with_h1_ = false;
 };
 
 }

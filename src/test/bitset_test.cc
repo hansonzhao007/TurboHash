@@ -1,4 +1,3 @@
-#include <emmintrin.h>
 #include <immintrin.h>
 #include <cstdlib>
 #include "util/env.h"

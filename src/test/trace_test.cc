@@ -11,7 +11,7 @@ int main() {
     }
     uint64_t num = 0;
     stats.Start();
-    for (uint64_t i = 0; i < 100000000; i++) {
+    for (uint64_t i = 0; i < 10000000; i++) {
         num = trace->Next();
         stats.FinishedSingleOp();
     }
@@ -19,7 +19,7 @@ int main() {
     stats.Report("Trace speed");
 
     stats.Start();
-    for (uint64_t i = 0; i < 100000000; i++) {
+    for (uint64_t i = 0; i < 10000000; i++) {
         num = random();
         stats.FinishedSingleOp();
     }

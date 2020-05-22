@@ -3,6 +3,23 @@
 #include <string>
 
 namespace lthash {
+
+#define LTHASH_H3_SIZE uint64_t
+#define LTHASH_H2_SIZE uint8_t 
+#define LTHASH_H1_SIZE uint16_t
+
+
+// 64 bit hash value
+// |  40 bit  |  8 bit  |  16 bit  |
+// |    H3    |    H2   |    H1    |
+// H3: is used to locate cell in each bucket, or it is index for associate
+// H2: is the one byte hash in the meta
+// H1: is the two byte hash stored in the non-used byte of the 8 byte-pointer
+const int CONST_SHIFT = 1;
+inline LTHASH_H3_SIZE H3(uint64_t hash) { return (hash  >> (24 + CONST_SHIFT));}
+inline LTHASH_H2_SIZE H2(uint64_t hash) { return ((hash >> (16 + CONST_SHIFT)) & 0xFF);}
+inline LTHASH_H1_SIZE H1(uint64_t hash) { return ((hash >> CONST_SHIFT) & 0xFFFF);}
+
 /**
  *  AssociateMask is used to mod associate_count
 */

@@ -5,16 +5,19 @@
 #include <stdlib.h>
 #include <immintrin.h>
 #include "bitset.h"
+#include "spinlock.h"
+
 namespace lthash {
 
-
+const int kBitLockPosition = 0;
 /**
  *  Description: Hash cell whose size is 256 byte. There are 28 slots in the cell.
  *  Format:
  *  | ----------------------- meta ------------------------| ----- slots ---- |
  *  | 4 byte bitmap | 28 byte: one byte hash for each slot | 8 byte * 28 slot |
  *  bitmap: 
- *      0  - 3  bit: not in use
+ *           0  bit: used as a bitlock
+ *      1  - 3  bit: not in use
  *      4  - 31 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
  *  one byte hash:
  *      8 bit hash for the slot
@@ -24,29 +27,36 @@ namespace lthash {
 */ 
 class CellMeta256 {
 public:
-    explicit CellMeta256(const char* rep) {
-        meta_ = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
-        bitmap_ = *(const uint32_t*)(rep); // the lowest 32bit is used as bitmap
-        bitmap_ &= 0x0FFFFFFF0;             // hidden the 0 - 3 bit in bitmap
-    }
+    explicit CellMeta256(char* rep) {
+        // aquire bit lock when construct this cell meta
+        lthash_bit_spin_lock((lthash_bitspinlock*)rep, kBitLockPosition);
 
+        meta_   = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
+        bitmap_ = *(uint32_t*)(rep);              // the lowest 32bit is used as bitmap
+        bitmap_ &= 0x0FFFFFFF0;                         // hidden the 0 - 3 bit in bitmap
+        rep_    = rep;
+    }
+    ~CellMeta256() {
+        // release the bit lock
+        lthash_bit_spin_unlock((lthash_bitspinlock*)rep_, kBitLockPosition);
+    }
     // return a bitset, the slot that matches the hash is set to 1
-    BitSet MatchBitSet(uint8_t hash) {
+    BitSet inline MatchBitSet(uint8_t hash) {
         auto bitset = _mm256_set1_epi8(hash);
         return BitSet(_mm256_movemask_epi8(_mm256_cmpeq_epi8(bitset, meta_)) &
                       (bitmap_) /* filter out empty slot*/);
     }
 
     // return a bitset, the slot that is ok for insertion
-    BitSet EmptyBitSet() {
+    BitSet inline EmptyBitSet() {
         return BitSet((~bitmap_) & 0x0FFFFFFF0);
     }
 
-    BitSet OccupyBitSet() {
+    BitSet inline OccupyBitSet() {
         return BitSet(bitmap_);
     }
 
-    int OccupyCount() {
+    int inline OccupyCount() {
         return __builtin_popcount(bitmap_);
     }
     static uint32_t CellSize() {
@@ -102,8 +112,9 @@ public:
         return bitmap_;
     }
 private:
-    __m256i     meta_;      // 32 byte integer vector
-    uint32_t    bitmap_;    // 1: occupied, 0: empty or deleted
+    __m256i     meta_;          // 32 byte integer vector
+    uint32_t    bitmap_;        // 1: occupied, 0: empty or deleted
+    char*       rep_;
 };
 
 
@@ -113,7 +124,8 @@ private:
  *  | ----------------------- meta ------------------------| ----- slots ---- |
  *  | 2 byte bitmap | 14 byte: one byte hash for each slot | 8 byte * 14 slot |
  *  bitmap: 
- *      0  -  1 bit: not in use: TODO (xingsheng) we may use this part to decide right shift length of the hash value to add more entropy
+ *            0 bit: used as a bitlock
+ *            1 bit: not in use
  *      2  - 15 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
  *  one byte hash:
  *      8 bit hash for the slot
@@ -123,30 +135,37 @@ private:
 */ 
 class CellMeta128 {
 public:
-    explicit CellMeta128(const char* rep) {
-        meta_ = _mm_loadu_si128(reinterpret_cast<const __m128i*>(rep));
-        bitmap_ = *(const uint32_t*)(rep); // the lowest 32bit is used as bitmap
-        bitmap_ &= 0xFFFC;             // hide the 0, 1 bit in bitmap
+    explicit CellMeta128(char* rep) {
+        // aquire bit lock when construct this cell meta
+        lthash_bit_spin_lock((lthash_bitspinlock*)rep, kBitLockPosition);
 
+        meta_   = _mm_loadu_si128(reinterpret_cast<const __m128i*>(rep));
+        bitmap_ = *(uint32_t*)(rep);              // the lowest 32bit is used as bitmap
+        bitmap_ &= 0xFFFC;                              // hide the 0, 1 bit in bitmap
+        rep_    = rep;
     }
 
+    ~CellMeta128() {
+         // release the bit lock
+        lthash_bit_spin_unlock((lthash_bitspinlock*)rep_, kBitLockPosition);
+    }
     // return a bitset, the position that matches the hash is set to 1
-    BitSet MatchBitSet(uint8_t hash) {
+    BitSet inline MatchBitSet(uint8_t hash) {
         auto bitset = _mm_set1_epi8(hash);
         return BitSet(_mm_movemask_epi8(_mm_cmpeq_epi8(bitset, meta_)) &
                       (bitmap_) /* filter out empty slot*/);
     }
 
     // return a bitset, the position that is empty for insertion
-    BitSet EmptyBitSet() {
+    BitSet inline EmptyBitSet() {
         return BitSet((~bitmap_) & 0xFFFC);
     }
 
-    BitSet OccupyBitSet() {
+    BitSet inline OccupyBitSet() {
         return BitSet(bitmap_);
     }
 
-    int OccupyCount() {
+    int inline OccupyCount() {
         return __builtin_popcount(bitmap_);
     }
 
@@ -203,6 +222,7 @@ public:
 private:
     __m128i     meta_;          // 16 byte integer vector
     uint16_t    bitmap_;        // 1: occupied, 0: empty or deleted
+    char*       rep_;
 };
 
 
