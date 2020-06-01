@@ -9,7 +9,6 @@
 
 namespace lthash {
 
-const int kBitLockPosition = 0;
 /**
  *  Description: Hash cell whose size is 256 byte. There are 28 slots in the cell.
  *  Format:
@@ -28,17 +27,12 @@ const int kBitLockPosition = 0;
 class CellMeta256 {
 public:
     explicit CellMeta256(char* rep) {
-        // aquire bit lock when construct this cell meta
-        lthash_bit_spin_lock((lthash_bitspinlock*)rep, kBitLockPosition);
-
         meta_   = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
         bitmap_ = *(uint32_t*)(rep);              // the lowest 32bit is used as bitmap
         bitmap_ &= 0x0FFFFFFF0;                         // hidden the 0 - 3 bit in bitmap
-        rep_    = rep;
+        // rep_    = rep;
     }
     ~CellMeta256() {
-        // release the bit lock
-        lthash_bit_spin_unlock((lthash_bitspinlock*)rep_, kBitLockPosition);
     }
     // return a bitset, the slot that matches the hash is set to 1
     BitSet inline MatchBitSet(uint8_t hash) {
@@ -54,6 +48,10 @@ public:
 
     BitSet inline OccupyBitSet() {
         return BitSet(bitmap_);
+    }
+
+    bool Occupy(int slot_index) {
+        return bitmap_ & (1 << slot_index);
     }
 
     int inline OccupyCount() {
@@ -114,7 +112,7 @@ public:
 private:
     __m256i     meta_;          // 32 byte integer vector
     uint32_t    bitmap_;        // 1: occupied, 0: empty or deleted
-    char*       rep_;
+    // char*       rep_;
 };
 
 
@@ -136,18 +134,13 @@ private:
 class CellMeta128 {
 public:
     explicit CellMeta128(char* rep) {
-        // aquire bit lock when construct this cell meta
-        lthash_bit_spin_lock((lthash_bitspinlock*)rep, kBitLockPosition);
-
         meta_   = _mm_loadu_si128(reinterpret_cast<const __m128i*>(rep));
         bitmap_ = *(uint32_t*)(rep);              // the lowest 32bit is used as bitmap
         bitmap_ &= 0xFFFC;                              // hide the 0, 1 bit in bitmap
-        rep_    = rep;
+        // rep_    = rep;
     }
 
     ~CellMeta128() {
-         // release the bit lock
-        lthash_bit_spin_unlock((lthash_bitspinlock*)rep_, kBitLockPosition);
     }
     // return a bitset, the position that matches the hash is set to 1
     BitSet inline MatchBitSet(uint8_t hash) {
@@ -165,6 +158,10 @@ public:
         return BitSet(bitmap_);
     }
 
+    bool Occupy(int slot_index) {
+        return bitmap_ & (1 << slot_index);
+    }
+    
     int inline OccupyCount() {
         return __builtin_popcount(bitmap_);
     }
@@ -222,7 +219,7 @@ public:
 private:
     __m128i     meta_;          // 16 byte integer vector
     uint16_t    bitmap_;        // 1: occupied, 0: empty or deleted
-    char*       rep_;
+    // char*       rep_;
 };
 
 

@@ -10,7 +10,7 @@
 #include "util/slice.h"
 #include "util/env.h"
 
-#define LTHASH_DEBUG_OUT
+// #define LTHASH_DEBUG_OUT
 
 namespace lthash {
 
@@ -141,28 +141,51 @@ public:
     // | partial hash   |  pointer to DIMM  |
     // Here the value should be the pointer to DIMM
     bool Put(const Slice& key, const Slice& value) {
-        // step 1: find a conflict slot in cell or empty slot
-        // step 2: store the value to media, update the slot
+        // step 1: store the value to media, obtain the offset. 
+        // step 2: find a conflict slot in cell or empty slot, update the slot
         // step 3: highly unlikely. There is no valid slot. (need expand the hash table)
 
-        // step 1:
-        auto res = findSlotForInsert(key);
-        if (res.second) {
-            // step 2:
-            void* media_pos = storeValueToMedia(key, value);
+        // step 1: this operation should be thread safe
+        void* media_pos = storeValueToMedia(key, value);
 
-            // insert H1 to higher 2 byte of the slot
-            HashSlot slot;
-            slot.entry = media_pos;
-            slot.meta.H1 = res.first.H1;
-            updateSlot(res.first, slot);
+        // step 2:
+        bool retry_find = false;
+        do {
+            // concurrent insertion may find the same position
+            auto res = findSlotForInsert(key);
 
-            // update meta one byte hash(H2), and set bitmap
-            updateMeta(res.first);
-            ++size_;
-            return true;
-        }
+            if (res.second) {
+                // find a valid slot
+                
+                // obtain the cell lock
+                char* cell_addr = locateCell({res.first.bucket, res.first.associate});
+                SpinLockScope((lthash_bitspinlock*)cell_addr);
+                
+                CellMeta meta(cell_addr);
+                if (likely(!meta.Occupy(res.first.slot))) {
+                    // if the slot is not occupied, we update the slot 
+                    // including bitmap, one byte hash, and the slot content
 
+                    // update slot content, including pointer and H1
+                    HashSlot slot;
+                    slot.entry = media_pos;
+                    slot.meta.H1 = res.first.H1;
+                    updateSlot(res.first, slot);
+
+                    // update one byte hash(H2), and bitmap
+                    updateMeta(res.first);
+                    ++size_;
+                    return true;
+                }
+                else {
+                    // if current slot already occupies by another 
+                    // concurrent thread, we retry find slot.
+                    printf("retry find slot\n");
+                    retry_find = true;
+                }
+            }
+        } while (retry_find);
+        
         // step 3:
         return false;
     }
@@ -305,7 +328,7 @@ private:
         
         while (probe) {
             char* cell_addr = locateCell(probe.offset());
-            // Here will aquire a bit lock when construct CellMeta
+            
             CellMeta meta(cell_addr);
 
             // locate if there is any H2 match in this cell

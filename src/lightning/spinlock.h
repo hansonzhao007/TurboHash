@@ -120,3 +120,17 @@ inline void lthash_bit_spin_unlock(lthash_bitspinlock *lock, int bit_pos)
     *lock &= ~(1 << bit_pos);
     // lthash_atomic_bittestandreset_x86(lock, bit_pos);
 }
+
+class SpinLockScope {
+public:
+    const int kBitLockPosition = 0;
+    SpinLockScope(lthash_bitspinlock *lock):
+        lock_(lock) {
+        lthash_bit_spin_lock(lock, kBitLockPosition);
+    }
+    ~SpinLockScope() {
+        // release the bit lock
+        lthash_bit_spin_unlock(lock_, kBitLockPosition);
+    }
+    lthash_bitspinlock *lock_;
+};
