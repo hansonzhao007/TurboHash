@@ -164,16 +164,12 @@ public:
                 CellMeta meta(cell_addr);
                 if (likely(!meta.Occupy(res.first.slot))) {
                     // if the slot is not occupied, we update the slot 
-                    // including bitmap, one byte hash, and the slot content
 
-                    // update slot content, including pointer and H1
+                    // update slot content, including pointer and H1, H2, bitmap
                     HashSlot slot;
                     slot.entry = media_pos;
                     slot.meta.H1 = res.first.H1;
-                    updateSlot(res.first, slot);
-
-                    // update one byte hash(H2), and bitmap
-                    updateMeta(res.first);
+                    updateMeta(res.first, slot);
                     ++size_;
                     return true;
                 }
@@ -264,32 +260,33 @@ private:
         return cells_ + (associate_count_ * kCellSize * offset.first +  // locate the bucket
                          offset.second * kCellSize);                    // locate the associate cell
     }
-    // inline char* locateCell(size_t bucket_i, size_t associate_i) {
-    //     // cells in the same bucket are allocate in adjecent memory address
-    //     return cells_ + (associate_count_ * kCellSize * bucket_i +  // locate the bucket
-    //                      associate_i * kCellSize);                  // locate the associate cell
-    // }
   
     inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
         return (HashSlot*)(cell_addr + slot_i * 8);
     }
 
-    inline void updateSlot(const SlotInfo& info, const HashSlot& slot) {
-        // update slot content
+
+    inline void updateMeta(const SlotInfo& info, const HashSlot& slot) {
+        // update slot content, H1 and pointer
         char* cell_addr = locateCell({info.bucket, info.associate});
         HashSlot* slot_pos = locateSlot(cell_addr, info.slot);
         *slot_pos = slot;
-    }
 
-    inline void updateMeta(const SlotInfo& info) {
-        // update cell meda, set bitmap and one byte hash(H2)
-        char* cell_addr = locateCell({info.bucket, info.associate});
+        // update cell bitmap and one byte hash(H2)
         decltype(CellMeta::BitMapType())* bitmap = (decltype(CellMeta::BitMapType())*)cell_addr;
-        // set bitmap
-        *bitmap = (*bitmap) | (1 << info.slot);
         // set H2
         cell_addr += info.slot; // move cell_addr one byte hash position
         *cell_addr = info.H2;   // update the one byte hash
+
+        // add a fence here. 
+        // Make sure the bitmap is updated after the H2 is updated.
+        // Prevent StoreStore reorder
+        // https://www.modernescpp.com/index.php/fences-as-memory-barriers
+        // https://preshing.com/20130922/acquire-and-release-fences/
+        std::atomic_thread_fence(std::memory_order_release);
+
+        // set bitmap
+        *bitmap = (*bitmap) | (1 << info.slot);
     }
 
     bool slotKeyEqual(const HashSlot& slot, const Slice& key) {

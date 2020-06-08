@@ -35,11 +35,6 @@ include_directories(
     "${CMAKE_BINARY_DIR}/lib/abseil-cpp"
 )
 
-# Leveling-hash repo
-include_directories(
-    "lib/leveling"
-)
-
 # add pthread support
 find_package(Threads REQUIRED)
 set(CMAKE_CXX_FLAGS "-pthread")
@@ -61,6 +56,7 @@ include_directories(
   "/usr/local/include"
   "${PROJECT_SOURCE_DIR}/src"
   "${PROJECT_SOURCE_DIR}/lib/pcm"
+  "${PROJECT_SOURCE_DIR}/lib"
 )
 
 # add system local lib

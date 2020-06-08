@@ -24,13 +24,13 @@ public:
 		delete[] objects_;
 	}
 
-	T* Allocate() {
+	inline T*  Allocate() {
 		T* object = nullptr;
 		pool_.try_dequeue(object);
 		return object;
 	}
-	void Release(T* object) {
-		pool_.enqueue(std::move(object));
+	inline void Release(T* object) {
+		pool_.enqueue(object);
 	}
 
 	inline int32_t Capacity() {return capacity_; }
