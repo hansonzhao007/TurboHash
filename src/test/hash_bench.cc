@@ -9,6 +9,7 @@
 #include "util/robin_hood.h"
 #include "util/io_report.h"
 #include "util/trace.h"
+#include "util/perf_util.h"
 
 #include "absl/container/flat_hash_map.h"
 
@@ -32,7 +33,7 @@ DEFINE_int32(probe_type, 0, "\
 DEFINE_int32(cell_type, 0, "\
     0: 128 byte cell, \
     1: 256 byte cell");
-DEFINE_bool(locate_cell_with_h1, true, "using partial hash h1 to locate cell inside bucket or not");
+DEFINE_bool(locate_cell_with_h1, false, "using partial hash h1 to locate cell inside bucket or not");
 
 static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23};
 
@@ -43,7 +44,7 @@ std::vector<std::string> kSearchKeys;
 template <class HashMap, class ValueType>
 void HashSpeedTest(const std::string& name, size_t inserted_num);
 void CuckooSpeedTest(const std::string& name, size_t inserted_num);
-size_t LTHashSpeedTest();
+size_t LTHashSpeedTest(bool generate_search_key);
 lthash::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate);
 
 
@@ -70,6 +71,8 @@ void sigalrm_handler(int sig)
 
 
 int main(int argc, char *argv[]) {
+    Env::PinCore(kThreadIDs[15]);
+    debug_perf_ppid();
     arm_sig_int();
     signal(SIGALRM, &sigalrm_handler);  // set a signal handler
 
@@ -77,7 +80,8 @@ int main(int argc, char *argv[]) {
     MAX_RANGE = FLAGS_bucket_size * FLAGS_associate_size * (FLAGS_cell_type == 0 ? 14 : 28);
     kInsertedKeys = GenerateAllKeysInRange(0, MAX_RANGE);
 
-    size_t inserted_num = LTHashSpeedTest();
+    size_t inserted_num = LTHashSpeedTest(true);
+    // inserted_num = LTHashSpeedTest(false);
     HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
     HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
     // HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);
@@ -85,36 +89,39 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-size_t LTHashSpeedTest() {
+size_t LTHashSpeedTest(bool generate_search_key) {
     size_t inserted_num = 0;
     util::Stats stats;
-    lthash::HashTable& hashtable = *HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
+    lthash::HashTable* hashtable = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
     uint64_t i = 0;
     bool res = true;
+    debug_perf_switch();
     auto time_start = Env::Default()->NowNanos();
     while (res && i < MAX_RANGE) {
-        res = hashtable.Put(kInsertedKeys[i++], "v");
+        res = hashtable->Put(kInsertedKeys[i++], "v");
         if ((i & 0xFFFFF) == 0) {
             fprintf(stderr, "%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
         }
     }
     auto time_end = Env::Default()->NowNanos();
+    debug_perf_switch();
     printf("lthash(%25s) - Load Factor: %.2f. Insert   %10lu key, Speed: %5.2f Mops/s. Time: %lu ns. Total put: %10lu\n", 
-        hashtable.ProbeStrategyName().c_str(), 
-        hashtable.LoadFactor(), 
-        hashtable.Size(), 
-        (double)hashtable.Size() / (time_end - time_start) * 1000.0, 
+        hashtable->ProbeStrategyName().c_str(), 
+        hashtable->LoadFactor(), 
+        hashtable->Size(), 
+        (double)hashtable->Size() / (time_end - time_start) * 1000.0, 
         (time_end - time_start),
         i - 1);
     inserted_num = i - 1;
-
+    
 
     std::vector<std::thread> workers(FLAGS_thread_read);
     std::vector<size_t> counts(FLAGS_thread_read, 0);
-    kSearchKeys =  GenerateRandomKeys(0, inserted_num, inserted_num, i * 123 + 123);
+    if (generate_search_key) kSearchKeys =  GenerateRandomKeys(0, inserted_num, inserted_num, i * 123 + 123);
 
     kRunning = true;
     alarm(6);  // set an alarm for 6 seconds from now
+    debug_perf_switch();
     time_start = Env::Default()->NowNanos();
     for (int t = 0; t < FLAGS_thread_read; t++) {
         workers[t] = std::thread([t, inserted_num, &hashtable, &counts]
@@ -127,7 +134,7 @@ size_t LTHashSpeedTest() {
             size_t start_offset = random() % inserted_num;
             // printf("thread %2d start offet: %8lu\n", t, start_offset);
             while (kRunning && i < inserted_num && res) {
-                res = hashtable.Get(kSearchKeys[(start_offset + i++) % inserted_num], &value);
+                res = hashtable->Get(kSearchKeys[(start_offset + i++) % inserted_num], &value);
                 if ((i & 0xFFFFF) == 0) {
                     fprintf(stderr, "thread: %2d%*s-%03d->\r", t,  int(i >> 20), " ", int(i >> 20));fflush(stderr);
                 }
@@ -140,10 +147,11 @@ size_t LTHashSpeedTest() {
         t.join();
     });
     time_end = Env::Default()->NowNanos();
+    debug_perf_stop();
     size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
     printf("lthash(%25s) - Load Factor: %.2f. Read     %10lu key, Speed: %5.2f Mops/s. Time: %lu ns\n", 
-        hashtable.ProbeStrategyName().c_str(), 
-        hashtable.LoadFactor(), 
+        hashtable->ProbeStrategyName().c_str(), 
+        hashtable->LoadFactor(), 
         read_count, 
         (double)(read_count) / (time_end - time_start) * 1000.0, 
         (time_end - time_start));
@@ -152,7 +160,7 @@ size_t LTHashSpeedTest() {
         printf("thread %2d read: %10lu\n", i, counts[i]);
     }
 
-    delete &hashtable;
+    delete hashtable;
     return inserted_num;
 }
 

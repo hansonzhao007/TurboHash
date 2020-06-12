@@ -143,18 +143,18 @@ public:
     ~CellMeta128() {
     }
     // return a bitset, the position that matches the hash is set to 1
-    BitSet inline MatchBitSet(uint8_t hash) {
+    BitSet MatchBitSet(uint8_t hash) {
         auto bitset = _mm_set1_epi8(hash);
         return BitSet(_mm_movemask_epi8(_mm_cmpeq_epi8(bitset, meta_)) &
                       (bitmap_) /* filter out empty slot*/);
     }
 
     // return a bitset, the position that is empty for insertion
-    BitSet inline EmptyBitSet() {
+    BitSet EmptyBitSet() {
         return BitSet((~bitmap_) & 0xFFFC);
     }
 
-    BitSet inline OccupyBitSet() {
+    BitSet OccupyBitSet() {
         return BitSet(bitmap_);
     }
 

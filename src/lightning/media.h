@@ -2,8 +2,6 @@
 
 #include "util/slice.h"
 #include "format.h"
-
-
 namespace lthash {
 
 /** 

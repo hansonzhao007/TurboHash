@@ -16,7 +16,7 @@
 #include "util/coding.h"
 #include "util/status.h"
 #include "util/prefetcher.h"
-
+#include "util/env.h"
 // #define LTHASH_DEBUG_OUT
 
 namespace lthash {
@@ -93,6 +93,7 @@ public:
 
 class HashTable {
 public:
+    virtual ~HashTable() {}
     virtual bool Put(const std::string& key, const std::string& value) = 0;
     virtual bool Get(const std::string& key, std::string* value) = 0;
     virtual void Delete(const Slice& key) = 0;
@@ -210,7 +211,7 @@ public:
 
         // step 4: write record to log_offset
         // calculate hash value of the key
-        size_t hash_value = HashValue(key);
+        size_t hash_value = Hasher::hash(key.data(), key.size());
         // store the kv pair to media
         void* media_offset = storeValueToMedia(key, value, log_id, log_offset);
 
@@ -220,7 +221,7 @@ public:
 
     // Return the entry if key exists
     bool Get(const std::string& key, std::string* value) {
-        size_t hash_value = HashValue(key);
+        size_t hash_value = Hasher::hash(key.data(), key.size());
         auto res = findSlot(key, hash_value);
         if (res.second) {
             // find a key in hash table
@@ -333,9 +334,6 @@ private:
         logid2filename_[cur_log_id_] = filename;
         logid2pmem_[cur_log_id_] = pmem_addr;
     }
-    inline size_t HashValue(const Slice& key) {
-        return Hasher::hash(key.data(), key.size());
-    }
 
     inline uint32_t locateBucket(uint64_t hash) {
         return hash & bucket_mask_;
@@ -349,7 +347,7 @@ private:
     }
   
     inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
-        return (HashSlot*)(cell_addr + slot_i * 8);
+        return (HashSlot*)(cell_addr + (slot_i << 3));
     }
 
     inline void updateSlotAndMeta(const SlotInfo& info, void* media_offset) {
@@ -386,12 +384,12 @@ private:
 
             if (res.second) {
                 // find a valid slot
-                
                 // obtain the cell lock
                 char* cell_addr = locateCell({res.first.bucket, res.first.associate});
                 SpinLockScope((lthash_bitspinlock*)cell_addr);
                 
                 CellMeta meta(cell_addr);
+                util::PrefetchForWrite((void*)cell_addr);
                 if (likely(!meta.Occupy(res.first.slot) || res.first.equal_key)) {
                     // if the slot is not occupied or the slot has same key with request
                     // we update the slot 
@@ -456,10 +454,12 @@ private:
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = locateBucket(partial_hash.bucket_hash_);
         ProbeStrategy probe(partial_hash.H3_, associate_mask_, bucket_i, bucket_count_);
-        
+
         while (probe) {
             auto offset = probe.offset();
             char* cell_addr = locateCell(offset);
+            // prefetch next cell
+            util::PrefetchForRead((void*)(cell_addr + CellMeta::CellSize()));
             CellMeta meta(cell_addr);
             // locate if there is any H2 match in this cell
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {
@@ -480,14 +480,14 @@ private:
                         #ifdef LTHASH_DEBUG_OUT
                         Slice slot_key =  extractSlice(slot, key.size());
                         printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Insert key: %15s, 0x%016lx, Slot key: %15s, 0x%016lx\n", 
-                            probe.offset().first, 
-                            probe.offset().second, 
+                            offset.first, 
+                            offset.second, 
                             i, 
                             meta.BitMapToString().c_str(),
                             key.ToString().c_str(),
                             hash_value,
                             slot_key.ToString().c_str(),
-                            HashValue(slot_key)
+                            Hasher::hash(slot_key.data(), slot_key.size())
                             );
                         #endif
                     }
@@ -521,7 +521,7 @@ private:
             // only when the slot index is smaller than size limit, we do prefetch
             HashSlot slot = *locateSlot(cell_addr, slot_i);
             slot.meta.H1 = 0;
-            util::PrefetchForRead(slot.entry, util::Locality_No_Temporal);
+            util::PrefetchForRead(slot.entry);
         }
     }
 
@@ -543,7 +543,8 @@ private:
                 // PrefetchSlotKey(cell_addr, i);
                 // locate the slot reference
                 const HashSlot& slot = *locateSlot(cell_addr, i);
-                util::PrefetchForRead((void*)((uint64_t)slot.entry & 0x0000FFFFFFFFFFFF), util::Locality_2);
+                // prefetch address that slot point to
+                util::PrefetchForRead((void*)((uint64_t)slot.entry & 0x0000FFFFFFFFFFFF));
 
                 // compare if the H1 partial hash is equal
                 if (likely(slot.meta.H1 == partial_hash.H1_)) {
@@ -569,14 +570,14 @@ private:
                         
                         Slice slot_key =  extractSlice(slot, key.size());
                         printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Search key: %15s, 0x%016lx, Slot key: %15s, 0x%016lx\n", 
-                            probe.offset().first, 
-                            probe.offset().second, 
+                            offset.first, 
+                            offset.second, 
                             i, 
                             meta.BitMapToString().c_str(),
                             key.ToString().c_str(),
                             hash_value,
                             slot_key.ToString().c_str(),
-                            HashValue(slot_key)
+                            Hasher::hash(slot_key.data(), slot_key.size())
                             );
                         #endif
                     }
