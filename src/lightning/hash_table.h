@@ -4,9 +4,11 @@
 #include <stdlib.h>
 #include <atomic>
 #include <vector>
+#include <libpmem.h>
 
 #include "format.h"
 #include "bitset.h"
+#include "media.h"
 #include "hash_function.h"
 #include "cell_meta.h"
 #include "probe_strategy.h"
@@ -18,7 +20,8 @@
 // #define LTHASH_DEBUG_OUT
 
 namespace lthash {
-const size_t kMaxLogFileSize = 512 << 20;   // 2 GB
+
+const size_t kMaxLogFileSize = 4LU << 30;   // 4 GB
 using Slice = util::Slice; 
 using Status = util::Status;
 
@@ -27,10 +30,17 @@ union HashSlot
     /* data */
     const void* entry;       // 8B
     struct {
-        uint16_t none[3];
+        uint32_t offset;
+        uint16_t log_id;
         uint16_t H1;
     } meta;
 };
+
+
+#define BUCKET_H_SIZE uint32_t
+#define LTHASH_H3_SIZE uint8_t
+#define LTHASH_H2_SIZE uint8_t 
+#define LTHASH_H1_SIZE uint16_t
 
 // 64 bit hash function is used to locate initial position of keys
 // |         4 B       |         4 B       |
@@ -40,12 +50,6 @@ union HashSlot
 // H3: index within each bucket
 // H2: 1 byte hash for parallel comparison
 // H1: 2 byte partial key
-
-#define BUCKET_H_SIZE uint32_t
-#define LTHASH_H3_SIZE uint8_t
-#define LTHASH_H2_SIZE uint8_t 
-#define LTHASH_H1_SIZE uint16_t
-
 struct PartialHash {
     PartialHash(uint64_t hash):
         bucket_hash_(hash >> 32),
@@ -113,7 +117,7 @@ public:
  *  Description:
  *  DramHashTable has bucket_count * associate_count cells
 */
-template <class CellMeta = CellMeta128, class ProbeStrategy = ProbeWithinBucket>
+template <class CellMeta = CellMeta128, class ProbeStrategy = ProbeWithinBucket, class Media = DramMedia>
 class DramHashTable: public HashTable {
 public:
     // Change 'Hasher' to another hash implementation to change hash function
@@ -121,6 +125,7 @@ public:
     // ---- uint64_t hash ( const void * key, int len, unsigned int seed) ----
     using Hasher = MurMurHash;
     const int kCellSize = CellMeta::CellSize();
+
     class iterator {
         friend class DramHashTable;
     };
@@ -176,12 +181,14 @@ public:
     
 
     bool Put(const std::string& key, const std::string& value) {
+        uint16_t log_id;
+        uint32_t log_offset;
         // // step 1: put the entry to queue_, thread safe
         // // obtain current queue tail and advance queue tail atomically
         // uint32_t queue_tail = queue_tail_.fetch_add(1, std::memory_order_relaxed);
         // // add kv pair to queue
         // uint32_t queue_index = queue_tail & queue_size_mask_;
-        // queue_[queue_index] = {key, value};
+        // queue_[queue_index] = {kTypeValue, {key, value}};
 
         // // step 2: wait until we obtain the ownership. spinlock
         // // will wait until queue_index is equal to queue_head_.
@@ -189,33 +196,25 @@ public:
         // while (queue_tail != queue_head_.load(std::memory_order_relaxed));
         // // {{{ ======= atomic process start
         // // step 3: calculate the offset in the log and release the onwership to next request. (atomic)
-        // // record :=
-        // // 1B: value type
-        // // 4B: key len
-        // //   : key
-        // // 4B: value len
-        // //   : value
-        // // 1B: checksum
-        // size_t record_size = key.size() + value.size() + 10;
-        // // obtain the log_offset for current put request
-        // char* log_offset = cur_log_offset_ + cur_pmem_initial_addr_;
+        // size_t record_size = Media::FormatRecordSize(kTypeValue, key, value);
         // // if log offset is larger than file size, we create a new log file
-        // // and reset log_offset
         // if (cur_log_offset_ + record_size > kMaxLogFileSize) {
-        //     cur_log_offset_ = 0;
-        //     log_offset = 0;
-        //     printf("Create new log\n");
+        //     createNewLogFile();
         // }
+        // uint16_t log_id = cur_log_id_;
+        // uint32_t log_offset = cur_log_offset_;
         // cur_log_offset_ += record_size;
         // // ======= atomic process end }}}
         // // release spinlock by adding queue_head
         // queue_head_.fetch_add(1, std::memory_order_relaxed);
 
         // step 4: write record to log_offset
+        // calculate hash value of the key
         size_t hash_value = HashValue(key);
-        void* media_offset = storeValueToMedia(key, value, 0);
+        // store the kv pair to media
+        void* media_offset = storeValueToMedia(key, value, log_id, log_offset);
 
-        // step 5: update DRAM index
+        // step 5: update DRAM index, thread safe
         return insertSlot(key, hash_value, media_offset);
     }
 
@@ -308,20 +307,43 @@ public:
     }
 
 private:
-    char* createNewLogFile() {
+    inline std::string logFileName(uint32_t log_seq) {
+        char buf[128];
+        sprintf(buf, "%s/%010u_%010u.ldata", path_.c_str(), log_seq, 0);
+        return buf;
+    }
 
+    // create a pmem log, create a log_id->pmem_addr mapping
+    inline void createNewLogFile() {
+        printf("Create a new log\n");
+        char* pmem_addr = nullptr;
+        size_t mapped_len_;
+        int is_pmem_;
+        
+        cur_log_offset_ = 0;
+        cur_log_id_++;
+        cur_log_id_ %= 65536;
+        log_seq_++;
+
+        std::string filename = logFileName(log_seq_);
+        if (Media::isOptane() && (pmem_addr = (char *)pmem_map_file(filename.c_str(), kMaxLogFileSize, PMEM_FILE_CREATE, 0666, &mapped_len_, &is_pmem_)) == NULL) {
+            perror("pmem_map_file");
+            exit(1) ;
+        }
+        logid2filename_[cur_log_id_] = filename;
+        logid2pmem_[cur_log_id_] = pmem_addr;
     }
     inline size_t HashValue(const Slice& key) {
         return Hasher::hash(key.data(), key.size());
     }
 
-    inline uint32_t locateBucket(const uint64_t& hash) {
+    inline uint32_t locateBucket(uint64_t hash) {
         return hash & bucket_mask_;
     }
 
     // offset.first: bucket index
     // offset.second: associate index
-    inline char* locateCell(const std::pair<size_t, size_t> offset) {
+    inline char* locateCell(const std::pair<size_t, size_t>& offset) {
         return cells_ + (associate_count_ * kCellSize * offset.first +  // locate the bucket
                          offset.second * kCellSize);                    // locate the associate cell
     }
@@ -392,40 +414,52 @@ private:
         return false;
     }
 
-    inline bool slotKeyEqual(const HashSlot& slot, const Slice& key) {
-        // TODO (xingsheng): passing a functor or something
-        auto tmp = slot;
-        tmp.meta.H1 = 0;
-        return memcmp(tmp.entry, key.data(), key.size()) == 0;
-    }
-
-    const Slice extractSlice(const HashSlot& slot, size_t len) {
-        auto tmp = slot;
-        tmp.meta.H1 = 0;
-        return Slice((const char*)tmp.entry, strlen((const char*)tmp.entry));
-    }
 
     // Store the value to media and return the pointer to the media position
     // where the value stores
-    inline void* storeValueToMedia(const Slice& key, const Slice& value, char* log_offset) {
-        // TODO (xingsheng): implement store functor
-        void* buffer = malloc(key.size());
-        memcpy(buffer, key.data(), key.size());
+    inline void* storeValueToMedia(const Slice& key, const Slice& value, uint16_t log_id, uint32_t log_offset) {
+        // void* buffer = malloc(key.size());
+        // memcpy(buffer, key.data(), key.size());
+        // return buffer;
+
+        // calculate optane address
+        char* pmem_addr = logid2pmem_[log_id] + log_offset;
+        void* buffer = Media::Store(key, value, pmem_addr, log_id, log_offset);
         return buffer;
     }
 
+    inline bool slotKeyEqual(const HashSlot& slot, const Slice& key) {
+        // auto tmp = slot;
+        // tmp.meta.H1 = 0;
+        // return memcmp(tmp.entry, key.data(), key.size()) == 0;
+
+        auto tmp = slot;
+        tmp.meta.H1 = 0;
+        Slice res = Media::ParseKey(tmp.entry);
+        return res == key;
+    }
+
+
+    inline const Slice extractSlice(const HashSlot& slot, size_t len) {
+        auto tmp = slot;
+        tmp.meta.H1 = 0;
+        return  Media::ParseKey(tmp.entry);
+    }
+
+    
     // Find a valid slot for insertion
     // Return: std::pair
     //      first: the slot info that should insert the key
     //      second: whether we can find a empty slot to insert
     // Node: Only when the second value is true, can we insert this key
-    std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, size_t hash_value) {
+    inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = locateBucket(partial_hash.bucket_hash_);
         ProbeStrategy probe(partial_hash.H3_, associate_mask_, bucket_i, bucket_count_);
         
         while (probe) {
-            char* cell_addr = locateCell(probe.offset());
+            auto offset = probe.offset();
+            char* cell_addr = locateCell(offset);
             CellMeta meta(cell_addr);
             // locate if there is any H2 match in this cell
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {
@@ -440,7 +474,7 @@ private:
                     // compare the actual key pointed by the pointer 
                     // with the parameter key
                     if (likely(slotKeyEqual(slot, key))) {
-                        return {{probe.offset().first, probe.offset().second, i, partial_hash.H1_, partial_hash.H2_, true}, true};
+                        return {{offset.first, offset.second, i, partial_hash.H1_, partial_hash.H2_, true}, true};
                     }
                     else {
                         #ifdef LTHASH_DEBUG_OUT
@@ -463,7 +497,7 @@ private:
             if (likely(empty_bitset)) {
                 // there is empty slot for insertion, so we return a slot
                 for (int i : empty_bitset) {
-                    return {{probe.offset().first, probe.offset().second, i, partial_hash.H1_, partial_hash.H2_, false}, true};
+                    return {{offset.first, offset.second, i, partial_hash.H1_, partial_hash.H2_, false}, true};
                 }
             }
             
@@ -492,13 +526,14 @@ private:
     }
 
     
-    std::pair<SlotInfo, bool> findSlot(const Slice& key, size_t hash_value) {
+    inline std::pair<SlotInfo, bool> findSlot(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = locateBucket(partial_hash.bucket_hash_);
         ProbeStrategy probe(partial_hash.H3_, associate_mask_, bucket_i, bucket_count_);
 
         while (probe) {
-            char* cell_addr = locateCell(probe.offset());
+            auto offset = probe.offset();
+            char* cell_addr = locateCell(offset);
             CellMeta meta(cell_addr);
             // locate if there is any H2 match in this cell
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {
@@ -508,7 +543,7 @@ private:
                 // PrefetchSlotKey(cell_addr, i);
                 // locate the slot reference
                 const HashSlot& slot = *locateSlot(cell_addr, i);
-                util::PrefetchForRead((void*)((uint64_t)slot.entry & 0x0000FFFFFFFFFFFF), util::Locality_1);
+                util::PrefetchForRead((void*)((uint64_t)slot.entry & 0x0000FFFFFFFFFFFF), util::Locality_2);
 
                 // compare if the H1 partial hash is equal
                 if (likely(slot.meta.H1 == partial_hash.H1_)) {
@@ -516,7 +551,7 @@ private:
                     // with the parameter key
                     if (likely(slotKeyEqual(slot, key))) {
                         // slotKeyEqual is very expensive 
-                        return {{probe.offset().first, probe.offset().second, i, partial_hash.H1_, partial_hash.H2_, true} , true};
+                        return {{offset.first, offset.second, i, partial_hash.H1_, partial_hash.H2_, true} , true};
                     }
                     else {
                         #ifdef LTHASH_DEBUG_OUT
@@ -565,6 +600,7 @@ private:
     }
 
 private:
+    std::string   path_ = "./";         // default path for pmem
     char*         cells_ = nullptr;
     const size_t  bucket_count_ = 0;
     const size_t  bucket_mask_  = 0;
@@ -575,17 +611,20 @@ private:
     bool          locate_cell_with_h1_ = false;
 
     // ----- circular queue for synchronizing put requests -----
-    std::vector<std::pair<Slice, Slice>> queue_;
+    std::vector<std::pair<char, std::pair<Slice, Slice> > > queue_; // queue that store request sequence. (type, kv entry)
     uint32_t              queue_size_mask_;
     std::atomic<uint32_t> queue_tail_;
     std::atomic<uint32_t> queue_head_;
-    uint32_t              queue_head_for_log_;       // used for back ground logging thread
-
-    // ----- for pmem append log -----
-    // guarded by spinlock (while loop)
-    uint64_t      log_seq_ = 0;
-    size_t        cur_log_offset_ = 0;
-    char*         cur_pmem_initial_addr_ = nullptr;
+    uint32_t              queue_head_for_log_;  // used for background logging thread
+ 
+    std::string logid2filename_[65536]; // log_id -> pmem file: After rebooting, this should be loaded from persistent memory,
+                                                                    //                      then logid2pmem_ is updated.
+    // {{{ guarded by spinlock (while loop)
+    uint64_t    log_seq_ = 0;
+    uint16_t    cur_log_id_ = 0;
+    uint32_t    cur_log_offset_ = 0;    // logid2pmem_[cur_log_id_] + cur_log_offset_ : actual address in pmem
+    char*       logid2pmem_[65536];     // map that stores the pmem file initial address, should be initialized when rebooting. log_id_ -> pmem_addr
+    // }}}
 };
 
 }
