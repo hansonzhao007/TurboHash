@@ -87,7 +87,7 @@ class Env {
   ~Env();
 
   std::string Execute(const std::string& cmd);
-  void PinCore(int i);
+  static void PinCore(int i);
   uint32_t NextID() {return next_id_.fetch_add(1, std::memory_order_relaxed); }
   // Priority for scheduling job in thread pool
   enum Priority { BOTTOM, LOW, HIGH, USER, TOTAL };

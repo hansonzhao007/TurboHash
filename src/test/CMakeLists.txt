@@ -8,4 +8,5 @@ db_test(context_pool_test)
 db_test(pmem_util_test)
 
 db_exe(hash_bench)
+db_exe(hash_multithread)
 db_exe(mem_bench)

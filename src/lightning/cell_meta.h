@@ -136,7 +136,7 @@ public:
     explicit CellMeta128(char* rep) {
         meta_   = _mm_loadu_si128(reinterpret_cast<const __m128i*>(rep));
         bitmap_ = *(uint32_t*)(rep);              // the lowest 32bit is used as bitmap
-        bitmap_ &= 0xFFFC;                              // hide the 0, 1 bit in bitmap
+        bitmap_ &= 0xFFFC;                        // hide the 0, 1 bit in bitmap
         // rep_    = rep;
     }
 

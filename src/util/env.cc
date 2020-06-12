@@ -80,7 +80,7 @@ std::string Env::Execute(const std::string& cmd) {
 
 void Env::PinCore(int i) {
     // ------------------- pin current thread to core i -------------------
-    printf("Pin thread: %2d.\n", i);
+    // printf("Pin thread: %2d.\n", i);
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(i, &cpuset);

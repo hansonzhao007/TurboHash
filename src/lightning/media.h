@@ -9,7 +9,7 @@ namespace lthash {
 
 class Media {
 public:
-    virtual void* Store(const util::Slice& key, const util::Slice& value) = 0;
+    virtual void* Store(const util::Slice& key, const util::Slice& value, char* addr) = 0;
     virtual std::pair<util::Slice, util::Slice> Parse(const char* addr) = 0;
 };
 
@@ -21,10 +21,10 @@ public:
 */
 class DramMedia: public Media {
 public:
-    void* Store(const util::Slice& key, const util::Slice& value) override {
+    void* Store(const util::Slice& key, const util::Slice& value, char* addr) override {
         uint32_t key_len = key.size();
         uint32_t value_len = value.size();
-        void* buffer = malloc(key.size() + value.size() + sizeof(int) * 2);
+        char* buffer = (char*)malloc(key.size() + value.size() + sizeof(int) * 2);
         // store key len
         memcpy(buffer, &key_len, 4);
         // store value len

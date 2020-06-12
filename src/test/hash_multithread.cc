@@ -26,18 +26,7 @@ DEFINE_int32(cell_type, 0, "\
     1: 256 byte cell");
 DEFINE_bool(locate_cell_with_h1, false, "using partial hash h1 to locate cell inside bucket or not");
 
-lthash::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate) {
-    if (0 == cell_type && 0 == probe_type)
-        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
-    if (0 == cell_type && 1 == probe_type)
-        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeContinousTwoBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
-    if (1 == cell_type && 0 == probe_type)
-        return new lthash::DramHashTable<lthash::CellMeta256, lthash::ProbeWithinBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
-    if (1 == cell_type && 1 == probe_type)
-        return new lthash::DramHashTable<lthash::CellMeta256, lthash::ProbeContinousTwoBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
-    else
-        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
-}
+lthash::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate);
 
 template <class HashType>
 void HashSpeedTest(const std::string& name, size_t inserted_num);
@@ -77,4 +66,18 @@ int main(int argc, char *argv[]) {
     }
     
     return 0;
+}
+
+
+lthash::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate) {
+    if (0 == cell_type && 0 == probe_type)
+        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
+    if (0 == cell_type && 1 == probe_type)
+        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeContinousTwoBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
+    if (1 == cell_type && 0 == probe_type)
+        return new lthash::DramHashTable<lthash::CellMeta256, lthash::ProbeWithinBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
+    if (1 == cell_type && 1 == probe_type)
+        return new lthash::DramHashTable<lthash::CellMeta256, lthash::ProbeContinousTwoBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
+    else
+        return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(bucket, associate, FLAGS_locate_cell_with_h1);
 }
