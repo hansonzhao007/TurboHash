@@ -23,7 +23,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 using namespace util;
 
 DEFINE_bool(print_thread_read, false, "");
-DEFINE_int32(thread_read, 2, "");
+DEFINE_int32(thread_read, 1, "");
 DEFINE_int32(thread_write, 1, "");
 DEFINE_int32(associate_size, 16, "");
 DEFINE_int32(bucket_size, 256 << 10, "bucket count");

@@ -21,80 +21,11 @@
 
 namespace lthash {
 
-const size_t kMaxLogFileSize = 4LU << 30;   // 4 GB
-using Slice = util::Slice; 
-using Status = util::Status;
-
-union HashSlot
-{
-    /* data */
-    const void* entry;       // 8B
-    struct {
-        uint32_t offset;
-        uint16_t log_id;
-        uint16_t H1;
-    } meta;
-};
-
-
-#define BUCKET_H_SIZE uint32_t
-#define LTHASH_H3_SIZE uint8_t
-#define LTHASH_H2_SIZE uint8_t 
-#define LTHASH_H1_SIZE uint16_t
-
-// 64 bit hash function is used to locate initial position of keys
-// |         4 B       |         4 B       |
-// |   bucket hash     |    associate hash |
-//                     | 1B | 1B |    2B   |
-//                     | H3 | H2 |    H1   |
-// H3: index within each bucket
-// H2: 1 byte hash for parallel comparison
-// H1: 2 byte partial key
-struct PartialHash {
-    PartialHash(uint64_t hash):
-        bucket_hash_(hash >> 32),
-        H1_(         hash & 0xFFFF),
-        H2_( (hash >> 16) & 0xFF),
-        H3_( (hash >> 24) & 0xFF) {
-    };
-    BUCKET_H_SIZE  bucket_hash_;
-    // H1: 2 byte partial key
-    LTHASH_H1_SIZE H1_;
-    // H2: 1 byte hash for parallel comparison
-    LTHASH_H2_SIZE H2_;
-    // H3: index within each bucket
-    LTHASH_H3_SIZE H3_;
-};
-
-class SlotInfo {
-public:
-    uint32_t bucket;
-    uint32_t associate;
-    int slot;
-    LTHASH_H1_SIZE H1;
-    LTHASH_H2_SIZE H2;
-    bool equal_key;
-    SlotInfo(uint32_t b, uint32_t a, int s, LTHASH_H1_SIZE h1, LTHASH_H2_SIZE h2, bool euqal):
-        bucket(b),
-        associate(a),
-        slot(s),
-        H1(h1),
-        H2(h2),
-        equal_key(euqal) {}
-    SlotInfo():
-        bucket(0),
-        associate(0),
-        slot(0),
-        H1(0),
-        H2(0),
-        equal_key(false) {}
-};
-
 
 class HashTable {
 public:
     virtual ~HashTable() {}
-    virtual bool Put(const std::string& key, const std::string& value) = 0;
+    virtual bool Put(const util::Slice& key, const util::Slice& value) = 0;
     virtual bool Get(const std::string& key, std::string* value) = 0;
     virtual void Delete(const Slice& key) = 0;
     virtual double LoadFactor() = 0;
@@ -121,14 +52,109 @@ public:
 template <class CellMeta = CellMeta128, class ProbeStrategy = ProbeWithinBucket, class Media = DramMedia>
 class DramHashTable: public HashTable {
 public:
-    // Change 'Hasher' to another hash implementation to change hash function
-    // The 'Hasher' implementation has to implement the following function: 
-    // ---- uint64_t hash ( const void * key, int len, unsigned int seed) ----
+    using Slice = util::Slice; 
+    using Status = util::Status;
     using Hasher = MurMurHash;
-    const int kCellSize = CellMeta::CellSize();
+    using value_type = std::pair<util::Slice, util::Slice>;
 
+    union HashSlot
+    {
+        /* data */
+        const void* entry;       // 8B
+        struct {
+            uint32_t offset;
+            uint16_t log_id;
+            uint16_t H1;
+        } meta;
+    };
+
+    // 64 bit hash function is used to locate initial position of keys
+    // |         4 B       |         4 B       |
+    // |   bucket hash     |    associate hash |
+    //                     | 1B | 1B |    2B   |
+    //                     | H3 | H2 |    H1   |
+    // H3: index within each bucket
+    // H2: 1 byte hash for parallel comparison
+    // H1: 2 byte partial key
+    #define BUCKET_H_SIZE uint32_t
+    #define LTHASH_H3_SIZE uint8_t
+    #define LTHASH_H2_SIZE uint8_t 
+    #define LTHASH_H1_SIZE uint16_t
+    struct PartialHash {
+        PartialHash(uint64_t hash):
+            bucket_hash_(hash >> 32),
+            H1_(         hash & 0xFFFF),
+            H2_( (hash >> 16) & 0xFF),
+            H3_( (hash >> 24) & 0xFF) {
+        };
+        BUCKET_H_SIZE  bucket_hash_;
+        // H1: 2 byte partial key
+        LTHASH_H1_SIZE H1_;
+        // H2: 1 byte hash for parallel comparison
+        LTHASH_H2_SIZE H2_;
+        // H3: index within each bucket
+        LTHASH_H3_SIZE H3_;
+    };
+
+    class SlotInfo {
+    public:
+        uint32_t bucket;
+        uint32_t associate;
+        int slot;
+        LTHASH_H1_SIZE H1;
+        LTHASH_H2_SIZE H2;
+        bool equal_key;
+        SlotInfo(uint32_t b, uint32_t a, int s, LTHASH_H1_SIZE h1, LTHASH_H2_SIZE h2, bool euqal):
+            bucket(b),
+            associate(a),
+            slot(s),
+            H1(h1),
+            H2(h2),
+            equal_key(euqal) {}
+        SlotInfo():
+            bucket(0),
+            associate(0),
+            slot(0),
+            H1(0),
+            H2(0),
+            equal_key(false) {}
+    };
+
+    class DataNode {
+    public:
+        explicit DataNode(char* addr):
+            data_addr_(addr) {}
+        
+
+        value_type operator->() {
+            return Media::ParseData(data_addr_).second;
+        }
+
+    private:
+        char* data_addr_;
+    };
     class iterator {
-        friend class DramHashTable;
+    public:
+        using difference_type = std::ptrdiff_t;
+        using value_type =  char*;
+        using reference = void;
+        using pointer = void;
+        using iterator_category = std::forward_iterator_tag; 
+
+        iterator& operator=(iterator const& iter) {
+            
+            return *this;
+        }
+
+        iterator& operator++() {
+
+            return *this;
+        }
+
+        pointer operator->() const {
+
+        }
+        friend class DramHashTable<CellMeta, ProbeStrategy, Media>;
     };
 
     explicit DramHashTable(uint32_t bucket_count, uint32_t associate_count, bool use_h1_locate_cell):
@@ -181,7 +207,7 @@ public:
     }
     
 
-    bool Put(const std::string& key, const std::string& value) {
+    bool Put(const util::Slice& key, const util::Slice& value) {
         uint16_t log_id;
         uint32_t log_offset;
         // // step 1: put the entry to queue_, thread safe
@@ -626,6 +652,10 @@ private:
     uint32_t    cur_log_offset_ = 0;    // logid2pmem_[cur_log_id_] + cur_log_offset_ : actual address in pmem
     char*       logid2pmem_[65536];     // map that stores the pmem file initial address, should be initialized when rebooting. log_id_ -> pmem_addr
     // }}}
+
+
+    const int       kCellSize = CellMeta::CellSize();
+    const size_t    kMaxLogFileSize = 4LU << 30;        // 4 GB
 };
 
 }

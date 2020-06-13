@@ -59,7 +59,7 @@ public:
     }
 
 
-    static inline std::pair<ValueType, std::pair<util::Slice, util::Slice> > Parse(const void* _addr) {
+    static inline std::pair<ValueType, std::pair<util::Slice, util::Slice> > ParseData(const void* _addr) {
         char* addr = (char*) _addr;
         ValueType type = kTypeValue;
         uint32_t key_len = 0;
