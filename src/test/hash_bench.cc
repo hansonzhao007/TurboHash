@@ -23,7 +23,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 using namespace util;
 
 DEFINE_bool(print_thread_read, false, "");
-DEFINE_int32(thread_read, 2, "");
+DEFINE_int32(thread_read, 1, "");
 DEFINE_int32(thread_write, 1, "");
 DEFINE_int32(associate_size, 16, "");
 DEFINE_int32(bucket_size, 256 << 10, "bucket count");
@@ -38,8 +38,8 @@ DEFINE_bool(locate_cell_with_h1, false, "using partial hash h1 to locate cell in
 static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23};
 
 size_t MAX_RANGE = 100000000;
-std::vector<std::string> kInsertedKeys;
-std::vector<std::string> kSearchKeys;
+std::string* kInsertedKeys;
+std::string* kSearchKeys;
 
 template <class HashMap, class ValueType>
 void HashSpeedTest(const std::string& name, size_t inserted_num);

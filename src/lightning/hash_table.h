@@ -94,7 +94,7 @@ public:
 class HashTable {
 public:
     virtual ~HashTable() {}
-    virtual bool Put(const std::string& key, const std::string& value) = 0;
+    virtual bool Put(const util::Slice& key, const util::Slice& value) = 0;
     virtual bool Get(const std::string& key, std::string* value) = 0;
     virtual void Delete(const Slice& key) = 0;
     virtual double LoadFactor() = 0;
@@ -181,7 +181,7 @@ public:
     }
     
 
-    bool Put(const std::string& key, const std::string& value) {
+    bool Put(const util::Slice& key, const util::Slice& value) {
         uint16_t log_id;
         uint32_t log_offset;
         // // step 1: put the entry to queue_, thread safe
