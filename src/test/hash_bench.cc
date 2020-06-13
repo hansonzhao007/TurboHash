@@ -22,6 +22,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 using namespace util;
 
+DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
 DEFINE_bool(print_thread_read, false, "");
 DEFINE_int32(thread_read, 1, "");
 DEFINE_int32(thread_write, 1, "");
@@ -80,6 +81,19 @@ int main(int argc, char *argv[]) {
     MAX_RANGE = FLAGS_bucket_size * FLAGS_associate_size * (FLAGS_cell_type == 0 ? 14 : 28);
     kInsertedKeys = GenerateAllKeysInRange(0, MAX_RANGE);
 
+    std::string key;
+    size_t i = 0;
+    auto time_start = Env::Default()->NowMicros();
+    while (i < MAX_RANGE) {
+        key = kInsertedKeys[i];
+        if ((i++ & 0xFFFFF) == 0) {
+            fprintf(stderr, "keytrace scan%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+        }
+    }
+    auto time_end = Env::Default()->NowMicros();
+    printf("%s\r", key.c_str());
+    printf("Scan keys (%lu): %f Mops/s\n", i, double(i) / (time_end - time_start));
+
     size_t inserted_num = LTHashSpeedTest(true);
     // inserted_num = LTHashSpeedTest(false);
     HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
@@ -100,12 +114,12 @@ size_t LTHashSpeedTest(bool generate_search_key) {
     while (res && i < MAX_RANGE) {
         res = hashtable->Put(kInsertedKeys[i++], "v");
         if ((i & 0xFFFFF) == 0) {
-            fprintf(stderr, "%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+            fprintf(stderr, "inserting%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
         }
     }
     auto time_end = Env::Default()->NowNanos();
     debug_perf_switch();
-    printf("lthash(%25s) - Load Factor: %.2f. Insert   %10lu key, Speed: %5.2f Mops/s. Time: %lu ns. Total put: %10lu\n", 
+    printf("lthash(%25s) - Load Factor: %.2f. Insert   %10lu key, Speed: %5.2f Mops/s. Time: %12lu ns. Total put: %10lu\n", 
         hashtable->ProbeStrategyName().c_str(), 
         hashtable->LoadFactor(), 
         hashtable->Size(), 
@@ -120,7 +134,7 @@ size_t LTHashSpeedTest(bool generate_search_key) {
     if (generate_search_key) kSearchKeys =  GenerateRandomKeys(0, inserted_num, inserted_num, i * 123 + 123);
 
     kRunning = true;
-    alarm(6);  // set an alarm for 6 seconds from now
+    if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
     debug_perf_switch();
     time_start = Env::Default()->NowNanos();
     for (int t = 0; t < FLAGS_thread_read; t++) {
@@ -136,10 +150,10 @@ size_t LTHashSpeedTest(bool generate_search_key) {
             while (kRunning && i < inserted_num && res) {
                 res = hashtable->Get(kSearchKeys[(start_offset + i++) % inserted_num], &value);
                 if ((i & 0xFFFFF) == 0) {
-                    fprintf(stderr, "thread: %2d%*s-%03d->\r", t,  int(i >> 20), " ", int(i >> 20));fflush(stderr);
+                    fprintf(stderr, "thread: %2d reading%*s-%03d->\r", t,  int(i >> 20), " ", int(i >> 20));fflush(stderr);
                 }
             }
-            counts[t] = i - 1;
+            counts[t] = i ;
         });
     }
     std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
@@ -149,7 +163,7 @@ size_t LTHashSpeedTest(bool generate_search_key) {
     time_end = Env::Default()->NowNanos();
     debug_perf_stop();
     size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
-    printf("lthash(%25s) - Load Factor: %.2f. Read     %10lu key, Speed: %5.2f Mops/s. Time: %lu ns\n", 
+    printf("lthash(%25s) - Load Factor: %.2f. Read     %10lu key, Speed: %5.2f Mops/s. Time: %12lu ns\n", 
         hashtable->ProbeStrategyName().c_str(), 
         hashtable->LoadFactor(), 
         read_count, 
@@ -176,11 +190,11 @@ void HashSpeedTest(const std::string& name, size_t inserted_num) {
     while (i < inserted_num) {
         map.insert({kInsertedKeys[i++], value});
         if ((i & 0xFFFFF) == 0) {
-            fprintf(stderr, "%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+            fprintf(stderr, "inserting%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
         }
     }
     auto time_end = Env::Default()->NowNanos();
-    printf("%33s - Load Factor: %.2f. Insert   %10lu key, Speed: %5.2f Mops/s. Time: %lu ns\n", 
+    printf("%33s - Load Factor: %.2f. Insert   %10lu key, Speed: %5.2f Mops/s. Time: %12lu ns\n", 
         name.c_str(), 
         map.load_factor(), 
         map.size(), 
@@ -191,7 +205,7 @@ void HashSpeedTest(const std::string& name, size_t inserted_num) {
     std::vector<std::thread> workers(FLAGS_thread_read);
     std::vector<size_t> counts(FLAGS_thread_read, 0);
     kRunning = true;
-    alarm(6);  // set an alarm for 6 seconds from now
+    if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
     time_start = Env::Default()->NowNanos();
     for (int t = 0; t < FLAGS_thread_read; t++) {
         workers[t] = std::thread([t, inserted_num, &map, &counts]
@@ -205,10 +219,10 @@ void HashSpeedTest(const std::string& name, size_t inserted_num) {
             while (kRunning && iter != map.end() && i < inserted_num) {
                 iter = map.find(kSearchKeys[(start_offset + i++) % inserted_num]);
                 if ((i & 0xFFFFF) == 0) {
-                    fprintf(stderr, "thread: %2d%*s-%03d->\r", t, int(i >> 20), " ", int(i >> 20));fflush(stderr);
+                    fprintf(stderr, "thread: %2d reading%*s-%03d->\r", t, int(i >> 20), " ", int(i >> 20));fflush(stderr);
                 }
             }
-            counts[t] = i - 1;
+            counts[t] = i ;
         });
     }
     std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
@@ -217,7 +231,7 @@ void HashSpeedTest(const std::string& name, size_t inserted_num) {
     });
     time_end = Env::Default()->NowNanos();
     size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
-    printf("%33s - Load Factor: %.2f. Read     %10lu key, Speed: %5.2f Mops/s. Time: %lu ns\n", 
+    printf("%33s - Load Factor: %.2f. Read     %10lu key, Speed: %5.2f Mops/s. Time: %12lu ns\n", 
         name.c_str(),
         map.load_factor(), 
         read_count, 
@@ -241,11 +255,11 @@ void CuckooSpeedTest(const std::string& name, size_t inserted_num) {
     while (i < inserted_num) {
         map.insert(kInsertedKeys[i++], value);
         if ((i & 0xFFFFF) == 0) {
-            fprintf(stderr, "%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+            fprintf(stderr, "inserting%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
         }
     }
     auto time_end = Env::Default()->NowNanos();
-    printf("%33s - Load Factor: %.2f. Insert   %10lu key, Speed: %5.2f Mops/s. Time: %lu ns\n", 
+    printf("%33s - Load Factor: %.2f. Insert   %10lu key, Speed: %5.2f Mops/s. Time: %12lu ns\n", 
         name.c_str(), 
         map.load_factor(), 
         map.size(), 
@@ -258,7 +272,7 @@ void CuckooSpeedTest(const std::string& name, size_t inserted_num) {
     std::vector<std::thread> workers(FLAGS_thread_read);
     std::vector<size_t> counts(FLAGS_thread_read, 0);
     kRunning = true;
-    alarm(6);  // set an alarm for 6 seconds from now
+    if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
     time_start = Env::Default()->NowNanos();
     for (int t = 0; t < FLAGS_thread_read; t++) {
         workers[t] = std::thread([t, inserted_num, &map, &counts]
@@ -273,10 +287,10 @@ void CuckooSpeedTest(const std::string& name, size_t inserted_num) {
             do {
                 is_find = map.find(kSearchKeys[(start_offset + i++) % inserted_num], out);
                 if ((i & 0xFFFFF) == 0) {
-                    fprintf(stderr, "thread: %2d%*s-%03d->\r", t, int(i >> 20), " ", int(i >> 20));fflush(stderr);
+                    fprintf(stderr, "thread: %2d reading%*s-%03d->\r", t, int(i >> 20), " ", int(i >> 20));fflush(stderr);
                 }
             } while (kRunning && i < inserted_num && is_find);
-            counts[t] = i - 1;
+            counts[t] = i ;
         });
     }
     std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
@@ -285,7 +299,7 @@ void CuckooSpeedTest(const std::string& name, size_t inserted_num) {
     });
     time_end = Env::Default()->NowNanos();
     size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
-    printf("%33s - Load Factor: %.2f. Read     %10lu key, Speed: %5.2f Mops/s. Time: %lu ns\n", 
+    printf("%33s - Load Factor: %.2f. Read     %10lu key, Speed: %5.2f Mops/s. Time: %12lu ns\n", 
             name.c_str(), 
             map.load_factor(), 
             read_count, 
