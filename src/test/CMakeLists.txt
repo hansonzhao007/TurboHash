@@ -1,4 +1,3 @@
-db_test(hello_libpmem)
 db_test(trace_test)
 db_test(bitset_test)
 db_test(spinlock_test)

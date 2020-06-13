@@ -76,7 +76,7 @@ function(db_test test_file)
   get_filename_component(test_target_name "${test_file}" NAME_WE)
   set (case_name test_${test_target_name})
   add_executable("${case_name}" "${test_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util pmemobj)  # boost_thread boost_system
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util)  # boost_thread boost_system
   target_sources("${case_name}"
       PRIVATE
       "${test_file}"
