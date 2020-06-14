@@ -4,7 +4,7 @@
 #include <libcuckoo/cuckoohash_map.hh>
 
 #include "util/env.h"
-
+#include "lightning/hash_function.h"
 #include "lightning/hash_table.h"
 #include "util/robin_hood.h"
 #include "util/io_report.h"
@@ -42,12 +42,19 @@ size_t MAX_RANGE = 100000000;
 std::string* kInsertedKeys;
 std::string* kSearchKeys;
 
+class SliceHash { 
+public: 
+    size_t operator()(const util::Slice& p) const
+    { 
+        return lthash::MurMurHash::hash(p.data(), p.size());
+    } 
+}; 
+
 template <class HashMap, class ValueType>
 void HashSpeedTest(const std::string& name, size_t inserted_num);
 void CuckooSpeedTest(const std::string& name, size_t inserted_num);
 size_t LTHashSpeedTest(bool generate_search_key);
 lthash::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate);
-
 
 bool kRunning = true;
 static void sig_int(int sig)
@@ -69,7 +76,6 @@ void sigalrm_handler(int sig)
     printf("Exiting on timeout %d\r", sig);
 	kRunning = false;
 }
-
 
 int main(int argc, char *argv[]) {
     Env::PinCore(kThreadIDs[15]);
@@ -96,8 +102,8 @@ int main(int argc, char *argv[]) {
 
     size_t inserted_num = LTHashSpeedTest(true);
     // inserted_num = LTHashSpeedTest(false);
-    HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
-    HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
+    HashSpeedTest<robin_hood::unordered_map<util::Slice, std::string, SliceHash>, std::string >("robin_hood::unordered_map", inserted_num);
+    HashSpeedTest<absl::flat_hash_map<util::Slice, std::string, SliceHash>, std::string >("absl::flat_hash_map", inserted_num);
     // HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);
     CuckooSpeedTest("CuckooHashMap", inserted_num);
     return 0;
@@ -128,7 +134,6 @@ size_t LTHashSpeedTest(bool generate_search_key) {
         i - 1);
     inserted_num = i - 1;
     
-
     std::vector<std::thread> workers(FLAGS_thread_read);
     std::vector<size_t> counts(FLAGS_thread_read, 0);
     if (generate_search_key) kSearchKeys =  GenerateRandomKeys(0, inserted_num, inserted_num, i * 123 + 123);
@@ -244,7 +249,7 @@ void HashSpeedTest(const std::string& name, size_t inserted_num) {
 } 
 
 void CuckooSpeedTest(const std::string& name, size_t inserted_num) {
-    libcuckoo::cuckoohash_map<std::string, std::string> map;
+    libcuckoo::cuckoohash_map<util::Slice, std::string, SliceHash> map;
     std::string value = "v";
     std::string key = "ltkey";
     

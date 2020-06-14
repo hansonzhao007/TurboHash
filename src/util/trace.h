@@ -5,7 +5,7 @@
 #include <vector>
 #include <thread>
 #include "geninfo.h"
-
+#include "slice.h"
 namespace util {
 const uint64_t kRAND64_MAX = ((((uint64_t)RAND_MAX) << 31) + ((uint64_t)RAND_MAX));
 const double   kRAND64_MAX_D = ((double)(kRAND64_MAX));
@@ -168,8 +168,25 @@ public:
 void RandomSequence(uint64_t num, std::vector<uint64_t>& sequence);
 // generate ycsb workload. For workload D, we need insertion order sequence: ycsb_insertion_sequence
 std::vector<YCSB_Op> YCSB_LoadGenerate(int64_t range, uint64_t max_num, YCSBLoadType type, Trace* selector, const std::vector<uint64_t>& ycsb_insertion_sequence);
-  
+
+// https://stackoverflow.com/questions/4351371/c-performance-challenge-integer-to-stdstring-conversion
+struct itostr_helper;
+util::Slice itostr(uint64_t o);
+
+class RandomString {
+public:
+  RandomString(util::Trace* trace):
+    trace_(trace) {}
+  inline util::Slice next() {
+		return itostr(trace_->Next());
+  }
+private:
+  util::Trace* trace_;
+};
+
 
 }
+    // hopman_fast
+
 
 #endif

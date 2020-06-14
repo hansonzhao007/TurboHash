@@ -41,22 +41,53 @@ std::string* GenerateAllKeysInRange(size_t min, size_t max) {
     return keys;
 }
 
-class KeyTrace {
+class RandomKeyTrace {
 public:
-    KeyTrace(std::string trace_file) {
-        ss_.open(trace_file);
+    RandomKeyTrace(size_t count) {
+        seed_  = 31415926;
+        count_ = count;
     }
 
-    bool Valid() {
-        return !ss_.eof();
-    }
-    
-    std::string Next() {
-        std::string res;
-        std::getline(ss_, res);
-        return std::move(res);
-    }
+    class Iterator {
+    public:
+        Iterator(size_t start_index, size_t range, int seed):
+        trace_(seed, 0, util::kRANDOM_RANGE),
+        count_(range+1),                        // plus one, so Next() could generate rage # keys
+        end_index_(start_index % range),        // make sure end_index < count
+        cur_index_((start_index + 1) % range)   // make sure cur_index < count
+        {
+            // shift to start_index pos
+            for (size_t i = 0; i < start_index; ++i)
+                trace_.Next();
+        }
 
+        inline bool Valid() {
+            return cur_index_ != end_index_;
+        }
+
+        inline util::Slice Next() {
+            cur_index_++;
+            cur_index_ = fast_mod(cur_index_, count_);
+            return util::itostr(trace_.Next());
+        }
+
+        inline int fast_mod(const int input, const int ceil) {
+            // apply the modulo operator only when needed
+            // (i.e. when the input is greater than the ceiling)
+            return input >= ceil ? input % ceil : input;
+            // NB: the assumption here is that the numbers are positive
+        }
+    private:
+        util::TraceUniform trace_;
+        size_t count_;
+        size_t end_index_;
+        size_t cur_index_;
+    };
+
+    Iterator trace_at(size_t start_index, size_t range) {
+        return Iterator(start_index, range, seed_);
+    }
 private:
-    std::ifstream ss_;
+    int seed_;
+    size_t count_;
 };
