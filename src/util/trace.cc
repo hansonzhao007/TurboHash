@@ -364,7 +364,7 @@ struct itostr_helper {
 } hlp_init;
 unsigned itostr_helper::out[10000];
 
-util::Slice itostr(uint64_t o) {
+std::string itostr(uint64_t o) {
 	typedef itostr_helper hlp;
     static unsigned blocks[3];
 	unsigned *b = blocks + 2;
@@ -392,7 +392,7 @@ util::Slice itostr(uint64_t o) {
 	if (o < 0) *--f = '-';
 
 	str += 12;
-	return util::Slice(f, (str - f));
+    return std::string(f, str);
 }
 
 // std::string RandomString::next() {

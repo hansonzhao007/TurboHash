@@ -349,7 +349,9 @@ private:
         
         cur_log_offset_ = 0;
         cur_log_id_++;
-        cur_log_id_ %= 65536;
+        if (cur_log_id_ >= 65536) {
+            cur_log_id_ = 0;
+        }
         log_seq_++;
 
         std::string filename = logFileName(log_seq_);

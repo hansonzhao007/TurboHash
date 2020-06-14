@@ -122,7 +122,9 @@ public:
         associate_index_ &= associate_mask_;
         if (probe_count_ == associate_mask_) {
             bucket_i_++;
-            bucket_i_ %= bucket_count_;
+            if (bucket_i_ >= bucket_count_) {
+                bucket_i_ = 0;
+            }
         }
         probe_count_++;
     }
