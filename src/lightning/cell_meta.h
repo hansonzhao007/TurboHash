@@ -29,7 +29,7 @@ public:
     explicit CellMeta256(char* rep) {
         meta_   = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
         bitmap_ = *(uint32_t*)(rep);              // the lowest 32bit is used as bitmap
-        bitmap_ &= 0x0FFFFFFF0;                         // hidden the 0 - 3 bit in bitmap
+        bitmap_ &= 0x0FFFFFFF0;                   // hidden the 0 - 3 bit in bitmap
         // rep_    = rep;
     }
     ~CellMeta256() {
@@ -47,7 +47,7 @@ public:
     }
 
     BitSet inline OccupyBitSet() {
-        return BitSet(bitmap_);
+        return BitSet(bitmap_ & 0x0FFFFFFF0);
     }
 
     bool Occupy(int slot_index) {
@@ -155,7 +155,7 @@ public:
     }
 
     BitSet OccupyBitSet() {
-        return BitSet(bitmap_);
+        return BitSet(bitmap_ & 0xFFFC);
     }
 
     bool Occupy(int slot_index) {

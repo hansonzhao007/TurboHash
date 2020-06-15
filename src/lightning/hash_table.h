@@ -6,6 +6,7 @@
 #include <vector>
 #include <libpmem.h>
 
+#include "bucket_iterator.h"
 #include "format.h"
 #include "bitset.h"
 #include "media.h"
@@ -270,6 +271,26 @@ public:
     // Persist entire dram hash to persistent memory
     void Persist(void* pmemaddr) {
 
+    }
+
+    void IterateAll() {
+        for (size_t i = 0; i < bucket_count_; ++i) {
+            char* bucket_addr = cells_ + associate_count_ * kCellSize * i;
+            BucketIterator<CellMeta> iter(bucket_addr, associate_count_);
+            while (iter != iter.end() && iter.valid()) {
+                char* data_addr = *iter;
+                HashSlot slot = *(HashSlot*)data_addr;
+                slot.meta.H1 = 0;
+                auto datanode = Media::ParseData(slot.entry);
+                printf("bucket: %8lu, %s, addr: %16lx. key: %.8s, value: %s\n", 
+                    i,
+                    iter.ToString().c_str(),
+                    (uint64_t)data_addr, 
+                    datanode.second.first.ToString().c_str(),
+                    datanode.second.second.ToString().c_str());
+                ++iter;
+            }
+        }
     }
 
     std::string ProbeStrategyName() {

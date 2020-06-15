@@ -11,7 +11,12 @@ namespace lthash {
 // this will print out 0, 2
 class BitSet {
 public:
+    BitSet():
+        bits_(0) {}
     explicit BitSet(uint32_t bits): bits_(bits) {}
+    BitSet(const BitSet& b) {
+        bits_ = b.bits_;
+    }
     BitSet& operator++() {
         // remove the lowest 1-bit
         bits_ &= (bits_ - 1);
