@@ -275,7 +275,7 @@ public:
 
     void IterateAll() {
         for (size_t i = 0; i < bucket_count_; ++i) {
-            char* bucket_addr = cells_ + associate_count_ * kCellSize * i;
+            char* bucket_addr = locateBucket(i);
             BucketIterator<CellMeta> iter(bucket_addr, associate_count_);
             while (iter != iter.end() && iter.valid()) {
                 char* data_addr = *iter;
@@ -384,10 +384,13 @@ private:
         logid2pmem_[cur_log_id_] = pmem_addr;
     }
 
-    inline uint32_t locateBucket(uint64_t hash) {
+    inline uint32_t bucketIndex(uint64_t hash) {
         return hash & bucket_mask_;
     }
 
+    inline char* locateBucket(uint32_t bi) {
+        return cells_ + associate_count_ * kCellSize * bi;
+    }
     // offset.first: bucket index
     // offset.second: associate index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
@@ -501,7 +504,7 @@ private:
     // Node: Only when the second value is true, can we insert this key
     inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value, locate_cell_with_h1_);
-        uint32_t bucket_i = locateBucket(partial_hash.bucket_hash_);
+        uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         ProbeStrategy probe(partial_hash.H3_, associate_mask_, bucket_i, bucket_count_);
 
         while (probe) {
@@ -577,7 +580,7 @@ private:
     
     inline std::pair<SlotInfo, bool> findSlot(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value, locate_cell_with_h1_);
-        uint32_t bucket_i = locateBucket(partial_hash.bucket_hash_);
+        uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         ProbeStrategy probe(partial_hash.H3_, associate_mask_, bucket_i, bucket_count_);
 
         while (probe) {
