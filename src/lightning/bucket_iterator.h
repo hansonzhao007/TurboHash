@@ -3,7 +3,13 @@
 
 namespace lthash {
 
-// iterator every slot in the bucket, return the pointer in the slot
+/** Usage: iterator every slot in the bucket, return the pointer in the slot
+ *  BucketIterator<CellMeta> iter(bucket_addr, associate_count_);
+ *  while (iter != iter.end() && iter.valid()) {
+ *      ...
+ *      ++iter;
+ *  }
+*/        
 template<class CellMeta>
 class BucketIterator {
 public:
