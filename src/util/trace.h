@@ -86,7 +86,8 @@ public:
   }
   inline uint64_t Next() override {
     cur_ += interval_;
-    cur_ %= max_;
+    if (cur_ >= max_) 
+      cur_ = 0;
     return cur_;
   }
 private:

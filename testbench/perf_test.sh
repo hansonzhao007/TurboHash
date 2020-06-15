@@ -43,7 +43,7 @@ do
         perfsvg $f "put"
     fi
 
-    if [[ "$x" == 3 ]]; then
+    if [[ "$x" == 2 ]]; then
         # probe Get
         echo "processing $f";
         perfsvg $f "get"

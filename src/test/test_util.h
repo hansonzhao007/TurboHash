@@ -46,7 +46,7 @@ public:
     RandomKeyTrace(size_t count) {
         seed_  = 31415926;
         count_ = count;
-        keys_ = GenerateRandomKeys(0, util::kRANDOM_RANGE, count_);
+        keys_ = GenerateRandomKeys(0, 3000000000L, count_);
     }
 
     ~RandomKeyTrace() {
@@ -111,7 +111,7 @@ public:
     class Iterator {
     public:
         Iterator(size_t start_index, size_t range, int seed):
-        trace_(seed, 0, util::kRANDOM_RANGE),
+        trace_(seed, 0, 3000000000),
         range_(range),                        
         end_index_(start_index % range_), 
         cur_index_(start_index % range_),

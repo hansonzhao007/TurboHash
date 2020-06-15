@@ -81,11 +81,11 @@ public:
     #define LTHASH_H2_SIZE uint8_t 
     #define LTHASH_H1_SIZE uint16_t
     struct PartialHash {
-        PartialHash(uint64_t hash):
+        PartialHash(uint64_t hash, bool locate_cell_with_h1):
             bucket_hash_(hash >> 32),
             H1_(         hash & 0xFFFF),
             H2_( (hash >> 16) & 0xFF),
-            H3_( (hash >> 24) & 0xFF) {
+            H3_( (locate_cell_with_h1 ? H1_ : ((hash >> 24) & 0xFF)) ) {
         };
         BUCKET_H_SIZE  bucket_hash_;
         // H1: 2 byte partial key
@@ -479,7 +479,7 @@ private:
     //      second: whether we can find a empty slot to insert
     // Node: Only when the second value is true, can we insert this key
     inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, size_t hash_value) {
-        PartialHash partial_hash(hash_value);
+        PartialHash partial_hash(hash_value, locate_cell_with_h1_);
         uint32_t bucket_i = locateBucket(partial_hash.bucket_hash_);
         ProbeStrategy probe(partial_hash.H3_, associate_mask_, bucket_i, bucket_count_);
 
@@ -555,7 +555,7 @@ private:
 
     
     inline std::pair<SlotInfo, bool> findSlot(const Slice& key, size_t hash_value) {
-        PartialHash partial_hash(hash_value);
+        PartialHash partial_hash(hash_value, locate_cell_with_h1_);
         uint32_t bucket_i = locateBucket(partial_hash.bucket_hash_);
         ProbeStrategy probe(partial_hash.H3_, associate_mask_, bucket_i, bucket_count_);
 

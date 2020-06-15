@@ -58,6 +58,7 @@ TraceUniform::TraceUniform(int seed, uint64_t minimum, uint64_t maximum):
     gi_->gen.uniform.interval = (double)(maximum - minimum);
     gi_->type = GEN_UNIFORM;
 }
+
 uint64_t TraceUniform::Next() {
     uint64_t off = (uint64_t)(RandomDouble() * gi_->gen.uniform.interval);
     return gi_->gen.uniform.min + off;

@@ -75,7 +75,6 @@ public:
             }
         }
         auto time_end = Env::Default()->NowNanos();
-        debug_perf_switch();
         printf("Total put: %lu\n", i - 1);
         std::string name = "lthash:" + hashtable->ProbeStrategyName();
         PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), time_end - time_start, false);
