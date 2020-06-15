@@ -50,7 +50,11 @@ public:
         return BitSet(bitmap_ & 0x0FFFFFFF0);
     }
 
-    bool Occupy(int slot_index) {
+    inline bool Full() {
+        return (bitmap_ & 0x0FFFFFFF0) == 0x0FFFFFFF0;
+    }
+
+    inline bool Occupy(int slot_index) {
         return bitmap_ & (1 << slot_index);
     }
 
@@ -158,7 +162,11 @@ public:
         return BitSet(bitmap_ & 0xFFFC);
     }
 
-    bool Occupy(int slot_index) {
+    inline bool Full() {
+        return (bitmap_ & 0xFFFC) == 0xFFFC;
+    }
+
+    inline bool Occupy(int slot_index) {
         return bitmap_ & (1 << slot_index);
     }
     
