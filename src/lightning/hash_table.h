@@ -31,6 +31,7 @@ public:
     virtual void Delete(const Slice& key) = 0;
     virtual double LoadFactor() = 0;
     virtual size_t Size() = 0;
+    virtual void WarmUp() = 0;
     virtual std::string ProbeStrategyName() = 0;
 };
 
@@ -58,6 +59,24 @@ public:
     using Hasher = MurMurHash;
     using value_type = std::pair<util::Slice, util::Slice>;
 
+    class BucketMeta {
+    public:
+        BucketMeta(){}
+        inline char* Address() {
+            return (char*)(uint64_t(__addr) & 0x0000FFFFFFFFFFFF);
+        }
+        inline uint16_t AssociateSize() {
+            return info.assocaite_size;
+        }
+        union {
+            char* __addr;
+            struct {
+                uint32_t none0;
+                uint16_t none1;
+                uint16_t associate_size;
+            } info;
+        };
+    };
     union HashSlot
     {
         /* data */
@@ -172,10 +191,12 @@ public:
             exit(1);
         }
 
-        buckets_ = (char**) malloc(sizeof(char*) * bucket_count);
+        buckets_ = new BucketMeta[bucket_count];
         for (int i = 0; i < bucket_count; ++i) {
-            buckets_[i] = (char*) aligned_alloc(kCellSize, associate_count_ * kCellSize);
-            memset(buckets_[i], 0, associate_count_ * kCellSize);
+            buckets_[i].__addr = (char*) aligned_alloc(kCellSize, associate_count_ * kCellSize);
+            memset(buckets_[i].Address(), 0, associate_count_ * kCellSize);
+            buckets_[i].info.associate_size = associate_count_;
+            
         }
         size_     = 0;
 
@@ -188,6 +209,14 @@ public:
         queue_tail_ = 0;
     }
 
+    void WarmUp() override {
+        char * addr = nullptr;
+        for (int i = 0; i < 1000; i++) {
+            addr = buckets_[i].__addr;
+        }
+        printf("finish warm up: %lx\n", (uint64_t)addr);
+    }
+    
     explicit DramHashTable(void* addr, uint32_t bucket_count, uint32_t associate_count, size_t size):
         cells_(addr),
         bucket_count_(bucket_count),
@@ -276,8 +305,8 @@ public:
 
     void IterateAll() {
         for (size_t i = 0; i < bucket_count_; ++i) {
-            char* bucket_addr = locateBucket(i);
-            BucketIterator<CellMeta> iter(bucket_addr, associate_count_);
+            auto bucket_meta = locateBucket(i);
+            BucketIterator<CellMeta> iter(bucket_meta.Address(), bucket_meta.info.associate_size);
             while (iter != iter.end() && iter.valid()) {
                 char* data_addr = *iter;
                 HashSlot slot = *(HashSlot*)data_addr;
@@ -389,13 +418,13 @@ private:
         return hash & bucket_mask_;
     }
 
-    inline char* locateBucket(uint32_t bi) {
+    inline BucketMeta& locateBucket(uint32_t bi) {
         return buckets_[bi];
     }
     // offset.first: bucket index
     // offset.second: associate index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
-        return  buckets_[offset.first] +    // locate the bucket
+        return  buckets_[offset.first].Address() +    // locate the bucket
                 offset.second * kCellSize;  // locate the associate cell
     }
   
@@ -403,6 +432,12 @@ private:
         return (HashSlot*)(cell_addr + (slot_i << 3));
     }
 
+    // rehash bucket bi
+    void reHashBucket(uint32_t bi) {
+        char* bucket_addr = buckets_[bi];
+
+
+    }
     inline void updateSlotAndMeta(const SlotInfo& info, void* media_offset) {
         // update slot content, H1 and pointer
         char* cell_addr = locateCell({info.bucket, info.associate});
@@ -684,7 +719,7 @@ private:
     const int       kCellSize = CellMeta::CellSize();
     const size_t    kMaxLogFileSize = 4LU << 30;        // 4 GB
 
-    char**      buckets_;
+    BucketMeta*     buckets_;
 };
 
 }

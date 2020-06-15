@@ -27,7 +27,7 @@ DEFINE_bool(print_thread_read, false, "");
 DEFINE_int32(thread_read, 1, "");
 DEFINE_int32(thread_write, 1, "");
 DEFINE_int32(associate_size, 16, "");
-DEFINE_int32(bucket_size, 256 << 10, "bucket count");
+DEFINE_int32(bucket_size, 128 << 10, "bucket count");
 DEFINE_int32(probe_type, 0, "\
     0: probe within bucket, \
     1: probe within cell");
@@ -66,6 +66,7 @@ public:
         uint64_t i = 0;
         bool res = true;
         auto key_iterator = key_trace_.trace_at(0, max_count_);
+        hashtable->WarmUp();
         debug_perf_switch();
         auto time_start = Env::Default()->NowNanos();
         while (res && i < max_count_) {
