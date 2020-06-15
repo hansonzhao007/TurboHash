@@ -171,11 +171,12 @@ public:
             printf("the hash table size setting is wrong. bucket: %u, associate: %u\n", bucket_count, associate_count);
             exit(1);
         }
-        // calloc will initialize the memory space to zero
-        // cells_  = (char*)calloc(kCellSize, bucket_count * associate_count);
 
-        cells_  = (char*)aligned_alloc(kCellSize, bucket_count * associate_count * kCellSize);
-        memset(cells_, 0, bucket_count * associate_count * kCellSize);
+        buckets_ = (char**) malloc(sizeof(char*) * bucket_count);
+        for (int i = 0; i < bucket_count; ++i) {
+            buckets_[i] = (char*) aligned_alloc(kCellSize, associate_count_ * kCellSize);
+            memset(buckets_[i], 0, associate_count_ * kCellSize);
+        }
         size_     = 0;
 
         // queue init
@@ -389,13 +390,13 @@ private:
     }
 
     inline char* locateBucket(uint32_t bi) {
-        return cells_ + associate_count_ * kCellSize * bi;
+        return buckets_[bi];
     }
     // offset.first: bucket index
     // offset.second: associate index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
-        return cells_ + (associate_count_ * kCellSize * offset.first +  // locate the bucket
-                         offset.second * kCellSize);                    // locate the associate cell
+        return  buckets_[offset.first] +    // locate the bucket
+                offset.second * kCellSize;  // locate the associate cell
     }
   
     inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
@@ -682,6 +683,8 @@ private:
 
     const int       kCellSize = CellMeta::CellSize();
     const size_t    kMaxLogFileSize = 4LU << 30;        // 4 GB
+
+    char**      buckets_;
 };
 
 }
