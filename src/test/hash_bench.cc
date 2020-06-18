@@ -293,11 +293,11 @@ int main(int argc, char *argv[]) {
     
     size_t inserted_num = hash_bench.LTHashSpeedTest();
     // inserted_num = hash_bench.LTHashSpeedTest();
-    hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
+    // hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
     
-    hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
+    // hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
     // HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);
-    hash_bench.CuckooSpeedTest("CuckooHashMap", inserted_num);
+    // hash_bench.CuckooSpeedTest("CuckooHashMap", inserted_num);
     return 0;
 }
 
