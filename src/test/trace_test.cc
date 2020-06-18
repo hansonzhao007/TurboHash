@@ -1,9 +1,11 @@
 #include "util/trace.h"
 #include "util/io_report.h"
-
+#include "lightning/hash_function.h"
 #include "test_util.h"
 const uint64_t KEY_COUNT = 80000000;;
 using namespace util;
+
+
 int main() {
     char str[128] = "1234567890";
     std::string test_str(str+1, str+4);
@@ -37,7 +39,31 @@ int main() {
     time_end = Env::Default()->NowMicros();
     duration = (time_end - time_start);
     printf("Random       speed (%lu record): %f Mops/s\n", KEY_COUNT, KEY_COUNT / duration);
+
+    time_start = Env::Default()->NowMicros();
+    uint64_t hash;
+    for (uint64_t i = 0; i < KEY_COUNT; i++) {
+        hash = lthash::MurMurHash::hash("1234567890", 10);
+        if ((i & 0xFFFFF) == 0) {
+            fprintf(stderr, "iteration %*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+        }
+    }
+    printf("num final: %lu\n", hash);
+    time_end = Env::Default()->NowMicros();
+    duration = (time_end - time_start);
+    printf("MurMurhash   speed (%lu record): %f Mops/s\n", KEY_COUNT, KEY_COUNT / duration);
     
+    time_start = Env::Default()->NowMicros();
+    for (uint64_t i = 0; i < KEY_COUNT; i++) {
+        num = xorshf96();
+        if ((i & 0xFFFFF) == 0) {
+            fprintf(stderr, "iteration %*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+        }
+    }
+    printf("num final: %lu\n", num);
+    time_end = Env::Default()->NowMicros();
+    duration = (time_end - time_start);
+    printf("xorshf96     speed (%lu record): %f Mops/s\n", KEY_COUNT, KEY_COUNT / duration);
 
     RandomString rnd(trace);
     std::string res;

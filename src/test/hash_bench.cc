@@ -34,7 +34,7 @@ DEFINE_int32(probe_type, 0, "\
 DEFINE_int32(cell_type, 0, "\
     0: 128 byte cell, \
     1: 256 byte cell");
-DEFINE_bool(locate_cell_with_h1, false, "using partial hash h1 to locate cell inside bucket or not");
+DEFINE_bool(locate_cell_with_h1, true, "using partial hash h1 to locate cell inside bucket or not");
 
 static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23};
 

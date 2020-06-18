@@ -88,6 +88,16 @@ Load64_NT(char* addr, int N = 0) {
     // _mm_lfence();
 }
 
+inline void Load128(char* addr, int N = 0) {
+    volatile __m128i zmm0 = _mm_load_si128 ((__m128i const*)addr);
+}
+
+
+inline void Load256(char* addr, int N = 0) {
+    volatile __m128i zmm0 = _mm_load_si128 ((__m128i const*)addr);
+    volatile __m128i zmm1 = _mm_load_si128 ((__m128i const*)addr + 1);
+}
+
 
 inline void // __attribute__((optimize("O0"),always_inline))
 Load128_NT(char* addr, int N = 0) {

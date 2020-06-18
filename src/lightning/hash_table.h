@@ -441,7 +441,7 @@ private:
                 SpinLockScope((lthash_bitspinlock*)cell_addr);
                 
                 CellMeta meta(cell_addr);
-                util::PrefetchForWrite((void*)cell_addr);
+                // util::PrefetchForWrite((void*)cell_addr);
                 if (likely(!meta.Occupy(res.first.slot) || res.first.equal_key)) {
                     // if the slot is not occupied or the slot has same key with request
                     // we update the slot 
@@ -511,7 +511,7 @@ private:
             auto offset = probe.offset();
             char* cell_addr = locateCell(offset);
             // prefetch next cell
-            util::PrefetchForRead((void*)(cell_addr + CellMeta::CellSize()));
+            // util::PrefetchForRead((void*)(cell_addr + CellMeta::CellSize()));
             CellMeta meta(cell_addr);
             // locate if there is any H2 match in this cell
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {
@@ -596,7 +596,7 @@ private:
                 // locate the slot reference
                 const HashSlot& slot = *locateSlot(cell_addr, i);
                 // prefetch address that slot point to
-                util::PrefetchForRead((void*)((uint64_t)slot.entry & 0x0000FFFFFFFFFFFF));
+                // util::PrefetchForRead((void*)((uint64_t)slot.entry & 0x0000FFFFFFFFFFFF));
 
                 // compare if the H1 partial hash is equal
                 if (likely(slot.meta.H1 == partial_hash.H1_)) {
