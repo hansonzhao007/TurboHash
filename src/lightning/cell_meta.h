@@ -26,6 +26,8 @@ namespace lthash {
 */ 
 class CellMeta256 {
 public:
+    static const uint32_t BitMapMask = 0x0FFFFFFF0;
+    static const int CellSizeLeftShift = 8;
     explicit CellMeta256(char* rep) {
         meta_   = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
         bitmap_ = *(uint32_t*)(rep);              // the lowest 32bit is used as bitmap
@@ -35,18 +37,18 @@ public:
     ~CellMeta256() {
     }
     // return a bitset, the slot that matches the hash is set to 1
-    BitSet inline MatchBitSet(uint8_t hash) {
+    inline BitSet MatchBitSet(uint8_t hash) {
         auto bitset = _mm256_set1_epi8(hash);
         return BitSet(_mm256_movemask_epi8(_mm256_cmpeq_epi8(bitset, meta_)) &
                       (bitmap_) /* filter out empty slot*/);
     }
 
     // return a bitset, the slot that is ok for insertion
-    BitSet inline EmptyBitSet() {
+    inline BitSet EmptyBitSet() {
         return BitSet((~bitmap_) & 0x0FFFFFFF0);
     }
 
-    BitSet inline OccupyBitSet() {
+    inline BitSet OccupyBitSet() {
         return BitSet(bitmap_ & 0x0FFFFFFF0);
     }
 
@@ -58,33 +60,33 @@ public:
         return bitmap_ & (1 << slot_index);
     }
 
-    int inline OccupyCount() {
+    inline int OccupyCount() {
         return __builtin_popcount(bitmap_);
     }
 
-    static uint8_t StartSlotPos() {
+    inline static uint8_t StartSlotPos() {
         return 4;
     }
 
-    static uint32_t CellSize() {
+    inline static uint32_t CellSize() {
         // cell size (include meta) in byte
         return 256;
     }
 
-    static uint32_t SlotMaxRange() {
+    inline static uint32_t SlotMaxRange() {
         return 32;
     }
     
-    static uint32_t SlotSize() {
+    inline static uint32_t SlotSize() {
         // slot count
         return 28;
     }
 
-    static uint32_t BitMapType() {
+    inline static uint32_t BitMapType() {
         return 0;
     }
 
-    static size_t size() {
+    inline static size_t size() {
         // the meta size in byte in current cell
         return 32;
     }
@@ -119,7 +121,7 @@ public:
         );
         return buffer;
     }
-    uint32_t bitmap() {
+    inline uint32_t bitmap() {
         return bitmap_;
     }
 private:
@@ -146,6 +148,8 @@ private:
 */ 
 class CellMeta128 {
 public:
+    static const uint16_t BitMapMask = 0xFFFC;
+    static const int CellSizeLeftShift = 7;
     explicit CellMeta128(char* rep) {
         meta_   = _mm_loadu_si128(reinterpret_cast<const __m128i*>(rep));
         bitmap_ = *(uint32_t*)(rep);              // the lowest 32bit is used as bitmap
@@ -156,18 +160,18 @@ public:
     ~CellMeta128() {
     }
     // return a bitset, the position that matches the hash is set to 1
-    BitSet MatchBitSet(uint8_t hash) {
+    inline BitSet MatchBitSet(uint8_t hash) {
         auto bitset = _mm_set1_epi8(hash);
         return BitSet(_mm_movemask_epi8(_mm_cmpeq_epi8(bitset, meta_)) &
                       (bitmap_) /* filter out empty slot*/);
     }
 
     // return a bitset, the position that is empty for insertion
-    BitSet EmptyBitSet() {
+    inline BitSet EmptyBitSet() {
         return BitSet((~bitmap_) & 0xFFFC);
     }
 
-    BitSet OccupyBitSet() {
+    inline BitSet OccupyBitSet() {
         return BitSet(bitmap_ & 0xFFFC);
     }
 
@@ -179,33 +183,33 @@ public:
         return bitmap_ & (1 << slot_index);
     }
     
-    int inline OccupyCount() {
+    inline int OccupyCount() {
         return __builtin_popcount(bitmap_);
     }
 
-    static uint8_t StartSlotPos() {
+    inline static uint8_t StartSlotPos() {
         return 2;
     }
 
-    static uint32_t CellSize() {
+    inline static uint32_t CellSize() {
         // cell size (include meta) in byte
         return 128;
     }
 
-    static uint32_t SlotMaxRange() {
+    inline static uint32_t SlotMaxRange() {
         return 16;
     }
 
-    static uint32_t SlotSize() {
+    inline static uint32_t SlotSize() {
         // slot count
         return 14;
     }
 
-    static uint16_t BitMapType() {
+    inline static uint16_t BitMapType() {
         return 0;
     }
 
-    static size_t size() {
+    inline static size_t size() {
         // the meta size in byte in current cell
         return 16;
     }
@@ -237,7 +241,7 @@ public:
         return buffer;
     }
 
-    uint16_t bitmap() {
+    inline uint16_t bitmap() {
         return bitmap_;
     }
 

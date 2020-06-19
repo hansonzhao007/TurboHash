@@ -18,6 +18,7 @@
 #include "util/status.h"
 #include "util/prefetcher.h"
 #include "util/env.h"
+#include "util/timer.h"
 // #define LTHASH_DEBUG_OUT
 
 namespace lthash {
@@ -101,12 +102,14 @@ public:
     void ReHashAll() override {
         // enlarge space 
         size_t count = 0;
-        char* new_cells = (char*) aligned_alloc(kCellSize, bucket_count_ * associate_count_ * kCellSize * 2);
+        size_t new_associate_size = associate_count_ * 2;
+        char* new_cells = (char*) aligned_alloc(kCellSize, bucket_count_ * new_associate_size * kCellSize);
         for (size_t i = 0; i < bucket_count_; ++i) {
-            count += Rehash(i, new_cells + i * associate_count_ * kCellSize * 2);
+            count += Rehash(i, new_cells + i * new_associate_size * kCellSize);
         }
         free(cells_);
         cells_ = new_cells;
+        associate_count_ = new_associate_size;
         capacity_ *= 2;
         printf("Rehash %lu entries\n", count);
     }
@@ -117,7 +120,8 @@ public:
         int loop_count = 0;
 
         // find next cell that is not full yet
-        while (unlikely(slot_vec[ai] >= CellMeta::SlotMaxRange())) {
+        uint32_t SLOT_MAX_RANGE = CellMeta::SlotMaxRange(); 
+        while (slot_vec[ai] >= SLOT_MAX_RANGE) {
             ai++;
             loop_count++;
             if (unlikely(loop_count > ProbeStrategy::MAX_PROBE_LEN)) {
@@ -151,7 +155,7 @@ public:
             exit(1);
         }
         new_bucket_meta.__addr = new_bucket_addr;
-        memset(new_bucket_meta.Address(), 0, new_associate_size * kCellSize);
+        // memset(new_bucket_meta.Address(), 0, new_associate_size * kCellSize);
         new_bucket_meta.info.associate_size = new_associate_size;
 
         // iterator old bucket and insert slots info to new bucket
@@ -393,7 +397,7 @@ private:
     // offset.second: associate index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
         return  buckets_[offset.first].Address() +  // locate the bucket
-                offset.second * kCellSize;          // locate the associate cell
+                (offset.second << kCellSizeLeftShift);          // locate the associate cell
     }
   
     inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
@@ -700,6 +704,7 @@ private:
 
 
     const int       kCellSize = CellMeta::CellSize();
+    const int       kCellSizeLeftShift = CellMeta::CellSizeLeftShift;
     const size_t    kMaxLogFileSize = 4LU << 30;        // 4 GB
 
     BucketMeta*     buckets_;

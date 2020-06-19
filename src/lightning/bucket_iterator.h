@@ -32,7 +32,7 @@ public:
     }
 
     // ++iterator
-    BucketIterator& operator++() {
+    inline BucketIterator& operator++() {
         ++bitmap_;
         if (!bitmap_) {
             toNextValidBitMap();
@@ -40,7 +40,17 @@ public:
         return *this;
     }
     
-    // return the associate index, slot index and its address
+    // struct IterInfo {
+    //     HashSlot slot;
+    //     uint8_t H2;
+    //     uint8_t slot_i;
+    //     IterInfo(const HashSlot& s, uint8_t h2, uint8_t si):
+    //     slot(s),
+    //     H2(h2),
+    //     slot_i(si) {}
+    // };
+
+    // return the associate index, slot index and its slot content
     std::pair<SlotInfo, HashSlot> operator*() const {
         uint8_t slot_index = *bitmap_;
         char* cell_addr = bucket_addr_ + associate_i_ * CellMeta::CellSize();
@@ -50,7 +60,7 @@ public:
                 *slot};
     }
 
-    bool valid() {
+    inline bool valid() {
         return associate_i_ < associate_size_ && (bitmap_ ? true : false);
     }
 
@@ -60,12 +70,11 @@ public:
         return buffer;
     }
 private:
-    void toNextValidBitMap() {
+    inline void toNextValidBitMap() {
         while(!bitmap_ && associate_i_ < associate_size_) {
             associate_i_++;
-            char* cell_addr = bucket_addr_ + associate_i_ * CellMeta::CellSize();
-            CellMeta meta(cell_addr);
-            bitmap_ = meta.OccupyBitSet();
+            char* cell_addr = bucket_addr_ + ( associate_i_ << CellMeta::CellSizeLeftShift );
+            bitmap_ = BitSet(*(uint32_t*)(cell_addr) & CellMeta::BitMapMask); 
         }
     }
     friend bool operator==(const BucketIterator& a, const BucketIterator& b) {

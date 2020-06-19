@@ -67,7 +67,7 @@ public:
         bool res = true;
         auto key_iterator = key_trace_.trace_at(0, max_count_);
         hashtable->WarmUp();
-        debug_perf_switch();
+        
         auto time_start = Env::Default()->NowNanos();
         while (res && i < max_count_) {
             res = hashtable->Put(key_iterator.Next(), value_);
@@ -86,7 +86,6 @@ public:
             std::vector<size_t> counts(FLAGS_thread_read, 0);
             kRunning = true;
             if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
-            debug_perf_switch();
             time_start = Env::Default()->NowNanos();
             for (int t = 0; t < FLAGS_thread_read; t++) {
                 workers[t] = std::thread([&, t]
@@ -114,7 +113,6 @@ public:
                 t.join();
             });
             time_end = Env::Default()->NowNanos();
-            debug_perf_stop();
             size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
             PrintSpeed(name, hashtable->LoadFactor(), read_count, time_end - time_start, true);
             if (FLAGS_print_thread_read)
@@ -123,15 +121,26 @@ public:
             }
         };
 
-        read_fun();
-        read_fun();
-        
+        debug_perf_switch();
         time_start = Env::Default()->NowNanos();
         hashtable->ReHashAll();
         time_end   = Env::Default()->NowNanos();
         printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
 
-        read_fun();
+        time_start = Env::Default()->NowNanos();
+        hashtable->ReHashAll();
+        time_end   = Env::Default()->NowNanos();
+        printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
+
+
+        time_start = Env::Default()->NowNanos();
+        hashtable->ReHashAll();
+        time_end   = Env::Default()->NowNanos();
+        printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
+
+        // debug_perf_switch();
+        // read_fun();
+
         delete hashtable;
     }
 

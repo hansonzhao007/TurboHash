@@ -11,7 +11,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 const size_t COUNT = 100000;
 int main(int argc, char *argv[]) {
     ParseCommandLineFlags(&argc, &argv, true);
-    auto* hashtable = new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(16, 16);
+    auto* hashtable = new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(16, 32);
     printf("------- Iterate empty hash table ------\n");
     hashtable->IterateAll();
 
@@ -34,17 +34,19 @@ int main(int argc, char *argv[]) {
     read_fun();
     // printf("------- Iterate hash table with %lu entries ------\n", hashtable->Size());
     // hashtable->IterateBucket(1);
-    hashtable->PrintAllMeta();
+    // hashtable->PrintAllMeta();
     // hashtable->IterateAll();
-
+    hashtable->IterateValidBucket();
     
     printf("------- rehash all bucket and repeat search 0 ------\n");
     hashtable->ReHashAll();
+    hashtable->IterateValidBucket();
     // hashtable->IterateBucket(1);
-    hashtable->PrintAllMeta();
+    // hashtable->PrintAllMeta();
     // hashtable->IterateAll();
     read_fun();
 
-
+    hashtable->ReHashAll();
+    read_fun();
     return 0;
 }
