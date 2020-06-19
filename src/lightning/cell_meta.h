@@ -61,11 +61,20 @@ public:
     int inline OccupyCount() {
         return __builtin_popcount(bitmap_);
     }
+
+    static uint8_t StartSlotPos() {
+        return 4;
+    }
+
     static uint32_t CellSize() {
         // cell size (include meta) in byte
         return 256;
     }
 
+    static uint32_t SlotMaxRange() {
+        return 32;
+    }
+    
     static uint32_t SlotSize() {
         // slot count
         return 28;
@@ -174,9 +183,17 @@ public:
         return __builtin_popcount(bitmap_);
     }
 
+    static uint8_t StartSlotPos() {
+        return 2;
+    }
+
     static uint32_t CellSize() {
         // cell size (include meta) in byte
         return 128;
+    }
+
+    static uint32_t SlotMaxRange() {
+        return 16;
     }
 
     static uint32_t SlotSize() {

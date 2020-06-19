@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # default using release mode
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE RelWithDebInfo) # RelWithDebInfo
+  set(CMAKE_BUILD_TYPE Release) # RelWithDebInfo
 endif()
 
 # add Intel PCM library
@@ -48,6 +48,7 @@ check_include_file("jemalloc/jemalloc.h" HAVE_JEMALLOC)
 if(HAVE_JEMALLOC)
   add_definitions(-DJEMALLOC)
   message("has jemalloc")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -ljemalloc ")
 endif()
 
 # In GCC, this will invoke the "-I" command

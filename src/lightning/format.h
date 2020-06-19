@@ -9,11 +9,102 @@ namespace lthash {
 using Status = util::Status;
 using Slice = util::Slice;
 
+union HashSlot
+{
+    /* data */
+    const void* entry;       // 8B
+    struct {
+        uint32_t offset;
+        uint16_t log_id;
+        uint16_t H1;
+    } meta;
+};
+
+
+// 64 bit hash function is used to locate initial position of keys
+// |         4 B       |         4 B       |
+// |   bucket hash     |    associate hash |
+//                     | 1B | 1B |    2B   |
+//                     | H3 | H2 |    H1   |
+// H3: index within each bucket
+// H2: 1 byte hash for parallel comparison
+// H1: 2 byte partial key
+#define BUCKET_H_SIZE uint32_t
+#define LTHASH_H3_SIZE uint8_t
+#define LTHASH_H2_SIZE uint8_t 
+#define LTHASH_H1_SIZE uint16_t
+struct PartialHash {
+    PartialHash(uint64_t hash):
+        bucket_hash_(hash >> 32),
+        H1_(         hash & 0xFFFF),
+        H2_( (hash >> 16) & 0xFF)
+        {};
+    BUCKET_H_SIZE  bucket_hash_;
+    // H1: 2 byte partial key
+    LTHASH_H1_SIZE H1_;
+    // H2: 1 byte hash for parallel comparison
+    LTHASH_H2_SIZE H2_;
+};
+
+class SlotInfo {
+public:
+    uint32_t bucket;        // bucket index
+    uint16_t associate;     // associate index
+    uint8_t  slot;          // slot index
+    LTHASH_H2_SIZE H2;
+    LTHASH_H1_SIZE H1;
+    bool equal_key;
+    SlotInfo(uint32_t b, uint32_t a, int s, LTHASH_H1_SIZE h1, LTHASH_H2_SIZE h2, bool euqal):
+        bucket(b),
+        associate(a),
+        slot(s),
+        H1(h1),
+        H2(h2),
+        equal_key(euqal) {}
+    SlotInfo():
+        bucket(0),
+        associate(0),
+        slot(0),
+        H1(0),
+        H2(0),
+        equal_key(false) {}
+    std::string ToString() {
+        char buffer[128];
+        sprintf(buffer, "b: %4u, a: %4u, s: %2u, H2: 0x%02x, H1: 0x%04x",
+            bucket,
+            associate,
+            slot,
+            H2,
+            H1);
+        return buffer;
+    }
+};
+    
 // bits 0 - 6 are uesd as magic number to indicate the start of a record
 enum ValueType {
     kTypeDeletion = 0x2A,   // 0b 0_0101010
     kTypeValue    = 0xAA,   // 0b 1_0101010
     kTypeMask     = 0x7F    // 0b 0_1111111
+};
+
+
+class BucketMeta {
+public:
+    BucketMeta(){}
+    inline char* Address() {
+        return (char*)(uint64_t(__addr) & 0x0000FFFFFFFFFFFF);
+    }
+    inline uint16_t AssociateSize() {
+        return info.associate_size;
+    }
+    union {
+        char* __addr;
+        struct {
+            uint32_t none0;
+            uint16_t none1;
+            uint16_t associate_size;
+        } info;
+    };
 };
 
 

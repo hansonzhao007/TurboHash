@@ -1,6 +1,6 @@
 #pragma once
 #include "bitset.h"
-
+#include "format.h"
 namespace lthash {
 
 /** Usage: iterator every slot in the bucket, return the pointer in the slot
@@ -18,11 +18,12 @@ public:
         associate_i_(assocaite_i),
         bitmap_(0),
         bucket_addr_(bucket_addr) {
-        if (bucket_addr != nullptr) {
-            CellMeta meta(bucket_addr);
-            bitmap_ = meta.OccupyBitSet();
-        }
-        toFirstValid();
+
+        assert(bucket_addr != 0);
+        CellMeta meta(bucket_addr);
+        bitmap_ = meta.OccupyBitSet();
+        if(!bitmap_) toNextValidBitMap();
+        // printf("Initial Bucket iter at ai: %u, si: %u\n", associate_i_, *bitmap_);
     }
 
     explicit operator bool() const {
@@ -34,33 +35,23 @@ public:
     BucketIterator& operator++() {
         ++bitmap_;
         if (!bitmap_) {
-            associate_i_++;
-            if (associate_i_ < associate_size_) {
-                char* cell_addr = bucket_addr_ + associate_i_ * CellMeta::CellSize();
-                CellMeta meta(cell_addr);
-                bitmap_ = meta.OccupyBitSet();
-            }
-            else {
-                bitmap_ = BitSet();
-            }
-            
+            toNextValidBitMap();
         }
         return *this;
     }
-
-    char* operator*() const {
-        return  bucket_addr_ + associate_i_ * CellMeta::CellSize() + *bitmap_ * 8;
+    
+    // return the associate index, slot index and its address
+    std::pair<SlotInfo, HashSlot> operator*() const {
+        uint8_t slot_index = *bitmap_;
+        char* cell_addr = bucket_addr_ + associate_i_ * CellMeta::CellSize();
+        HashSlot* slot = (HashSlot*)(cell_addr + slot_index * 8);
+        uint8_t H2 = *(uint8_t*)(cell_addr + slot_index);
+        return  { {0 /* ignore bucket index */, associate_i_ /* associate index */, *bitmap_ /* slot index*/, slot->meta.H1, H2, false}, 
+                *slot};
     }
 
     bool valid() {
-        return bitmap_ ? true : false;
-    }
-    BucketIterator begin() const {
-        return *this;
-    }
-
-    BucketIterator end() const {
-        return BucketIterator(nullptr, associate_size_, associate_size_);
+        return associate_i_ < associate_size_ && (bitmap_ ? true : false);
     }
 
     std::string ToString() {
@@ -69,7 +60,7 @@ public:
         return buffer;
     }
 private:
-    void toFirstValid() {
+    void toNextValidBitMap() {
         while(!bitmap_ && associate_i_ < associate_size_) {
             associate_i_++;
             char* cell_addr = bucket_addr_ + associate_i_ * CellMeta::CellSize();
@@ -90,7 +81,6 @@ private:
     uint32_t    associate_i_; 
     BitSet      bitmap_;
     char*       bucket_addr_;
-
 };
 
 }
