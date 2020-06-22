@@ -4,8 +4,8 @@
 #include <libcuckoo/cuckoohash_map.hh>
 
 #include "util/env.h"
-#include "lightning/hash_function.h"
-#include "lightning/hash_table.h"
+#include "turbo/hash_function.h"
+#include "turbo/hash_table.h"
 #include "util/robin_hood.h"
 #include "util/io_report.h"
 #include "util/trace.h"
@@ -62,7 +62,7 @@ public:
     void TestRehash() {
         size_t inserted_num = 0;
         util::Stats stats;
-        lthash::HashTable* hashtable = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
+        turbo::HashTable* hashtable = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
         uint64_t i = 0;
         bool res = true;
         auto key_iterator = key_trace_.trace_at(0, max_count_);
@@ -77,7 +77,7 @@ public:
         }
         auto time_end = Env::Default()->NowNanos();
         printf("Total put: %lu\n", i - 1);
-        std::string name = "lthash:" + hashtable->ProbeStrategyName();
+        std::string name = "turbo:" + hashtable->ProbeStrategyName();
         PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), time_end - time_start, false);
         inserted_num = i - 1;
         
@@ -120,23 +120,32 @@ public:
                 printf("thread %2d read: %10lu\n", i, counts[i]);
             }
         };
+        read_fun();
 
-        debug_perf_switch();
+        // debug_perf_switch();
         time_start = Env::Default()->NowNanos();
         hashtable->ReHashAll();
         time_end   = Env::Default()->NowNanos();
         printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
+        read_fun();
 
         time_start = Env::Default()->NowNanos();
         hashtable->ReHashAll();
         time_end   = Env::Default()->NowNanos();
         printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
-
+        read_fun();
 
         time_start = Env::Default()->NowNanos();
         hashtable->ReHashAll();
         time_end   = Env::Default()->NowNanos();
         printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
+        read_fun();
+
+        time_start = Env::Default()->NowNanos();
+        hashtable->ReHashAll();
+        time_end   = Env::Default()->NowNanos();
+        printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
+        read_fun();
 
         // debug_perf_switch();
         // read_fun();
@@ -147,7 +156,7 @@ public:
     size_t LTHashSpeedTest() {
         size_t inserted_num = 0;
         util::Stats stats;
-        lthash::HashTable* hashtable = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
+        turbo::HashTable* hashtable = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
         uint64_t i = 0;
         bool res = true;
         auto key_iterator = key_trace_.trace_at(0, max_count_);
@@ -162,7 +171,7 @@ public:
         }
         auto time_end = Env::Default()->NowNanos();
         printf("Total put: %lu\n", i - 1);
-        std::string name = "lthash:" + hashtable->ProbeStrategyName();
+        std::string name = "turbo:" + hashtable->ProbeStrategyName();
         PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), time_end - time_start, false);
         inserted_num = i - 1;
         
@@ -211,17 +220,17 @@ public:
     }
 
         
-    lthash::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate) {
+    turbo::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate) {
         if (0 == cell_type && 0 == probe_type)
-            return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(bucket, associate);
+            return new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinBucket>(bucket, associate);
         if (0 == cell_type && 1 == probe_type)
-            return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinCell>(bucket, associate);
+            return new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinCell>(bucket, associate);
         if (1 == cell_type && 0 == probe_type)
-            return new lthash::DramHashTable<lthash::CellMeta256, lthash::ProbeWithinBucket>(bucket, associate);
+            return new turbo::DramHashTable<turbo::CellMeta256, turbo::ProbeWithinBucket>(bucket, associate);
         if (1 == cell_type && 1 == probe_type)
-            return new lthash::DramHashTable<lthash::CellMeta256, lthash::ProbeWithinCell>(bucket, associate);
+            return new turbo::DramHashTable<turbo::CellMeta256, turbo::ProbeWithinCell>(bucket, associate);
         else
-            return new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(bucket, associate);
+            return new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinBucket>(bucket, associate);
     }
     
     template <class HashMap, class ValueType>

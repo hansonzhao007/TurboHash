@@ -2,7 +2,7 @@
 
 #include "util/slice.h"
 #include "format.h"
-namespace lthash {
+namespace turbo {
 
 /** 
  *  Dram Record Format: 

@@ -1,7 +1,7 @@
 #pragma once
 #include "bitset.h"
 #include "format.h"
-namespace lthash {
+namespace turbo {
 
 /** Usage: iterator every slot in the bucket, return the pointer in the slot
  *  BucketIterator<CellMeta> iter(bucket_addr, associate_count_);

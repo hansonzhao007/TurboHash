@@ -1,4 +1,4 @@
-#include "lightning/spinlock.h"
+#include "turbo/spinlock.h"
 #include <stdio.h>
 #include <cstdlib>
 #include <vector>
@@ -15,21 +15,21 @@ int main() {
     for (int i = 0; i < 32; ++i) {
         printf("test and set bit: %d\n", i);
         printf("\tlock_value before: %09x\n", *lock_value);
-        char test_set_res = lthash_atomic_bittestandset_x86(lock_value, i);    
+        char test_set_res = turbo_atomic_bittestandset_x86(lock_value, i);    
         printf("\tlock_value  after: %09x. test&set result: %d\n", *lock_value, test_set_res);
-        test_set_res = lthash_atomic_bittestandset_x86(lock_value, i);    
+        test_set_res = turbo_atomic_bittestandset_x86(lock_value, i);    
         printf("\tlock_value  after: %09x. test&set result: %d (retry)\n", *lock_value, test_set_res);
-        char test_reset_res = lthash_atomic_bittestandreset_x86(lock_value, i);
+        char test_reset_res = turbo_atomic_bittestandreset_x86(lock_value, i);
         printf("\tlock_value  after: %09x. test&reset result: %d (reset)\n", *lock_value, test_reset_res);
-        test_reset_res = lthash_atomic_bittestandreset_x86(lock_value, i);
+        test_reset_res = turbo_atomic_bittestandreset_x86(lock_value, i);
         printf("\tlock_value  after: %09x. test&reset result: %d (retry)\n", *lock_value, test_reset_res);
     }
 
     *lock_value = 0xFCFCDAC8;
-    lthash_bit_spin_lock(lock_value, 0);
+    turbo_bit_spin_lock(lock_value, 0);
     printf("succ lock. lock value: %08x\n", *lock_value);
 
-    lthash_bit_spin_unlock(lock_value, 0);
+    turbo_bit_spin_unlock(lock_value, 0);
     printf("succ unlock. lock value: %08x\n", *lock_value);
 
     *lock_value = 0;
@@ -42,10 +42,10 @@ int main() {
         {   
             int loop = 100000;
             while (loop--) {
-                lthash_bit_spin_lock(lock_value, 0);
+                turbo_bit_spin_lock(lock_value, 0);
                 // critical section
                 shared_num++; 
-                lthash_bit_spin_unlock(lock_value, 0);
+                turbo_bit_spin_unlock(lock_value, 0);
             }
         }));
     }

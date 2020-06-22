@@ -7,7 +7,7 @@
 #include "bitset.h"
 #include "spinlock.h"
 
-namespace lthash {
+namespace turbo {
 
 /**
  *  Description: Hash cell whose size is 256 byte. There are 28 slots in the cell.

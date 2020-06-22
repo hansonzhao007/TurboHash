@@ -1,6 +1,6 @@
 #include <immintrin.h>
 #include <cstdlib>
-#include "lightning/hash_table.h"
+#include "turbo/hash_table.h"
 
 #include "gflags/gflags.h"
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
@@ -11,7 +11,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 const size_t COUNT = 100000;
 int main(int argc, char *argv[]) {
     ParseCommandLineFlags(&argc, &argv, true);
-    auto* hashtable = new lthash::DramHashTable<lthash::CellMeta128, lthash::ProbeWithinBucket>(16, 32);
+    auto* hashtable = new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinBucket>(16, 32);
     printf("------- Iterate empty hash table ------\n");
     hashtable->IterateAll();
 

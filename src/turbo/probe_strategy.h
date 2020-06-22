@@ -2,7 +2,7 @@
 #include <inttypes.h>
 #include <string>
 
-namespace lthash {
+namespace turbo {
 
 class ProbeWithinCell {
 public:

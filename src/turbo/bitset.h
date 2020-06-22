@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-namespace lthash {
+namespace turbo {
 
 // Usage example:
 // BitSet bitset(0x05); 

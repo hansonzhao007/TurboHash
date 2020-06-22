@@ -5,7 +5,7 @@
 #include "util/status.h"
 #include "util/coding.h"
 
-namespace lthash {
+namespace turbo {
 using Status = util::Status;
 using Slice = util::Slice;
 
@@ -19,7 +19,6 @@ union HashSlot
         uint16_t H1;
     } meta;
 };
-
 
 // 64 bit hash function is used to locate initial position of keys
 // |         4 B       |         4 B       |
@@ -87,9 +86,13 @@ enum ValueType {
     kTypeMask     = 0x7F    // 0b 0_1111111
 };
 
-
 class BucketMeta {
 public:
+    BucketMeta(char* addr, uint16_t associate_size):
+        __addr(addr)
+        {
+            info.associate_size = associate_size;
+    }
     BucketMeta(){}
     inline char* Address() {
         return (char*)(uint64_t(__addr) & 0x0000FFFFFFFFFFFF);

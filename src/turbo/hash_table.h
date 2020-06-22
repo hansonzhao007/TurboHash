@@ -18,10 +18,10 @@
 #include "util/status.h"
 #include "util/prefetcher.h"
 #include "util/env.h"
-#include "util/timer.h"
+
 // #define LTHASH_DEBUG_OUT
 
-namespace lthash {
+namespace turbo {
 
 
 class HashTable {
@@ -64,7 +64,7 @@ public:
     explicit DramHashTable(uint32_t bucket_count, uint32_t associate_count):
         bucket_count_(bucket_count),
         bucket_mask_(bucket_count - 1),
-        associate_count_(associate_count),
+        associate_size_(associate_count),
         associate_mask_(associate_count - 1),
         capacity_(bucket_count * associate_count * CellMeta::SlotSize()),
         cur_log_offset_(0) {
@@ -75,11 +75,11 @@ public:
         }
 
         buckets_ = new BucketMeta[bucket_count];
-        cells_   = (char*) aligned_alloc(kCellSize, bucket_count_ * associate_count_ * kCellSize);
-        memset(cells_, 0, bucket_count_ * associate_count_ * kCellSize);
+        cells_   = (char*) aligned_alloc(kCellSize, bucket_count_ * associate_size_ * kCellSize);
+        memset(cells_, 0, bucket_count_ * associate_size_ * kCellSize);
         for (size_t i = 0; i < bucket_count; ++i) {
-            buckets_[i].__addr = cells_ + i * associate_count_ * kCellSize;
-            buckets_[i].info.associate_size = associate_count_;
+            buckets_[i].__addr = cells_ + i * associate_size_ * kCellSize;
+            buckets_[i].info.associate_size = associate_size_;
         }
         size_     = 0;
 
@@ -102,14 +102,18 @@ public:
     void ReHashAll() override {
         // enlarge space 
         size_t count = 0;
-        size_t new_associate_size = associate_count_ * 2;
+        size_t new_associate_size = associate_size_ * 2;
+        if (new_associate_size > 65536) {
+            printf("cannot rehash. current associate size reach maximum size 65536: %lu\n", associate_size_);
+            return;
+        }
         char* new_cells = (char*) aligned_alloc(kCellSize, bucket_count_ * new_associate_size * kCellSize);
         for (size_t i = 0; i < bucket_count_; ++i) {
             count += Rehash(i, new_cells + i * new_associate_size * kCellSize);
         }
         free(cells_);
         cells_ = new_cells;
-        associate_count_ = new_associate_size;
+        associate_size_ = new_associate_size;
         capacity_ *= 2;
         printf("Rehash %lu entries\n", count);
     }
@@ -323,7 +327,7 @@ public:
     std::string PrintBucketMeta(uint32_t bucket_i) {
         std::string res;
         char buffer[1024];
-        BucketMeta& meta = buckets_[bucket_i];
+        BucketMeta meta = locateBucket(bucket_i);
         sprintf(buffer, "----- bucket %10u -----\n", bucket_i);
         res += buffer;
         ProbeStrategy probe(0, meta.AssociateSize() - 1, bucket_i, bucket_count_);
@@ -390,14 +394,16 @@ private:
         return hash & bucket_mask_;
     }
 
-    inline BucketMeta& locateBucket(uint32_t bi) {
-        return buckets_[bi];
+    inline BucketMeta locateBucket(uint32_t bi) {
+        return BucketMeta(cells_ + bi * associate_size_ * kCellSize, associate_size_);
+        // return buckets_[bi];
     }
     // offset.first: bucket index
     // offset.second: associate index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
+        // return cells_ + offset.first * associate_size_ * kCellSize + offset.second * kCellSize;
         return  buckets_[offset.first].Address() +  // locate the bucket
-                (offset.second << kCellSizeLeftShift);          // locate the associate cell
+                offset.second * kCellSize;          // locate the associate cell
     }
   
     inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
@@ -456,7 +462,7 @@ private:
                 // find a valid slot
                 // obtain the cell lock
                 char* cell_addr = locateCell({res.first.bucket, res.first.associate});
-                SpinLockScope((lthash_bitspinlock*)cell_addr);
+                SpinLockScope((turbo_bitspinlock*)cell_addr);
                 
                 CellMeta meta(cell_addr);
                 util::PrefetchForWrite((void*)cell_addr);
@@ -523,7 +529,7 @@ private:
     inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        BucketMeta meta = buckets_[bucket_i];
+        BucketMeta meta = locateBucket(bucket_i);
         ProbeStrategy probe(partial_hash.H1_, meta.AssociateSize() - 1, bucket_i, bucket_count_);
 
         // limit probe count
@@ -602,7 +608,7 @@ private:
     inline std::pair<SlotInfo, bool> findSlot(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        BucketMeta meta = buckets_[bucket_i];
+        BucketMeta meta = locateBucket(bucket_i);
         ProbeStrategy probe(partial_hash.H1_, meta.AssociateSize() - 1, bucket_i, bucket_count_);
 
         // limit probe count
@@ -681,7 +687,7 @@ private:
     char*         cells_ = nullptr;
     const size_t  bucket_count_ = 0;
     const size_t  bucket_mask_  = 0;
-    size_t        associate_count_ = 0;
+    size_t        associate_size_ = 0;
     size_t        associate_mask_  = 0;
     size_t        capacity_ = 0;
     size_t        size_ = 0;

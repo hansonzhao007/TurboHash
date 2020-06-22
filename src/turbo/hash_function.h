@@ -1,6 +1,6 @@
 #pragma once
 
-namespace lthash {
+namespace turbo {
 
 class MurMurHash {
 public:
@@ -11,7 +11,7 @@ public:
 
     static inline uint64_t MurmurHash64A ( const void * key, int len)
     {
-        const uint64_t m = 0xc6a4a7935bd1e995;
+        const uint64_t m = UINT64_C(0xc6a4a7935bd1e995);
         const uint64_t seed = UINT64_C(0xe17a1465);
         const int r = 47;
 

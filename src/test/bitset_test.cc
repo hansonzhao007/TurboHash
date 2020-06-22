@@ -3,21 +3,21 @@
 #include "util/env.h"
 #include "util/pmm_util.h"
 
-#include "lightning/hash_table.h"
+#include "turbo/hash_table.h"
 
 using namespace util;
 int main() {
     uint64_t SIZE = 1 << 30;
     char* large_space = (char*) malloc(SIZE);
 
-    lthash::BitSet bitset(0x05);
+    turbo::BitSet bitset(0x05);
     for (int i : bitset) {
         printf("has bit in pos: %d\n", i);
     }
 
     {   
         uint8_t bitset_buffer[] = {0x00, 0x00};
-        lthash::CellMeta128 meta((char*)bitset_buffer);
+        turbo::CellMeta128 meta((char*)bitset_buffer);
         auto bitset_occupy = meta.OccupyBitSet();
         printf("bitset_occupy bitmap: 0x%x\n", bitset_occupy.bit());
         printf("bitset_occupy should be empty: %s\n", bitset_occupy ? "ERROR: not empty" : "empty");
@@ -28,7 +28,7 @@ int main() {
 // bitmap: 0  0   1     1    0      1     0     1  |  0      1    0     1     1     1     0     1
                 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee};
 // index:  0  1   2     3    4      5     6     7     8     9     10    11    12    13    14    15           
-        lthash::CellMeta128 meta128((char*)bitset_buffer128);
+        turbo::CellMeta128 meta128((char*)bitset_buffer128);
         for (int i : meta128.EmptyBitSet()) {
             printf("empty slot %d\n", i);
         }
@@ -55,7 +55,7 @@ int main() {
 // bitmap:   1      0    1     1     0     0     1     1
 // index :   24     25   26    27    28    29    30    31
             0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
-        lthash::CellMeta256 meta256((char*)bitset_buffer256);
+        turbo::CellMeta256 meta256((char*)bitset_buffer256);
         for (int i : meta256.MatchBitSet(0x99)) {
             printf("0x99 is in slot: %d\n", i);
         }
