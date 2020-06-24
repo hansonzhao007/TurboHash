@@ -35,8 +35,8 @@ DEFINE_int32(cell_type, 0, "\
     0: 128 byte cell, \
     1: 256 byte cell");
 DEFINE_bool(locate_cell_with_h1, false, "using partial hash h1 to locate cell inside bucket or not");
-
-static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23};
+// use numactl --hardware command to check numa node info
+static int kThreadIDs[16] = {16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7 };
 
 class HashBench {
 public:
@@ -86,7 +86,7 @@ public:
             std::vector<size_t> counts(FLAGS_thread_read, 0);
             kRunning = true;
             if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
-            time_start = Env::Default()->NowNanos();
+            auto time_start = Env::Default()->NowNanos();
             for (int t = 0; t < FLAGS_thread_read; t++) {
                 workers[t] = std::thread([&, t]
                 {
@@ -112,7 +112,7 @@ public:
             {
                 t.join();
             });
-            time_end = Env::Default()->NowNanos();
+            auto time_end = Env::Default()->NowNanos();
             size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
             PrintSpeed(name, hashtable->LoadFactor(), read_count, time_end - time_start, true);
             if (FLAGS_print_thread_read)
@@ -147,73 +147,89 @@ public:
         printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
         read_fun();
 
-        // debug_perf_switch();
-        // read_fun();
-
         delete hashtable;
         return inserted_num;
     }
+
 
     size_t TurboHashSpeedTest() {
         size_t inserted_num = 0;
         util::Stats stats;
         turbo::HashTable* hashtable = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
-        uint64_t i = 0;
-        bool res = true;
-        auto key_iterator = key_trace_.trace_at(0, max_count_);
         hashtable->WarmUp();
-        debug_perf_switch();
-        auto time_start = Env::Default()->NowNanos();
-        while (res && i < max_count_) {
-            res = hashtable->Put(key_iterator.Next(), value_);
-            if ((i++ & 0xFFFFF) == 0) {
-                fprintf(stderr, "inserting%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
-            }
-        }
-        auto time_end = Env::Default()->NowNanos();
-        printf("Total put: %lu\n", i - 1);
         std::string name = "turbo:" + hashtable->ProbeStrategyName();
-        PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), time_end - time_start, false);
-        inserted_num = i - 1;
-        
-        std::vector<std::thread> workers(FLAGS_thread_read);
-        std::vector<size_t> counts(FLAGS_thread_read, 0);
-        kRunning = true;
-        if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
-        debug_perf_switch();
-        time_start = Env::Default()->NowNanos();
-        for (int t = 0; t < FLAGS_thread_read; t++) {
-            workers[t] = std::thread([&, t]
-            {
-                // core function
-                Env::PinCore(kThreadIDs[t]);
-                std::string value;
-                bool res = true;
-                size_t i = 0;
-                size_t start_offset = random() % inserted_num;
-                if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
-                auto key_iterator = key_trace_.trace_at(start_offset, inserted_num);
-                while (kRunning && key_iterator.Valid() && res) {
-                    res = hashtable->Get(key_iterator.Next(), &value);
-                    if ((i++ & 0xFFFFF) == 0) {
-                        fprintf(stderr, "thread: %2d reading%*s-%03d->\r", t,  int(i >> 20), " ", int(i >> 20));fflush(stderr);
-                    }
-                }
-                if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, res ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
-                counts[t] = i ;
-            });
-        }
-        std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
         {
-            t.join();
-        });
-        time_end = Env::Default()->NowNanos();
-        debug_perf_stop();
-        size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
-        PrintSpeed(name, hashtable->LoadFactor(), read_count, time_end - time_start, true);
-        if (FLAGS_print_thread_read)
-        for(int i = 0; i < FLAGS_thread_read; i++) {
-            printf("thread %2d read: %10lu\n", i, counts[i]);
+            std::vector<std::thread> workers(FLAGS_thread_write);
+            std::vector<size_t> counts(FLAGS_thread_write, 0);
+            kRunning = true;
+            auto time_start = Env::Default()->NowNanos();
+            for (int t = 0; t < FLAGS_thread_write; t++) {
+                workers[t] = std::thread([&, t] {
+                    Env::PinCore(kThreadIDs[t]);
+                    uint64_t i = 0;
+                    bool res = true;
+                    auto key_iterator = key_trace_.trace_at(0, max_count_);
+                    while (res && i < max_count_) {
+                        res = hashtable->Put(key_iterator.Next(), value_);
+                        if ((i++ & 0xFFFFF) == 0) {
+                            fprintf(stderr, "inserting%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+                        }
+                    }
+                    counts[t] = i - 1;
+                });
+            }   
+            std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
+            {
+                t.join();
+            });
+            auto time_end = Env::Default()->NowNanos();
+            size_t write_count = std::accumulate(counts.begin(), counts.end(), 0);
+            printf("Total put: %lu\n", write_count);
+            PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), time_end - time_start, false);
+            inserted_num = write_count;   
+        }
+        
+        {
+            auto read_fun = [&]{
+                std::vector<std::thread> workers(FLAGS_thread_read);
+                std::vector<size_t> counts(FLAGS_thread_read, 0);
+                kRunning = true;
+                if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
+                auto time_start = Env::Default()->NowNanos();
+                for (int t = 0; t < FLAGS_thread_read; t++) {
+                    workers[t] = std::thread([&, t]
+                    {
+                        // core function
+                        Env::PinCore(kThreadIDs[t]);
+                        std::string value;
+                        bool res = true;
+                        size_t i = 0;
+                        size_t start_offset = random() % inserted_num;
+                        if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
+                        auto key_iterator = key_trace_.trace_at(start_offset, inserted_num);
+                        while (kRunning && key_iterator.Valid() && res) {
+                            res = hashtable->Get(key_iterator.Next(), &value);
+                            if ((i++ & 0xFFFFF) == 0) {
+                                fprintf(stderr, "thread: %2d reading%*s-%03d->\r", t,  int(i >> 20), " ", int(i >> 20));fflush(stderr);
+                            }
+                        }
+                        if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, res ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
+                        counts[t] = i ;
+                    });
+                }
+                std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
+                {
+                    t.join();
+                });
+                auto time_end = Env::Default()->NowNanos();
+                size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
+                PrintSpeed(name, hashtable->LoadFactor(), read_count, time_end - time_start, true);
+                if (FLAGS_print_thread_read)
+                for(int i = 0; i < FLAGS_thread_read; i++) {
+                    printf("thread %2d read: %10lu\n", i, counts[i]);
+                }
+            };
+            read_fun();
         }
 
         delete hashtable;
@@ -386,9 +402,9 @@ int main(int argc, char *argv[]) {
 
     HashBench hash_bench(FLAGS_bucket_size, FLAGS_associate_size, FLAGS_cell_type);
     
-    // size_t inserted_num = hash_bench.TurboHashSpeedTest();
-    size_t inserted_num = hash_bench.TestRehash();
+    size_t inserted_num = hash_bench.TurboHashSpeedTest();
     // inserted_num = hash_bench.TurboHashSpeedTest();
+    // inserted_num = hash_bench.TestRehash();
     hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
     
     // hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
