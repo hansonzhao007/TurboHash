@@ -9,6 +9,9 @@
 #include "util/env.h"
 using namespace util;
 
+
+static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23};
+const int kThreadNum = 15;
 int main() {
     std::atomic<int> aint(0);
     unsigned* lock_value = (unsigned*)malloc(4);
@@ -36,10 +39,11 @@ int main() {
     std::vector<std::thread> workers;
     int shared_num = 0;
     auto start_time = Env::Default()->NowNanos();
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < kThreadNum; i++) {
         // each worker add 10000,
-        workers.push_back(std::thread([&shared_num, &lock_value]() 
+        workers.push_back(std::thread([&shared_num, &lock_value, i]() 
         {   
+            util::Env::Default()->PinCore(kThreadIDs[i]);
             int loop = 100000;
             while (loop--) {
                 turbo_bit_spin_lock(lock_value, 0);
@@ -62,10 +66,11 @@ int main() {
         std::atomic<int> tmp(0);
         std::vector<std::thread> workers;
         auto start_time = Env::Default()->NowNanos();
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < kThreadNum; i++) {
             // each worker add 10000,
-            workers.push_back(std::thread([&shared_num, &tmp]() 
+            workers.push_back(std::thread([&shared_num, &tmp, i]() 
             {   
+                util::Env::Default()->PinCore(kThreadIDs[i]);
                 int loop = 1000000;
                 while (loop--) {
                     tmp.fetch_add(1, std::memory_order_relaxed);

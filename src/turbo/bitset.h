@@ -34,7 +34,7 @@ public:
     }
 private:
     friend bool operator==(const BitSet& a, const BitSet& b) {
-    return a.bits_ == b.bits_;
+        return a.bits_ == b.bits_;
     }
     friend bool operator!=(const BitSet& a, const BitSet& b) {
         return a.bits_ != b.bits_;

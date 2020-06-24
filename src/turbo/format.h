@@ -4,6 +4,7 @@
 #include "util/slice.h"
 #include "util/status.h"
 #include "util/coding.h"
+#include "hash_function.h"
 
 namespace turbo {
 using Status = util::Status;
@@ -33,11 +34,18 @@ union HashSlot
 #define LTHASH_H2_SIZE uint8_t 
 #define LTHASH_H1_SIZE uint16_t
 struct PartialHash {
-    PartialHash(uint64_t hash):
+    PartialHash(uint64_t hash)
+        :
         bucket_hash_(hash >> 32),
         H1_(         hash & 0xFFFF),
         H2_( (hash >> 16) & 0xFF)
-        {};
+        {
+            // uint32_t combined_hash = MurMurHash::hash64to32shift(hash);
+            // bucket_hash_ = combined_hash;
+            // combined_hash = MurMurHash::rotl32(combined_hash, 8);
+            // H1_ = combined_hash & 0xFFFF;
+            // H2_ = (hash >> 16) & 0xFF;
+        };
     BUCKET_H_SIZE  bucket_hash_;
     // H1: 2 byte partial key
     LTHASH_H1_SIZE H1_;
@@ -111,93 +119,93 @@ public:
 };
 
 
-class Handler {
-public: 
-    virtual void Run(ValueType, const Slice& key, const Slice& value) = 0;
-};
+// class Handler {
+// public: 
+//     virtual void Run(ValueType, const Slice& key, const Slice& value) = 0;
+// };
 
-// records :=
-//    kTypeValue varstring varstring 
-//    kTypeDeletion varstring
-// varstring :=
-//    len: varint32
-//    data: uint8[len]
-Status IterateRecords(const std::string& records, Handler* handler, size_t* records_count) {
-    Slice input(records);
-    Slice key, value;
-    int found = 0;
-    while (!input.empty()) {
-        found++;
-        unsigned char tag = input[0];
-        input.remove_prefix(1);
-        switch (tag) {
-        case kTypeValue:
-            if (GetLengthPrefixedSlice(&input, &key) &&
-                GetLengthPrefixedSlice(&input, &value)) {
-                handler->Run(kTypeValue, key, value);
-            } else {
-                return Status::Corruption("bad kTypeValue");
-            }
-            break;
-        case kTypeDeletion:
-            if (GetLengthPrefixedSlice(&input, &key)) {
-                handler->Run(kTypeDeletion, key, value);
-            } else {
-                return Status::Corruption("bad kTypeDeletion");
-            }
-            break;
-        default:
-            return Status::Corruption("unknown ValueType");
-        }
-    } 
+// // records :=
+// //    kTypeValue varstring varstring 
+// //    kTypeDeletion varstring
+// // varstring :=
+// //    len: varint32
+// //    data: uint8[len]
+// Status IterateRecords(const std::string& records, Handler* handler, size_t* records_count) {
+//     Slice input(records);
+//     Slice key, value;
+//     int found = 0;
+//     while (!input.empty()) {
+//         found++;
+//         unsigned char tag = input[0];
+//         input.remove_prefix(1);
+//         switch (tag) {
+//         case kTypeValue:
+//             if (GetLengthPrefixedSlice(&input, &key) &&
+//                 GetLengthPrefixedSlice(&input, &value)) {
+//                 handler->Run(kTypeValue, key, value);
+//             } else {
+//                 return Status::Corruption("bad kTypeValue");
+//             }
+//             break;
+//         case kTypeDeletion:
+//             if (GetLengthPrefixedSlice(&input, &key)) {
+//                 handler->Run(kTypeDeletion, key, value);
+//             } else {
+//                 return Status::Corruption("bad kTypeDeletion");
+//             }
+//             break;
+//         default:
+//             return Status::Corruption("unknown ValueType");
+//         }
+//     } 
 
-    *records_count = found;
-    return Status::OK();
-}
+//     *records_count = found;
+//     return Status::OK();
+// }
 
-inline
-void SerilizeRecord(ValueType type, const Slice& key, const Slice& value, std::string* output) {
-    output->push_back(static_cast<char>(type));
-    PutLengthPrefixedSlice(output, key);
-    if (type != kTypeDeletion) PutLengthPrefixedSlice(output, value);
-}
+// inline
+// void SerilizeRecord(ValueType type, const Slice& key, const Slice& value, std::string* output) {
+//     output->push_back(static_cast<char>(type));
+//     PutLengthPrefixedSlice(output, key);
+//     if (type != kTypeDeletion) PutLengthPrefixedSlice(output, value);
+// }
 
 
-// Note: the rep_ will be stored to media
-// WriteBatch::rep_ :=
-//    data: record[count]
-// record :=
-//    kTypeValue varstring varstring         |
-//    kTypeDeletion varstring
-// varstring :=
-//    len: varint32
-//    data: uint8[len]
-class WriteBatch {
-public:
-    inline void Put(const Slice& key, const Slice& value) {
-        count_++;
-        rep_.push_back(static_cast<char>(kTypeValue));
-        PutLengthPrefixedSlice(&rep_, key);
-        PutLengthPrefixedSlice(&rep_, value);
-    }
+// // Note: the rep_ will be stored to media
+// // WriteBatch::rep_ :=
+// //    data: record[count]
+// // record :=
+// //    kTypeValue varstring varstring         |
+// //    kTypeDeletion varstring
+// // varstring :=
+// //    len: varint32
+// //    data: uint8[len]
+// class WriteBatch {
+// public:
+//     inline void Put(const Slice& key, const Slice& value) {
+//         count_++;
+//         rep_.push_back(static_cast<char>(kTypeValue));
+//         PutLengthPrefixedSlice(&rep_, key);
+//         PutLengthPrefixedSlice(&rep_, value);
+//     }
 
-    inline void Delete(const Slice& key) {
-        count_++;
-        rep_.push_back(static_cast<char>(kTypeDeletion));
-        PutLengthPrefixedSlice(&rep_, key);
-    }
+//     inline void Delete(const Slice& key) {
+//         count_++;
+//         rep_.push_back(static_cast<char>(kTypeDeletion));
+//         PutLengthPrefixedSlice(&rep_, key);
+//     }
 
-    inline size_t Count() {
-        return count_;
-    }
+//     inline size_t Count() {
+//         return count_;
+//     }
 
-    inline size_t Size() {
-        return rep_.size();
-    }
+//     inline size_t Size() {
+//         return rep_.size();
+//     }
 
-private:
-    size_t count_ = 0;
-    std::string rep_;
-};
+// private:
+//     size_t count_ = 0;
+//     std::string rep_;
+// };
 
 }

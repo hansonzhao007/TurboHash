@@ -9,6 +9,37 @@ public:
         return (MurmurHash64A(key, len));
     }
 
+    static inline uint32_t rotl32 ( uint32_t x, int8_t r )
+    {
+        return (x << r) | (x >> (32 - r));
+    }
+
+    static inline uint64_t rotl64 ( uint64_t x, int8_t r )
+    {
+        return (x << r) | (x >> (64 - r));
+    }
+
+    static inline int hash64to32shift(uint64_t key)
+    {
+        key = (~key) + (key << 18); // key = (key << 18) - key - 1;
+        key = key ^ (key >> 31);
+        key = key * 21; // key = (key + (key << 2)) + (key << 4);
+        key = key ^ (key >> 11);
+        key = key + (key << 6);
+        key = key ^ (key >> 22);
+        return (int) key;
+    }
+
+    static uint64_t xorshift(const uint64_t& n,int i){
+        return n^(n>>i);
+    }
+
+    static uint64_t numhash(const uint64_t& n){
+        uint64_t p = 0x5555555555555555ull; // pattern of alternating 0 and 1
+        uint64_t c = 17316035218449499591ull;// random uneven integer constant; 
+        return c*xorshift(p*xorshift(n,32),32);
+    }
+    
     static inline uint64_t MurmurHash64A ( const void * key, int len)
     {
         const uint64_t m = UINT64_C(0xc6a4a7935bd1e995);

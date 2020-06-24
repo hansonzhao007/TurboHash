@@ -167,28 +167,25 @@ public:
         //       ========>
         // new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444    |
         std::vector<uint8_t> slot_vec(new_associate_size, CellMeta::StartSlotPos());
-        BucketIterator<CellMeta> iter(bucket_meta.Address(), bucket_meta.info.associate_size);
+        BucketIterator<CellMeta> iter(bi, bucket_meta.Address(), bucket_meta.info.associate_size);
         while (iter.valid()) { // iterator every slot in this bucket
             count++;
             // obtain old slot info and slot content
             auto res = *iter;
-            SlotInfo& info = res.first;
-            HashSlot& slot = res.second;
-            info.bucket = bi;
-    
+
             // update bitmap, H2, H1 and slot pointer in new bucket
             // 1. find valid slot in new bucket
-            auto valid_slot = findNextSlotInRehash(slot_vec, info.H1 & new_associate_size_mask, new_associate_size_mask);
+            auto valid_slot = findNextSlotInRehash(slot_vec, res.first.H1, new_associate_size_mask);
             
             // 2. move the slot from old bucket to new bucket
-            char* des_cell_addr = new_bucket_addr + valid_slot.first * kCellSize;
-            info.slot = valid_slot.second;
-            info.associate = valid_slot.first;
-            if (info.slot >= CellMeta::SlotMaxRange() || info.associate >= new_associate_size) {
-                printf("rehash fail: %s\n", info.ToString().c_str());
+            char* des_cell_addr = new_bucket_addr + (valid_slot.first << kCellSizeLeftShift);
+            res.first.slot      = valid_slot.second;
+            res.first.associate = valid_slot.first;
+            if (res.first.slot >= CellMeta::SlotMaxRange() || res.first.associate >= new_associate_size) {
+                printf("rehash fail: %s\n", res.first.ToString().c_str());
                 exit(1);
             }
-            moveSlot(des_cell_addr, info, slot);            
+            moveSlot(des_cell_addr, res.first, res.second);            
             ++iter;
         }
         // replace old bucket meta in buckets_
@@ -270,7 +267,7 @@ public:
         printf("Iterate Valid Bucket\n");
         for (size_t i = 0; i < bucket_count_; ++i) {
             auto bucket_meta = locateBucket(i);
-            BucketIterator<CellMeta> iter(bucket_meta.Address(), bucket_meta.info.associate_size);
+            BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.info.associate_size);
             if (iter.valid()) {
                 printf("%s\n", PrintBucketMeta(i).c_str());
             }
@@ -300,11 +297,10 @@ public:
         size_t count = 0;
         for (size_t i = 0; i < bucket_count_; ++i) {
             auto bucket_meta = locateBucket(i);
-            BucketIterator<CellMeta> iter(bucket_meta.Address(), bucket_meta.info.associate_size);
+            BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.info.associate_size);
             while (iter.valid()) {
                 auto res = (*iter);
                 SlotInfo& info = res.first;
-                info.bucket = i;
                 HashSlot& slot = res.second;
                 slot.meta.H1 = 0;
                 auto datanode = Media::ParseData(slot.entry);
@@ -401,9 +397,9 @@ private:
     // offset.first: bucket index
     // offset.second: associate index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
-        // return cells_ + offset.first * associate_size_ * kCellSize + offset.second * kCellSize;
-        return  buckets_[offset.first].Address() +  // locate the bucket
-                offset.second * kCellSize;          // locate the associate cell
+        return cells_ + offset.first * associate_size_ * kCellSize + offset.second * kCellSize;
+        // return  buckets_[offset.first].Address() +  // locate the bucket
+        //         offset.second * kCellSize;          // locate the associate cell
     }
   
     inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
@@ -529,16 +525,14 @@ private:
     inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        BucketMeta meta = locateBucket(bucket_i);
-        ProbeStrategy probe(partial_hash.H1_, meta.AssociateSize() - 1, bucket_i, bucket_count_);
+        // BucketMeta bucket_meta = locateBucket(bucket_i);
+        ProbeStrategy probe(partial_hash.H1_, associate_size_ - 1 /*bucket_meta.AssociateSize() - 1*/, bucket_i, bucket_count_);
 
         // limit probe count
         int probe_count = 0;
         while (probe && probe_count++ < ProbeStrategy::MAX_PROBE_LEN) {
             auto offset = probe.offset();
             char* cell_addr = locateCell(offset);
-            // prefetch next cell
-            // util::PrefetchForRead((void*)(cell_addr + CellMeta::CellSize()));
             CellMeta meta(cell_addr);
             // locate if there is any H2 match in this cell
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {
@@ -608,8 +602,8 @@ private:
     inline std::pair<SlotInfo, bool> findSlot(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        BucketMeta meta = locateBucket(bucket_i);
-        ProbeStrategy probe(partial_hash.H1_, meta.AssociateSize() - 1, bucket_i, bucket_count_);
+        // BucketMeta bucket_meta = locateBucket(bucket_i);
+        ProbeStrategy probe(partial_hash.H1_, associate_size_ - 1 /* bucket_meta.AssociateSize() - 1*/, bucket_i, bucket_count_);
 
         // limit probe count
         int probe_count = 0;
@@ -619,14 +613,10 @@ private:
             CellMeta meta(cell_addr);
             // locate if there is any H2 match in this cell
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {
-                // i is the slot index in current cell, each slot
-                // occupies 8-byte
+                // i is the slot index in current cell, each slot occupies 8-byte
 
-                // PrefetchSlotKey(cell_addr, i);
                 // locate the slot reference
                 const HashSlot& slot = *locateSlot(cell_addr, i);
-                // prefetch address that slot point to
-                // util::PrefetchForRead((void*)((uint64_t)slot.entry & 0x0000FFFFFFFFFFFF));
 
                 // compare if the H1 partial hash is equal
                 if (likely(slot.meta.H1 == partial_hash.H1_)) {

@@ -36,11 +36,11 @@ int main(int argc, char *argv[]) {
     // hashtable->IterateBucket(1);
     // hashtable->PrintAllMeta();
     // hashtable->IterateAll();
-    hashtable->IterateValidBucket();
+    // hashtable->IterateValidBucket();
     
     printf("------- rehash all bucket and repeat search 0 ------\n");
     hashtable->ReHashAll();
-    hashtable->IterateValidBucket();
+    // hashtable->IterateValidBucket();
     // hashtable->IterateBucket(1);
     // hashtable->PrintAllMeta();
     // hashtable->IterateAll();
