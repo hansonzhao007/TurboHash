@@ -1,11 +1,13 @@
 #pragma once
-
+// #define XXH_INLINE_ALL
+// #include "util/xxhash.h"
 namespace turbo {
 
 class MurMurHash {
 public:
     static inline size_t hash ( const void * key, int len)
     {
+        // return (XXH64(key, len, len));
         return (MurmurHash64A(key, len));
     }
 

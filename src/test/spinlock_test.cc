@@ -5,7 +5,7 @@
 #include <thread>
 #include <algorithm>
 #include <atomic>
-
+#include <unistd.h>
 #include "util/env.h"
 using namespace util;
 
@@ -37,19 +37,20 @@ int main() {
 
     *lock_value = 0;
     std::vector<std::thread> workers;
-    int shared_num = 0;
+    size_t shared_num = 0;
     auto start_time = Env::Default()->NowNanos();
     for (int i = 0; i < kThreadNum; i++) {
         // each worker add 10000,
         workers.push_back(std::thread([&shared_num, &lock_value, i]() 
         {   
-            util::Env::Default()->PinCore(kThreadIDs[i]);
-            int loop = 100000;
+            // util::Env::Default()->PinCore(kThreadIDs[i]);
+            size_t loop = 100000;
             while (loop--) {
-                turbo_bit_spin_lock(lock_value, 0);
+                // usleep(1);
+                SpinLockScope lock_scope((turbo_bitspinlock*)lock_value);
                 // critical section
-                shared_num++; 
-                turbo_bit_spin_unlock(lock_value, 0);
+                shared_num++;
+                // turbo_bit_spin_unlock(lock_value, 0);
             }
         }));
     }
@@ -58,7 +59,7 @@ int main() {
         t.join();
     });
     auto end_time = Env::Default()->NowNanos();
-    printf("spinlock Speed: %f Mops/s. Add result: %d\n", 
+    printf("spinlock Speed: %f Mops/s. Add result: %lu\n", 
         (double)shared_num / (end_time - start_time) * 1000.0,
         shared_num);
 

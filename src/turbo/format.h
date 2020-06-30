@@ -39,13 +39,7 @@ struct PartialHash {
         bucket_hash_(hash >> 32),
         H1_(         hash & 0xFFFF),
         H2_( (hash >> 16) & 0xFF)
-        {
-            // uint32_t combined_hash = MurMurHash::hash64to32shift(hash);
-            // bucket_hash_ = combined_hash;
-            // combined_hash = MurMurHash::rotl32(combined_hash, 8);
-            // H1_ = combined_hash & 0xFFFF;
-            // H2_ = (hash >> 16) & 0xFF;
-        };
+        {};
     BUCKET_H_SIZE  bucket_hash_;
     // H1: 2 byte partial key
     LTHASH_H1_SIZE H1_;

@@ -26,6 +26,7 @@ DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
 DEFINE_bool(print_thread_read, false, "");
 DEFINE_int32(thread_read, 1, "");
 DEFINE_int32(thread_write, 1, "");
+DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 DEFINE_int32(associate_size, 16, "");
 DEFINE_int32(bucket_size, 256 << 10, "bucket count");
 DEFINE_int32(probe_type, 0, "\
@@ -48,13 +49,14 @@ public:
         signal(SIGALRM, &sigalrm_handler);  // set a signal handler
     }
 
-    void PrintSpeed(std::string name, double loadfactor, size_t size, size_t duration_ns, bool read) {
-        printf("%33s - Load Factor: %.2f. %s   %10lu key, Speed: %5.2f Mops/s. Time: %12lu ns\n", 
+    void PrintSpeed(std::string name, double loadfactor, size_t size, size_t inserted, size_t duration_ns, bool read) {
+        printf("%33s - Load Factor: %.2f. %s   %10lu key, Size: %10lu. Speed: %5.2f Mops/s. Time: %12lu ns\n", 
             name.c_str(), 
             loadfactor,
             read ? "Read  " : "Insert",
+            inserted,
             size,
-            (double)size / duration_ns * 1000.0, 
+            (double)inserted / duration_ns * 1000.0, 
             duration_ns
             );
     }
@@ -72,14 +74,14 @@ public:
         while (res && i < max_count_) {
             res = hashtable->Put(key_iterator.Next(), value_);
             if ((i++ & 0xFFFFF) == 0) {
-                fprintf(stderr, "inserting%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+                fprintf(stderr, "insert%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
             }
         }
         auto time_end = Env::Default()->NowNanos();
         printf("Total put: %lu\n", i - 1);
         std::string name = "turbo:" + hashtable->ProbeStrategyName();
-        PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), time_end - time_start, false);
         inserted_num = i - 1;
+        PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), inserted_num, time_end - time_start, false);
         
         auto read_fun = [&]{
             std::vector<std::thread> workers(FLAGS_thread_read);
@@ -114,7 +116,7 @@ public:
             });
             auto time_end = Env::Default()->NowNanos();
             size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
-            PrintSpeed(name, hashtable->LoadFactor(), read_count, time_end - time_start, true);
+            PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), read_count, time_end - time_start, true);
             if (FLAGS_print_thread_read)
             for(int i = 0; i < FLAGS_thread_read; i++) {
                 printf("thread %2d read: %10lu\n", i, counts[i]);
@@ -158,6 +160,7 @@ public:
         turbo::HashTable* hashtable = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
         hashtable->WarmUp();
         std::string name = "turbo:" + hashtable->ProbeStrategyName();
+        size_t max_range = max_count_ * FLAGS_loadfactor;
         {
             std::vector<std::thread> workers(FLAGS_thread_write);
             std::vector<size_t> counts(FLAGS_thread_write, 0);
@@ -168,11 +171,12 @@ public:
                     Env::PinCore(kThreadIDs[t]);
                     uint64_t i = 0;
                     bool res = true;
-                    auto key_iterator = key_trace_.trace_at(0, max_count_);
-                    while (res && i < max_count_) {
+                    size_t start_offset = random() % max_range;
+                    auto key_iterator = key_trace_.trace_at(start_offset, max_range);
+                    while (res && i < max_range) {
                         res = hashtable->Put(key_iterator.Next(), value_);
                         if ((i++ & 0xFFFFF) == 0) {
-                            fprintf(stderr, "inserting%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+                            fprintf(stderr, "thread: %2d inserting%*s-%03d->\r", t, int(i >> 20), " ", int(i >> 20));fflush(stderr);
                         }
                     }
                     counts[t] = i - 1;
@@ -185,10 +189,12 @@ public:
             auto time_end = Env::Default()->NowNanos();
             size_t write_count = std::accumulate(counts.begin(), counts.end(), 0);
             printf("Total put: %lu\n", write_count);
-            PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), time_end - time_start, false);
-            inserted_num = write_count;   
+            PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), write_count, time_end - time_start, false);
+            
         }
-        
+
+        inserted_num = hashtable->Size();
+
         {
             auto read_fun = [&]{
                 std::vector<std::thread> workers(FLAGS_thread_read);
@@ -204,9 +210,9 @@ public:
                         std::string value;
                         bool res = true;
                         size_t i = 0;
-                        size_t start_offset = random() % inserted_num;
+                        size_t start_offset = random() % max_range;
                         if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
-                        auto key_iterator = key_trace_.trace_at(start_offset, inserted_num);
+                        auto key_iterator = key_trace_.trace_at(start_offset, max_range);
                         while (kRunning && key_iterator.Valid() && res) {
                             res = hashtable->Get(key_iterator.Next(), &value);
                             if ((i++ & 0xFFFFF) == 0) {
@@ -223,7 +229,7 @@ public:
                 });
                 auto time_end = Env::Default()->NowNanos();
                 size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
-                PrintSpeed(name, hashtable->LoadFactor(), read_count, time_end - time_start, true);
+                PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), read_count, time_end - time_start, true);
                 if (FLAGS_print_thread_read)
                 for(int i = 0; i < FLAGS_thread_read; i++) {
                     printf("thread %2d read: %10lu\n", i, counts[i]);
@@ -322,7 +328,7 @@ public:
             }
         }
         auto time_end = Env::Default()->NowNanos();
-        PrintSpeed(name.c_str(), map.load_factor(), i, time_end - time_start, false);
+        PrintSpeed(name.c_str(), map.load_factor(), map.size(), i, time_end - time_start, false);
 
         std::vector<std::thread> workers(FLAGS_thread_read);
         std::vector<size_t> counts(FLAGS_thread_read, 0);
@@ -356,7 +362,7 @@ public:
         });
         time_end = Env::Default()->NowNanos();
         size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
-        PrintSpeed(name.c_str(), map.load_factor(), read_count, time_end - time_start, true);
+        PrintSpeed(name.c_str(), map.load_factor(), map.size(), read_count, time_end - time_start, true);
     
         if (FLAGS_print_thread_read)
         for(int i = 0; i < FLAGS_thread_read; i++) {
@@ -396,16 +402,15 @@ private:
 bool HashBench::kRunning = true;
 
 int main(int argc, char *argv[]) {
-    Env::PinCore(kThreadIDs[15]);
     debug_perf_ppid();
     ParseCommandLineFlags(&argc, &argv, true);
 
     HashBench hash_bench(FLAGS_bucket_size, FLAGS_associate_size, FLAGS_cell_type);
     
-    size_t inserted_num = hash_bench.TurboHashSpeedTest();
-    // inserted_num = hash_bench.TurboHashSpeedTest();
-    // inserted_num = hash_bench.TestRehash();
-    hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
+    hash_bench.TurboHashSpeedTest();
+    
+    // size_t inserted_num = hash_bench.TestRehash();
+    // hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
     
     // hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
     // HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);

@@ -1,36 +1,12 @@
 #pragma once
 #include <cstdint>
-
+#include <atomic>
+#include <immintrin.h>
 // http://www.cs.utexas.edu/~pingali/CS378/2015sp/lectures/Spinlocks%20and%20Read-Write%20Locks.htm
-#define turbo_atomic_xadd(P, V) __sync_fetch_and_add((P), (V))
-#define turbo_cmpxchg(P, O, N) __sync_val_compare_and_swap((P), (O), (N))
-#define turbo_atomic_inc(P) __sync_add_and_fetch((P), 1)
-#define turbo_atomic_dec(P) __sync_add_and_fetch((P), -1) 
-#define turbo_atomic_add(P, V) __sync_add_and_fetch((P), (V))
-#define turbo_atomic_set_bit(P, V) __sync_or_and_fetch((P), 1<<(V))
-#define turbo_atomic_clear_bit(P, V) __sync_and_and_fetch((P), ~(1<<(V)))
 /* Compile read-write barrier */
-#define turbo_barrier() asm volatile("": : :"memory")
+#define barrier() asm volatile("": : :"memory")
 /* Pause instruction to prevent excess processor bus usage */ 
-#define turbo_cpu_relax() asm volatile("pause\n": : :"memory")
-static inline unsigned turbo_xchg_32(void *ptr, unsigned x)
-{
- __asm__ __volatile__("xchgl %0,%1"
-    :"=r" ((unsigned) x)
-    :"m" (*(volatile unsigned *)ptr), "0" (x)
-    :"memory");
-
- return x;
-}
-static inline unsigned short turbo_xchg_16(void *ptr, unsigned short x)
-{
- __asm__ __volatile__("xchgw %0,%1"
-    :"=r" ((unsigned short) x)
-    :"m" (*(volatile unsigned short *)ptr), "0" (x)
-    :"memory");
-
- return x;
-}
+#define cpu_relax() asm volatile("pause\n": : :"memory")
 
 /** https://stackoverflow.com/questions/30467638/cheapest-least-intrusive-way-to-atomically-update-a-bit
  * \brief Atomically tests and sets a bit (INTEL only)
@@ -95,35 +71,36 @@ inline char turbo_atomic_bittestandreset_x86(volatile unsigned int* ptr, unsigne
     return out;
 }
 
-#define LTHASH_FREE 0
+#define SPINLOCK_FREE 0
 typedef unsigned int turbo_bitspinlock;
 
 inline bool turbo_lockbusy(turbo_bitspinlock *lock, int bit_pos) {
     return (*lock) & (1 << bit_pos);
 }
+
 inline void turbo_bit_spin_lock(turbo_bitspinlock *lock, int bit_pos)
 {
     
     while(1) {
         // test & set return 0 if success
-        if (turbo_atomic_bittestandset_x86(lock, bit_pos) == LTHASH_FREE) return;
-
-        while ((*lock) & (1 << bit_pos)) turbo_cpu_relax();
-
+        if (turbo_atomic_bittestandset_x86(lock, bit_pos) == SPINLOCK_FREE) {
+            return;
+        }
+        while ((*lock) & (1 << bit_pos)) /* cpu_relax();*/ _mm_pause();
     }
     
 }
 
 inline void turbo_bit_spin_unlock(turbo_bitspinlock *lock, int bit_pos)
 {
-    turbo_barrier();
+    // barrier();
+    std::atomic_thread_fence(std::memory_order_acq_rel);
     *lock &= ~(1 << bit_pos);
-    // turbo_atomic_bittestandreset_x86(lock, bit_pos);
 }
 
 class SpinLockScope {
 public:
-    const int kBitLockPosition = 0;
+    static const int kBitLockPosition = 0;
     SpinLockScope(turbo_bitspinlock *lock):
         lock_(lock) {
         turbo_bit_spin_lock(lock, kBitLockPosition);

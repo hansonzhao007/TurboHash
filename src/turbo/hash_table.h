@@ -67,7 +67,8 @@ public:
         associate_size_(associate_count),
         associate_mask_(associate_count - 1),
         capacity_(bucket_count * associate_count * CellMeta::SlotSize()),
-        cur_log_offset_(0) {
+        cur_log_offset_(0),
+        size_(0) {
         if (!isPowerOfTwo(bucket_count) ||
             !isPowerOfTwo(associate_count)) {
             printf("the hash table size setting is wrong. bucket: %u, associate: %u\n", bucket_count, associate_count);
@@ -458,17 +459,17 @@ private:
                 // find a valid slot
                 // obtain the cell lock
                 char* cell_addr = locateCell({res.first.bucket, res.first.associate});
-                SpinLockScope((turbo_bitspinlock*)cell_addr);
+                SpinLockScope lock_scope((turbo_bitspinlock*)cell_addr);
                 
                 CellMeta meta(cell_addr);
-                util::PrefetchForWrite((void*)cell_addr);
+                // util::PrefetchForWrite((void*)cell_addr);
                 if (likely(!meta.Occupy(res.first.slot) || res.first.equal_key)) {
                     // if the slot is not occupied or the slot has same key with request
                     // we update the slot 
 
                     // update slot content (including pointer and H1), H2 and bitmap
                     updateSlotAndMeta(cell_addr, res.first, media_offset);
-                    if (!res.first.equal_key) ++size_;
+                    if (!res.first.equal_key) size_++;
                     return true;
                 }
                 else {
@@ -680,7 +681,7 @@ private:
     size_t        associate_size_ = 0;
     size_t        associate_mask_  = 0;
     size_t        capacity_ = 0;
-    size_t        size_ = 0;
+    size_t        size_;
 
     // ----- circular queue for synchronizing put requests -----
     std::vector<std::pair<char, std::pair<Slice, Slice> > > queue_; // queue that store request sequence. (type, kv entry)
