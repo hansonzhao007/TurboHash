@@ -22,11 +22,7 @@ union HashSlot
 };
 
 // 64 bit hash function is used to locate initial position of keys
-// |         4 B       |         4 B       |
-// |   bucket hash     |    associate hash |
-//                     | 1B | 1B |    2B   |
-//                     | H3 | H2 |    H1   |
-// H3: index within each bucket
+// bucket_hash_: index within each bucket
 // H2: 1 byte hash for parallel comparison
 // H1: 2 byte partial key
 #define BUCKET_H_SIZE uint32_t
@@ -37,9 +33,9 @@ struct PartialHash {
     PartialHash(uint64_t hash)
         :
         bucket_hash_(hash >> 32),
-        H1_(         hash & 0xFFFF),
-        H2_( (hash >> 16) & 0xFF)
-        {};
+        H1_((hash & 0xFFFF) ^ (hash >> 16)),
+        H2_((hash >> 16) & 0xFF)
+        { };
     BUCKET_H_SIZE  bucket_hash_;
     // H1: 2 byte partial key
     LTHASH_H1_SIZE H1_;

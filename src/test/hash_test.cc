@@ -16,20 +16,22 @@ int main(int argc, char *argv[]) {
     hashtable->IterateAll();
 
     bool succ = true;
-    size_t i = 0;
-    for (i = 0 ; i < COUNT && succ; i++) {
+    size_t find = 0;
+    for (size_t i = 0 ; i < COUNT && succ; i++) {
         succ = hashtable->Put("key" + std::to_string(i), "value" + std::to_string(i));
+        if (likely(succ)) find++;
     }
-    printf("inserted %lu kv, hashtable size: %lu, loadfactor: %f\n", i, hashtable->Size(), hashtable->LoadFactor());
+    printf("inserted %lu kv, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());
 
     auto read_fun = [&hashtable] {
         bool succ = true;
         std::string value;
-        size_t i = 0;
-        for (; i < COUNT && succ; i++) {
+        size_t find = 0;
+        for (size_t i = 0; i < COUNT && succ; i++) {
             succ = hashtable->Get("key" + std::to_string(i), &value);
+            if (likely(succ)) find++;
         }
-        printf("find %lu key, hashtable size: %lu, loadfactor: %f\n", i, hashtable->Size(), hashtable->LoadFactor());
+        printf("find %lu key, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());
     };
     read_fun();
     // printf("------- Iterate hash table with %lu entries ------\n", hashtable->Size());
