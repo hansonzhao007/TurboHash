@@ -8,9 +8,14 @@ using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
 
 
+void OtherTest() {
+    
+}
+
 const size_t COUNT = 100000;
 int main(int argc, char *argv[]) {
     ParseCommandLineFlags(&argc, &argv, true);
+    OtherTest();
     auto* hashtable = new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinBucket>(16, 32);
     printf("------- Iterate empty hash table ------\n");
     hashtable->IterateAll();

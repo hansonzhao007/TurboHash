@@ -283,11 +283,10 @@ public:
             SlotInfo& info = res.first;
             info.bucket = i;
             HashSlot& slot = res.second;
-            slot.meta.H1 = 0;
-            auto datanode = Media::ParseData(slot.entry);
+            auto datanode = Media::ParseData(reinterpret_cast<void*>(slot.meta.entry));
             printf("%s, addr: %16lx. key: %.8s, value: %s\n", 
                 info.ToString().c_str(),
-                (uint64_t)slot.entry, 
+                slot.meta.entry, 
                 datanode.second.first.ToString().c_str(),
                 datanode.second.second.ToString().c_str());
             ++iter;
@@ -303,11 +302,10 @@ public:
                 auto res = (*iter);
                 SlotInfo& info = res.first;
                 HashSlot& slot = res.second;
-                slot.meta.H1 = 0;
-                auto datanode = Media::ParseData(slot.entry);
+                auto datanode = Media::ParseData(reinterpret_cast<void*>(slot.meta.entry));
                 printf("%s, addr: %16lx. key: %.8s, value: %s\n", 
                     info.ToString().c_str(),
-                    (uint64_t)slot.entry, 
+                    slot.meta.entry, 
                     datanode.second.first.ToString().c_str(),
                     datanode.second.second.ToString().c_str());
                 ++iter;
@@ -426,7 +424,7 @@ private:
 
         // set 2 byte H1 and 6 byte pointer
         HashSlot* slot_pos = locateSlot(cell_addr, info.slot);
-        slot_pos->entry = media_offset;
+        slot_pos->meta.entry = (uint64_t)media_offset;
         slot_pos->meta.H1 = info.H1;
        
         // obtain bitmap
@@ -489,10 +487,6 @@ private:
     // Store the value to media and return the pointer to the media position
     // where the value stores
     inline void* storeValueToMedia(const Slice& key, const Slice& value, uint16_t log_id, uint32_t log_offset) {
-        // void* buffer = malloc(key.size());
-        // memcpy(buffer, key.data(), key.size());
-        // return buffer;
-
         // calculate optane address
         char* pmem_addr = logid2pmem_[log_id] + log_offset;
         void* buffer = Media::Store(key, value, pmem_addr, log_id, log_offset);
@@ -500,21 +494,13 @@ private:
     }
 
     inline bool slotKeyEqual(const HashSlot& slot, const Slice& key) {
-        // auto tmp = slot;
-        // tmp.meta.H1 = 0;
-        // return memcmp(tmp.entry, key.data(), key.size()) == 0;
-
-        auto tmp = slot;
-        tmp.meta.H1 = 0;
-        Slice res = Media::ParseKey(tmp.entry);
+        Slice res = Media::ParseKey(reinterpret_cast<void*>(slot.meta.entry));
         return res == key;
     }
 
 
     inline const Slice extractSlice(const HashSlot& slot, size_t len) {
-        auto tmp = slot;
-        tmp.meta.H1 = 0;
-        return  Media::ParseKey(tmp.entry);
+        return  Media::ParseKey(reinterpret_cast<void*>(slot.meta.entry));
     }
 
     
@@ -589,16 +575,6 @@ private:
         // exists in this bucket. 
         return {{}, false};
     }
-
-    inline void PrefetchSlotKey(const char* cell_addr, int slot_i) {
-        if (slot_i < CellMeta::SlotSize()) {
-            // only when the slot index is smaller than size limit, we do prefetch
-            HashSlot slot = *locateSlot(cell_addr, slot_i);
-            slot.meta.H1 = 0;
-            util::PrefetchForRead(slot.entry);
-        }
-    }
-
     
     inline std::pair<SlotInfo, bool> findSlot(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);

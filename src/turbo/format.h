@@ -13,11 +13,20 @@ using Slice = util::Slice;
 union HashSlot
 {
     /* data */
-    const void* entry;       // 8B
+    struct {
+        uint64_t ptr:48;
+        uint64_t  H1:16;
+    } dram;
+
     struct {
         uint32_t offset;
         uint16_t log_id;
         uint16_t H1;
+    } pmm;
+
+    struct {
+        uint64_t entry:48;
+        uint64_t H1:16;
     } meta;
 };
 
