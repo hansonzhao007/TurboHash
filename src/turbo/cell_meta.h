@@ -39,8 +39,10 @@ public:
     // return a bitset, the slot that matches the hash is set to 1
     inline BitSet MatchBitSet(uint8_t hash) {
         auto bitset = _mm256_set1_epi8(hash);
-        return BitSet(_mm256_movemask_epi8(_mm256_cmpeq_epi8(bitset, meta_)) &
-                      (bitmap_) /* filter out empty slot*/);
+        uint32_t mask = _mm256_cmpeq_epi8_mask(bitset, meta_);
+        return BitSet(mask & bitmap_);
+        // return BitSet(_mm256_movemask_epi8(_mm256_cmpeq_epi8(bitset, meta_)) &
+        //               (bitmap_) /* filter out empty slot*/);
     }
 
     // return a bitset, the slot that is ok for insertion
@@ -162,8 +164,10 @@ public:
     // return a bitset, the position that matches the hash is set to 1
     inline BitSet MatchBitSet(uint8_t hash) {
         auto bitset = _mm_set1_epi8(hash);
-        return BitSet(_mm_movemask_epi8(_mm_cmpeq_epi8(bitset, meta_)) &
-                      (bitmap_) /* filter out empty slot*/);
+        uint16_t mask = _mm_cmpeq_epi8_mask(bitset, meta_);
+        return BitSet(mask & bitmap_);
+        // return BitSet(_mm_movemask_epi8(_mm_cmpeq_epi8(bitset, meta_)) &
+        //               (bitmap_) /* filter out empty slot*/);
     }
 
     // return a bitset, the position that is empty for insertion
