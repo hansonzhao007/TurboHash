@@ -43,8 +43,8 @@ class HashBench {
 public:
     HashBench(size_t bucket_count, size_t assocaite_count, size_t cell_type):
         max_count_(bucket_count * assocaite_count * (cell_type == 0 ? 14 : 28)),
-        key_trace_(max_count_) {
-        value_ = "v";
+        key_trace_(max_count_),
+        value_(64, 'v') {
         arm_sig_int();
         signal(SIGALRM, &sigalrm_handler);  // set a signal handler
     }
@@ -93,7 +93,7 @@ public:
                 workers[t] = std::thread([&, t]
                 {
                     // core function
-                    Env::PinCore(kThreadIDs[t]);
+                    // Env::PinCore(kThreadIDs[t]);
                     std::string value;
                     bool res = true;
                     size_t i = 0;
@@ -155,7 +155,6 @@ public:
 
 
     size_t TurboHashSpeedTest() {
-        size_t inserted_num = 0;
         util::Stats stats;
         turbo::HashTable* hashtable = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
         hashtable->WarmUp();
@@ -168,7 +167,7 @@ public:
             auto time_start = Env::Default()->NowNanos();
             for (int t = 0; t < FLAGS_thread_write; t++) {
                 workers[t] = std::thread([&, t] {
-                    Env::PinCore(kThreadIDs[t]);
+                    // Env::PinCore(kThreadIDs[t]);
                     uint64_t i = 0;
                     bool res = true;
                     size_t start_offset = random() % max_range;
@@ -193,8 +192,6 @@ public:
             
         }
 
-        inserted_num = hashtable->Size();
-
         {
             auto read_fun = [&]{
                 std::vector<std::thread> workers(FLAGS_thread_read);
@@ -206,7 +203,7 @@ public:
                     workers[t] = std::thread([&, t]
                     {
                         // core function
-                        Env::PinCore(kThreadIDs[t]);
+                        // Env::PinCore(kThreadIDs[t]);
                         std::string value;
                         bool res = true;
                         size_t i = 0;
@@ -239,7 +236,7 @@ public:
         }
 
         delete hashtable;
-        return inserted_num;
+        return max_range;
     }
 
         
@@ -272,7 +269,7 @@ public:
             }
         }
         auto time_end = Env::Default()->NowNanos();
-        PrintSpeed(name.c_str(), map.load_factor(), map.size(), time_end - time_start, false);
+        PrintSpeed(name.c_str(), map.load_factor(), map.size(), inserted_num, time_end - time_start, false);
 
         std::vector<std::thread> workers(FLAGS_thread_read);
         std::vector<size_t> counts(FLAGS_thread_read, 0);
@@ -284,7 +281,7 @@ public:
             workers[t] = std::thread([&, t]
             {
                 // core function
-                Env::PinCore(kThreadIDs[t]);
+                // Env::PinCore(kThreadIDs[t]);
                 size_t i = 0;
                 auto iter = map.begin();
                 size_t start_offset = random() % inserted_num;
@@ -306,7 +303,7 @@ public:
         });
         time_end = Env::Default()->NowNanos();
         size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
-        PrintSpeed(name.c_str(), map.load_factor(), read_count, time_end - time_start, true);
+        PrintSpeed(name.c_str(), map.load_factor(), map.size(), read_count, time_end - time_start, true);
         if (FLAGS_print_thread_read)
         for(int i = 0; i < FLAGS_thread_read; i++) {
             printf("thread %2d read: %10lu\n", i, counts[i]);
@@ -339,7 +336,7 @@ public:
             workers[t] = std::thread([&, t]
             {
                 // core function
-                Env::PinCore(kThreadIDs[t]);
+                // Env::PinCore(kThreadIDs[t]);
                 size_t i = 0;
                 std::string out;
                 bool is_find = false;
@@ -407,13 +404,13 @@ int main(int argc, char *argv[]) {
 
     HashBench hash_bench(FLAGS_bucket_size, FLAGS_associate_size, FLAGS_cell_type);
     
-    // hash_bench.TurboHashSpeedTest();
+    size_t inserted_num;
+    inserted_num = hash_bench.TurboHashSpeedTest();
     
-    size_t inserted_num = hash_bench.TestRehash();
-    // hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
-    
-    // hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
-    // HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);
+    // inserted_num = hash_bench.TestRehash();
+    hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
+    hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
+    hash_bench.HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);
     // hash_bench.CuckooSpeedTest("CuckooHashMap", inserted_num);
     return 0;
 }

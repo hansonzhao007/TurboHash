@@ -82,7 +82,6 @@ public:
             buckets_[i].__addr = cells_ + i * associate_size_ * kCellSize;
             buckets_[i].info.associate_size = associate_size_;
         }
-        size_     = 0;
 
         // queue init
         size_t QUEUE_SIZE = 1 << 10;
@@ -254,10 +253,10 @@ public:
     }
 
     double LoadFactor() {
-        return (double) size_ / capacity_;
+        return (double) size_.load(std::memory_order_relaxed) / capacity_;
     }
 
-    size_t Size() { return size_;}
+    size_t Size() { return size_.load(std::memory_order_relaxed);}
 
     // Persist entire dram hash to persistent memory
     void Persist(void* pmemaddr) {
@@ -312,7 +311,7 @@ public:
                 count++;
             }
         }
-        printf("iterato %lu entries. total size: %lu\n", count, size_);
+        printf("iterato %lu entries. total size: %lu\n", count, size_.load(std::memory_order_relaxed));
     }
 
     std::string ProbeStrategyName() {
@@ -467,13 +466,15 @@ private:
 
                     // update slot content (including pointer and H1), H2 and bitmap
                     updateSlotAndMeta(cell_addr, res.first, media_offset);
-                    if (!res.first.equal_key) size_++;
+                    if (!res.first.equal_key) size_.fetch_add(1, std::memory_order_relaxed);
                     return true;
                 }
                 else {
                     // if current slot already occupies by another 
                     // concurrent thread, we retry find slot.
+                    #ifdef LTHASH_DEBUG_OUT
                     printf("retry find slot. %s\n", key.ToString().c_str());
+                    #endif
                     // printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
                     retry_find = true;
                 }
@@ -657,7 +658,7 @@ private:
     size_t        associate_size_ = 0;
     size_t        associate_mask_  = 0;
     size_t        capacity_ = 0;
-    size_t        size_;
+    std::atomic<size_t> size_;
 
     // ----- circular queue for synchronizing put requests -----
     std::vector<std::pair<char, std::pair<Slice, Slice> > > queue_; // queue that store request sequence. (type, kv entry)
