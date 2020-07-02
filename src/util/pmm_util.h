@@ -83,93 +83,93 @@ ClearCache() {
 
 inline void // __attribute__((optimize("O0"),always_inline))
 Load64_NT(char* addr, int N = 0) {
-    volatile __m512i zmm0 = __builtin_ia32_movntdqa512((__m512i *)addr + 0);
-    // __m512i zmm00 = __builtin_ia32_movntdqa512((__m512i *)addr + 0); // 64
+    volatile __m512i zmm0 = _mm512_stream_load_si512((__m512i *)addr + 0);
+    // __m512i zmm00 = _mm512_stream_load_si512((__m512i *)addr + 0); // 64
     // _mm_lfence();
 }
 
 
 inline void // __attribute__((optimize("O0"),always_inline))
 Load128_NT(char* addr, int N = 0) {
-    volatile __m512i zmm0 = __builtin_ia32_movntdqa512((__m512i *)addr + 0);
-    volatile __m512i zmm1 = __builtin_ia32_movntdqa512((__m512i *)addr + 1);
+    volatile __m512i zmm0 = _mm512_stream_load_si512((__m512i *)addr + 0);
+    volatile __m512i zmm1 = _mm512_stream_load_si512((__m512i *)addr + 1);
 
-    // __m512i zmm0 = __builtin_ia32_movntdqa512((__m512i *)addr + 0);
-	// __m512i zmm1 = __builtin_ia32_movntdqa512((__m512i *)addr + 1);
+    // __m512i zmm0 = _mm512_stream_load_si512((__m512i *)addr + 0);
+	// __m512i zmm1 = _mm512_stream_load_si512((__m512i *)addr + 1);
     // _mm_lfence();
 }
 
 
 inline void // __attribute__((optimize("O0"),always_inline))
 Load256_NT(char* addr, int N = 0) {
-    volatile __m512i zmm00 = __builtin_ia32_movntdqa512((__m512i *)addr + 0);
-    volatile __m512i zmm01 = __builtin_ia32_movntdqa512((__m512i *)addr + 1);
-    volatile __m512i zmm02 = __builtin_ia32_movntdqa512((__m512i *)addr + 2);
-    volatile __m512i zmm03 = __builtin_ia32_movntdqa512((__m512i *)addr + 3);
+    volatile __m512i zmm00 = _mm512_stream_load_si512((__m512i *)addr + 0);
+    volatile __m512i zmm01 = _mm512_stream_load_si512((__m512i *)addr + 1);
+    volatile __m512i zmm02 = _mm512_stream_load_si512((__m512i *)addr + 2);
+    volatile __m512i zmm03 = _mm512_stream_load_si512((__m512i *)addr + 3);
 
-    // __m512i zmm00 = __builtin_ia32_movntdqa512((__m512i *)addr + 0); // 64
-    // __m512i zmm01 = __builtin_ia32_movntdqa512((__m512i *)addr + 1); // 128
-    // __m512i zmm02 = __builtin_ia32_movntdqa512((__m512i *)addr + 2); // 192
-    // __m512i zmm03 = __builtin_ia32_movntdqa512((__m512i *)addr + 3); // 256
+    // __m512i zmm00 = _mm512_stream_load_si512((__m512i *)addr + 0); // 64
+    // __m512i zmm01 = _mm512_stream_load_si512((__m512i *)addr + 1); // 128
+    // __m512i zmm02 = _mm512_stream_load_si512((__m512i *)addr + 2); // 192
+    // __m512i zmm03 = _mm512_stream_load_si512((__m512i *)addr + 3); // 256
     // _mm_lfence();
 }
 
 inline void // __attribute__((optimize("O0"),always_inline))
 Load512_NT(char* addr, int N = 0) {
-    volatile __m512i zmm00 = __builtin_ia32_movntdqa512((__m512i *)addr + 0);
-    volatile __m512i zmm01 = __builtin_ia32_movntdqa512((__m512i *)addr + 1);
-    volatile __m512i zmm02 = __builtin_ia32_movntdqa512((__m512i *)addr + 2);
-    volatile __m512i zmm03 = __builtin_ia32_movntdqa512((__m512i *)addr + 3);
-    volatile __m512i zmm04 = __builtin_ia32_movntdqa512((__m512i *)addr + 4);
-    volatile __m512i zmm05 = __builtin_ia32_movntdqa512((__m512i *)addr + 5);
-    volatile __m512i zmm06 = __builtin_ia32_movntdqa512((__m512i *)addr + 6);
-    volatile __m512i zmm07 = __builtin_ia32_movntdqa512((__m512i *)addr + 7);
-    // __m512i zmm00 = __builtin_ia32_movntdqa512((__m512i *)addr + 0); // 64
-    // __m512i zmm01 = __builtin_ia32_movntdqa512((__m512i *)addr + 1); // 128
-    // __m512i zmm02 = __builtin_ia32_movntdqa512((__m512i *)addr + 2); // 192
-    // __m512i zmm03 = __builtin_ia32_movntdqa512((__m512i *)addr + 3); // 256
-    // __m512i zmm04 = __builtin_ia32_movntdqa512((__m512i *)addr + 4); // 
-    // __m512i zmm05 = __builtin_ia32_movntdqa512((__m512i *)addr + 5); // 
-    // __m512i zmm06 = __builtin_ia32_movntdqa512((__m512i *)addr + 6); // 
-    // __m512i zmm07 = __builtin_ia32_movntdqa512((__m512i *)addr + 7); // 512
+    volatile __m512i zmm00 = _mm512_stream_load_si512((__m512i *)addr + 0);
+    volatile __m512i zmm01 = _mm512_stream_load_si512((__m512i *)addr + 1);
+    volatile __m512i zmm02 = _mm512_stream_load_si512((__m512i *)addr + 2);
+    volatile __m512i zmm03 = _mm512_stream_load_si512((__m512i *)addr + 3);
+    volatile __m512i zmm04 = _mm512_stream_load_si512((__m512i *)addr + 4);
+    volatile __m512i zmm05 = _mm512_stream_load_si512((__m512i *)addr + 5);
+    volatile __m512i zmm06 = _mm512_stream_load_si512((__m512i *)addr + 6);
+    volatile __m512i zmm07 = _mm512_stream_load_si512((__m512i *)addr + 7);
+    // __m512i zmm00 = _mm512_stream_load_si512((__m512i *)addr + 0); // 64
+    // __m512i zmm01 = _mm512_stream_load_si512((__m512i *)addr + 1); // 128
+    // __m512i zmm02 = _mm512_stream_load_si512((__m512i *)addr + 2); // 192
+    // __m512i zmm03 = _mm512_stream_load_si512((__m512i *)addr + 3); // 256
+    // __m512i zmm04 = _mm512_stream_load_si512((__m512i *)addr + 4); // 
+    // __m512i zmm05 = _mm512_stream_load_si512((__m512i *)addr + 5); // 
+    // __m512i zmm06 = _mm512_stream_load_si512((__m512i *)addr + 6); // 
+    // __m512i zmm07 = _mm512_stream_load_si512((__m512i *)addr + 7); // 512
     // _mm_lfence();
 }
 
 
 inline void // __attribute__((optimize("O0"),always_inline))
 Load1024_NT(char* addr, int N = 0) {
-    volatile __m512i zmm00 = __builtin_ia32_movntdqa512((__m512i *)addr + 0);
-    volatile __m512i zmm01 = __builtin_ia32_movntdqa512((__m512i *)addr + 1);
-    volatile __m512i zmm02 = __builtin_ia32_movntdqa512((__m512i *)addr + 2);
-    volatile __m512i zmm03 = __builtin_ia32_movntdqa512((__m512i *)addr + 3);
-    volatile __m512i zmm04 = __builtin_ia32_movntdqa512((__m512i *)addr + 4);
-    volatile __m512i zmm05 = __builtin_ia32_movntdqa512((__m512i *)addr + 5);
-    volatile __m512i zmm06 = __builtin_ia32_movntdqa512((__m512i *)addr + 6);
-    volatile __m512i zmm07 = __builtin_ia32_movntdqa512((__m512i *)addr + 7);
-    volatile __m512i zmm08 = __builtin_ia32_movntdqa512((__m512i *)addr + 8);
-    volatile __m512i zmm09 = __builtin_ia32_movntdqa512((__m512i *)addr + 9);
-    volatile __m512i zmm10 = __builtin_ia32_movntdqa512((__m512i *)addr + 10);
-    volatile __m512i zmm11 = __builtin_ia32_movntdqa512((__m512i *)addr + 11);
-    volatile __m512i zmm12 = __builtin_ia32_movntdqa512((__m512i *)addr + 12);
-    volatile __m512i zmm13 = __builtin_ia32_movntdqa512((__m512i *)addr + 13);
-    volatile __m512i zmm14 = __builtin_ia32_movntdqa512((__m512i *)addr + 14);
-    volatile __m512i zmm15 = __builtin_ia32_movntdqa512((__m512i *)addr + 15);
-    // __m512i zmm00 = __builtin_ia32_movntdqa512((__m512i *)addr + 0); // 64
-    // __m512i zmm01 = __builtin_ia32_movntdqa512((__m512i *)addr + 1); // 128
-    // __m512i zmm02 = __builtin_ia32_movntdqa512((__m512i *)addr + 2); // 192
-    // __m512i zmm03 = __builtin_ia32_movntdqa512((__m512i *)addr + 3); // 256
-    // __m512i zmm04 = __builtin_ia32_movntdqa512((__m512i *)addr + 4); // 
-    // __m512i zmm05 = __builtin_ia32_movntdqa512((__m512i *)addr + 5); // 
-    // __m512i zmm06 = __builtin_ia32_movntdqa512((__m512i *)addr + 6); // 
-    // __m512i zmm07 = __builtin_ia32_movntdqa512((__m512i *)addr + 7); // 512
-    // __m512i zmm08 = __builtin_ia32_movntdqa512((__m512i *)addr + 8);
-    // __m512i zmm09 = __builtin_ia32_movntdqa512((__m512i *)addr + 9);
-    // __m512i zmm10 = __builtin_ia32_movntdqa512((__m512i *)addr + 10);
-    // __m512i zmm11 = __builtin_ia32_movntdqa512((__m512i *)addr + 11);
-    // __m512i zmm12 = __builtin_ia32_movntdqa512((__m512i *)addr + 12);
-    // __m512i zmm13 = __builtin_ia32_movntdqa512((__m512i *)addr + 13);
-    // __m512i zmm14 = __builtin_ia32_movntdqa512((__m512i *)addr + 14);
-    // __m512i zmm15 = __builtin_ia32_movntdqa512((__m512i *)addr + 15); // 1024
+    volatile __m512i zmm00 = _mm512_stream_load_si512((__m512i *)addr + 0);
+    volatile __m512i zmm01 = _mm512_stream_load_si512((__m512i *)addr + 1);
+    volatile __m512i zmm02 = _mm512_stream_load_si512((__m512i *)addr + 2);
+    volatile __m512i zmm03 = _mm512_stream_load_si512((__m512i *)addr + 3);
+    volatile __m512i zmm04 = _mm512_stream_load_si512((__m512i *)addr + 4);
+    volatile __m512i zmm05 = _mm512_stream_load_si512((__m512i *)addr + 5);
+    volatile __m512i zmm06 = _mm512_stream_load_si512((__m512i *)addr + 6);
+    volatile __m512i zmm07 = _mm512_stream_load_si512((__m512i *)addr + 7);
+    volatile __m512i zmm08 = _mm512_stream_load_si512((__m512i *)addr + 8);
+    volatile __m512i zmm09 = _mm512_stream_load_si512((__m512i *)addr + 9);
+    volatile __m512i zmm10 = _mm512_stream_load_si512((__m512i *)addr + 10);
+    volatile __m512i zmm11 = _mm512_stream_load_si512((__m512i *)addr + 11);
+    volatile __m512i zmm12 = _mm512_stream_load_si512((__m512i *)addr + 12);
+    volatile __m512i zmm13 = _mm512_stream_load_si512((__m512i *)addr + 13);
+    volatile __m512i zmm14 = _mm512_stream_load_si512((__m512i *)addr + 14);
+    volatile __m512i zmm15 = _mm512_stream_load_si512((__m512i *)addr + 15);
+    // __m512i zmm00 = _mm512_stream_load_si512((__m512i *)addr + 0); // 64
+    // __m512i zmm01 = _mm512_stream_load_si512((__m512i *)addr + 1); // 128
+    // __m512i zmm02 = _mm512_stream_load_si512((__m512i *)addr + 2); // 192
+    // __m512i zmm03 = _mm512_stream_load_si512((__m512i *)addr + 3); // 256
+    // __m512i zmm04 = _mm512_stream_load_si512((__m512i *)addr + 4); // 
+    // __m512i zmm05 = _mm512_stream_load_si512((__m512i *)addr + 5); // 
+    // __m512i zmm06 = _mm512_stream_load_si512((__m512i *)addr + 6); // 
+    // __m512i zmm07 = _mm512_stream_load_si512((__m512i *)addr + 7); // 512
+    // __m512i zmm08 = _mm512_stream_load_si512((__m512i *)addr + 8);
+    // __m512i zmm09 = _mm512_stream_load_si512((__m512i *)addr + 9);
+    // __m512i zmm10 = _mm512_stream_load_si512((__m512i *)addr + 10);
+    // __m512i zmm11 = _mm512_stream_load_si512((__m512i *)addr + 11);
+    // __m512i zmm12 = _mm512_stream_load_si512((__m512i *)addr + 12);
+    // __m512i zmm13 = _mm512_stream_load_si512((__m512i *)addr + 13);
+    // __m512i zmm14 = _mm512_stream_load_si512((__m512i *)addr + 14);
+    // __m512i zmm15 = _mm512_stream_load_si512((__m512i *)addr + 15); // 1024
     // _mm_lfence();
 }
 
