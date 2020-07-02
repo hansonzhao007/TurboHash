@@ -389,15 +389,15 @@ private:
     }
 
     inline BucketMeta locateBucket(uint32_t bi) {
-        return BucketMeta(cells_ + bi * associate_size_ * kCellSize, associate_size_);
-        // return buckets_[bi];
+        // return BucketMeta(cells_ + bi * associate_size_ * kCellSize, associate_size_);
+        return buckets_[bi];
     }
     // offset.first: bucket index
     // offset.second: associate index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
-        return cells_ + offset.first * associate_size_ * kCellSize + offset.second * kCellSize;
-        // return  buckets_[offset.first].Address() +  // locate the bucket
-        //         offset.second * kCellSize;          // locate the associate cell
+        // return cells_ + offset.first * associate_size_ * kCellSize + offset.second * kCellSize;
+        return  buckets_[offset.first].Address() +  // locate the bucket
+                offset.second * kCellSize;          // locate the associate cell
     }
   
     inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {

@@ -28,7 +28,7 @@ DEFINE_int32(thread_read, 1, "");
 DEFINE_int32(thread_write, 1, "");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 DEFINE_int32(associate_size, 16, "");
-DEFINE_int32(bucket_size, 256 << 10, "bucket count");
+DEFINE_int32(bucket_size, 128 << 10, "bucket count");
 DEFINE_int32(probe_type, 0, "\
     0: probe within bucket, \
     1: probe within cell");
