@@ -1,9 +1,12 @@
+cd ../release
+make -j32
+cd ../testbench
 rm perf.data.*
 evens=L1-dcache-loads:u,L1-dcache-load-misses:u,dTLB-loads:u,dTLB-load-misses:u
 
 filename=motivation1.csv
 rm $filename
-echo "access_size, rand_read_latency, seq_read_latency, rand_write_latency, seq_write_latency, \
+echo "access_size, rnd_read_latency, seq_read_latency, rnd_write_latency, seq_write_latency, \
       rnd_r_l1_load, rnd_r_l1_miss, rnd_r_tlb_load, rnd_r_tlb_miss, \
       seq_r_l1_load, seq_r_l1_miss, seq_r_tlb_load, seq_r_tlb_miss, \
       rnd_w_l1_load, rnd_w_l1_miss, rnd_w_tlb_load, rnd_w_tlb_miss, \
@@ -29,3 +32,5 @@ do
     done
     echo "      " >> $filename
 done
+
+python3 motivation.py
