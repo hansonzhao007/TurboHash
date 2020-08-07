@@ -46,7 +46,7 @@ int main() {
             // util::Env::Default()->PinCore(kThreadIDs[i]);
             size_t loop = 100000;
             while (loop--) {
-                // usleep(1);
+                usleep(1);
                 SpinLockScope lock_scope((turbo_bitspinlock*)lock_value);
                 // critical section
                 shared_num++;

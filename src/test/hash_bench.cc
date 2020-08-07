@@ -403,14 +403,13 @@ int main(int argc, char *argv[]) {
     ParseCommandLineFlags(&argc, &argv, true);
 
     HashBench hash_bench(FLAGS_bucket_size, FLAGS_associate_size, FLAGS_cell_type);
-    
     size_t inserted_num;
     inserted_num = hash_bench.TurboHashSpeedTest();
     
     // inserted_num = hash_bench.TestRehash();
-    hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
-    hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
-    hash_bench.HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);
+    // hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
+    // hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
+    // hash_bench.HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);
     // hash_bench.CuckooSpeedTest("CuckooHashMap", inserted_num);
     return 0;
 }

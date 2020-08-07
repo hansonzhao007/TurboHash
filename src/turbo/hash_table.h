@@ -23,7 +23,6 @@
 
 namespace turbo {
 
-
 class HashTable {
 public:
     virtual ~HashTable() {}
@@ -90,6 +89,7 @@ public:
         queue_head_for_log_ = 0;
         queue_head_ = 0;
         queue_tail_ = 0;
+        WarmUp();
     }
 
     void WarmUp() override {
@@ -97,7 +97,6 @@ public:
         for (int i = 0; i < 1000; i++) {
             addr = buckets_[i].__addr;
         }
-        // printf("finish warm up: %lx\n", (uint64_t)addr);
     }
     void ReHashAll() override {
         // enlarge space 
@@ -389,15 +388,15 @@ private:
     }
 
     inline BucketMeta locateBucket(uint32_t bi) {
-        // return BucketMeta(cells_ + bi * associate_size_ * kCellSize, associate_size_);
-        return buckets_[bi];
+        return BucketMeta(cells_ + bi * associate_size_ * kCellSize, associate_size_);
+        // return buckets_[bi];
     }
     // offset.first: bucket index
     // offset.second: associate index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
-        // return cells_ + offset.first * associate_size_ * kCellSize + offset.second * kCellSize;
-        return  buckets_[offset.first].Address() +  // locate the bucket
-                offset.second * kCellSize;          // locate the associate cell
+        return cells_ + offset.first * associate_size_ * kCellSize + offset.second * kCellSize;
+        // return  buckets_[offset.first].Address() +  // locate the bucket
+        //         offset.second * kCellSize;          // locate the associate cell
     }
   
     inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {

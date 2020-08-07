@@ -45,7 +45,7 @@ public:
         //               (bitmap_) /* filter out empty slot*/);
     }
 
-    // return a bitset, the slot that is ok for insertion
+    // return a bitset, indicating the availabe slot
     inline BitSet EmptyBitSet() {
         return BitSet((~bitmap_) & 0x0FFFFFFF0);
     }
