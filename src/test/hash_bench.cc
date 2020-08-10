@@ -27,8 +27,8 @@ DEFINE_bool(print_thread_read, false, "");
 DEFINE_int32(thread_read, 1, "");
 DEFINE_int32(thread_write, 1, "");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
-DEFINE_int32(associate_size, 32, "");
-DEFINE_int32(bucket_size, 128 << 10, "bucket count");
+DEFINE_int32(associate_size, 16, "");
+DEFINE_int32(bucket_size, 256 << 10, "bucket count");
 DEFINE_int32(probe_type, 0, "\
     0: probe within bucket, \
     1: probe within cell");
@@ -404,9 +404,9 @@ int main(int argc, char *argv[]) {
 
     HashBench hash_bench(FLAGS_bucket_size, FLAGS_associate_size, FLAGS_cell_type);
     size_t inserted_num;
-    // inserted_num = hash_bench.TurboHashSpeedTest();
+    inserted_num = hash_bench.TurboHashSpeedTest();
     
-    inserted_num = hash_bench.TestRehash();
+    // inserted_num = hash_bench.TestRehash();
     // hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
     // hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
     // hash_bench.HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);

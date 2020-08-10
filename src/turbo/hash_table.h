@@ -53,19 +53,16 @@ public:
  *  Description:
  *  DramHashTable has bucket_count * associate_count cells
 */
-template <class CellMeta = CellMeta128, class ProbeStrategy = ProbeWithinBucket, class Media = DramMedia>
+template <class CellMeta = CellMeta128, class ProbeStrategy = ProbeWithinBucket, class Media = DramMedia, int kAssociateSizeLimit = 32768>
 class DramHashTable: public HashTable {
 public:
     using Slice = util::Slice; 
     using Status = util::Status;
     using Hasher = MurMurHash;
     using value_type = std::pair<util::Slice, util::Slice>;
-
     explicit DramHashTable(uint32_t bucket_count, uint32_t associate_count):
         bucket_count_(bucket_count),
         bucket_mask_(bucket_count - 1),
-        associate_size_(associate_count),
-        associate_mask_(associate_count - 1),
         capacity_(bucket_count * associate_count * CellMeta::SlotSize()),
         cur_log_offset_(0),
         size_(0) {
@@ -78,11 +75,11 @@ public:
         buckets_ = new BucketMeta[bucket_count];
         buckets_mem_block_ids_ = new int[bucket_count];
         for (size_t i = 0; i < bucket_count; ++i) {
-            auto res = mem_allocator_.Allocate(associate_size_);
+            auto res = mem_allocator_.Allocate(associate_count);
             buckets_[i].__addr = res.second;
             buckets_mem_block_ids_[i] = res.first;
-            memset(buckets_[i].__addr, 0, associate_size_ * kCellSize);
-            buckets_[i].info.associate_size = associate_size_;
+            memset(buckets_[i].__addr, 0, associate_count * kCellSize);
+            buckets_[i].info.associate_size = associate_count;
         }
         
         WarmUp();
@@ -94,17 +91,21 @@ public:
             addr = buckets_[i].__addr;
         }
     }
+
     void ReHashAll() override {
         // enlarge space 
         size_t count = 0;
-        size_t new_associate_size = associate_size_ * 2;
-        if (new_associate_size > 65536) {
-            printf("cannot rehash. current associate size reach maximum size 65536: %lu\n", associate_size_);
-            return;
-        }
-        
         for (size_t i = 0; i < bucket_count_; ++i) {
             int old_mem_block_id = buckets_mem_block_ids_[i];
+            auto bucket_meta = locateBucket(i);
+            uint32_t new_associate_size = bucket_meta.AssociateSize() * 2;
+
+            // if current bucket cannot enlarge any more, continue
+            if (new_associate_size > kAssociateSizeLimit) {
+                printf("Cannot rehash bucket %lu\n", i);
+                continue;
+            }
+
             auto res = mem_allocator_.Allocate(new_associate_size);
             buckets_mem_block_ids_[i] = res.first;
             if (res.second == nullptr) {
@@ -114,9 +115,8 @@ public:
             memset(res.second, 0, new_associate_size * kCellSize);
             count += Rehash(i, res.second);
             mem_allocator_.Release(old_mem_block_id);
+            capacity_.fetch_add(bucket_meta.AssociateSize() * CellMeta::SlotSize());
         }
-        associate_size_ = new_associate_size;
-        capacity_ *= 2;
         printf("Rehash %lu entries\n", count);
     }
 
@@ -152,7 +152,7 @@ public:
         uint32_t new_associate_size      = old_associate_size << 1;
         uint32_t new_associate_size_mask = new_associate_size - 1;
         if (!isPowerOfTwo(new_associate_size)) {
-            printf("rehash bucket is not power of 2\n");
+            printf("rehash bucket is not power of 2. %u\n", new_associate_size);
             exit(1);
         }
         BucketMeta new_bucket_meta;
@@ -330,35 +330,6 @@ public:
     }
 
 private:
-    // inline std::string logFileName(uint32_t log_seq) {
-    //     char buf[128];
-    //     sprintf(buf, "%s/%010u_%010u.ldata", path_.c_str(), log_seq, 0);
-    //     return buf;
-    // }
-
-    // create a pmem log, create a log_id->pmem_addr mapping
-    // inline void createNewLogFile() {
-    //     printf("Create a new log\n");
-    //     char* pmem_addr = nullptr;
-    //     size_t mapped_len_;
-    //     int is_pmem_;
-        
-    //     cur_log_offset_ = 0;
-    //     cur_log_id_++;
-    //     if (cur_log_id_ >= 65536) {
-    //         cur_log_id_ = 0;
-    //     }
-    //     log_seq_++;
-
-    //     std::string filename = logFileName(log_seq_);
-    //     if (Media::isOptane() && (pmem_addr = (char *)pmem_map_file(filename.c_str(), kMaxLogFileSize, PMEM_FILE_CREATE, 0666, &mapped_len_, &is_pmem_)) == NULL) {
-    //         perror("pmem_map_file");
-    //         exit(1) ;
-    //     }
-    //     logid2filename_[cur_log_id_] = filename;
-    //     logid2pmem_[cur_log_id_] = pmem_addr;
-    // }
-
     inline uint32_t bucketIndex(uint64_t hash) {
         return hash & bucket_mask_;
     }
@@ -440,15 +411,15 @@ private:
                     return true;
                 }
                 else { // current slot has been occupied by another concurrent thread, retry.
-                    #ifdef LTHASH_DEBUG_OUT
+                    // #ifdef LTHASH_DEBUG_OUT
                     printf("retry find slot. %s\n", key.ToString().c_str());
-                    #endif
+                    // #endif
                     retry_find = true;
                 }
             }
             else { // cannot find a valid slot for insertion, rehash current bucket then retry
                 // printf("=========== Need Rehash ==========\n");
-                printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
+                // printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
                 break;
             }
         } while (retry_find);
@@ -474,7 +445,8 @@ private:
     inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        ProbeStrategy probe(partial_hash.H1_, associate_size_ - 1 /*bucket_meta.AssociateSize() - 1*/, bucket_i, bucket_count_);
+        auto bucket_meta = locateBucket(bucket_i);
+        ProbeStrategy probe(partial_hash.H1_, bucket_meta.AssociateSize() - 1, bucket_i, bucket_count_);
 
         int probe_count = 0; // limit probe times
         while (probe && probe_count++ < ProbeStrategy::MAX_PROBE_LEN) {
@@ -555,7 +527,8 @@ private:
     inline std::pair<SlotInfo, bool> findSlot(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        ProbeStrategy probe(partial_hash.H1_, associate_size_ - 1 /* bucket_meta.AssociateSize() - 1*/, bucket_i, bucket_count_);
+        auto bucket_meta = locateBucket(bucket_i);
+        ProbeStrategy probe(partial_hash.H1_,  bucket_meta.AssociateSize() - 1, bucket_i, bucket_count_);
 
         int probe_count = 0; // limit probe times
         while (probe && probe_count++ < ProbeStrategy::MAX_PROBE_LEN) {
@@ -626,14 +599,12 @@ private:
     }
 
 private:
-    MemAllocator<CellMeta, 65536> mem_allocator_;
+    MemAllocator<CellMeta, kAssociateSizeLimit> mem_allocator_;
     BucketMeta*   buckets_;
     int*          buckets_mem_block_ids_;
     const size_t  bucket_count_ = 0;
     const size_t  bucket_mask_  = 0;
-    size_t        associate_size_ = 0;
-    size_t        associate_mask_  = 0;
-    size_t        capacity_ = 0;
+    std::atomic<size_t> capacity_;
     std::atomic<size_t> size_;
     
 
@@ -646,9 +617,6 @@ private:
     const int       kCellSize = CellMeta::CellSize();
     const int       kCellSizeLeftShift = CellMeta::CellSizeLeftShift;
     const size_t    kMaxLogFileSize = 4LU << 30;        // 4 GB
-
-    
-    
 };
 
 }

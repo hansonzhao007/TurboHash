@@ -16,7 +16,7 @@ const size_t COUNT = 100000;
 int main(int argc, char *argv[]) {
     ParseCommandLineFlags(&argc, &argv, true);
     OtherTest();
-    auto* hashtable = new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinBucket>(2, 32768);
+    auto* hashtable = new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinBucket>(2, 8192);
     printf("------- Iterate empty hash table ------\n");
     hashtable->IterateAll();
 
@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
     // hashtable->IterateAll();
     // hashtable->IterateValidBucket();
     
-    printf("------- rehash all bucket and repeat search 0 ------\n");
+    printf("------- rehash all bucket and repeat search ------\n");
     hashtable->ReHashAll();
     // hashtable->IterateValidBucket();
     // hashtable->IterateBucket(1);

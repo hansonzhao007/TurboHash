@@ -122,7 +122,7 @@ private:
     int     block_id_;          
 };
 
-template <class CellMeta = CellMeta128, size_t kBucketCellCount = 65536>
+template <class CellMeta = CellMeta128, size_t kBucketCellCount = 32768>
 class MemAllocator {
 public:
     MemAllocator(int initial_blocks = 1):
