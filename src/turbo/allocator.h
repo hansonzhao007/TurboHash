@@ -44,6 +44,7 @@ public:
             printf("MemBlock size is not 4KB aligned. %lu", space);
             exit(1);
         }
+        // printf("Add %.2f MB MemBlock\n", space/1024.0/1024.0 );
         start_addr_ = (char*) mmap(ADDR, space, PROTECTION, FLAGS, -1, 0);
         if (start_addr_ == MAP_FAILED) {
             fprintf(stderr, "mmap %lu hugepage fail.\n", space);
@@ -92,6 +93,7 @@ public:
          --ref_;
         if (ref_ == 0) {
             remaining_ = size_;
+            cur_addr_ = start_addr_;
             return true;
         }
         else
@@ -123,7 +125,7 @@ private:
 template <class CellMeta = CellMeta128, size_t kBucketCellCount = 65536>
 class MemAllocator {
 public:
-    MemAllocator(int initial_blocks = 100):
+    MemAllocator(int initial_blocks = 1):
         cur_mem_block_(nullptr),
         next_id_(0) {
         AddMemBlock(initial_blocks);

@@ -104,11 +104,16 @@ public:
         }
         
         for (size_t i = 0; i < bucket_count_; ++i) {
+            int old_mem_block_id = buckets_mem_block_ids_[i];
             auto res = mem_allocator_.Allocate(new_associate_size);
             buckets_mem_block_ids_[i] = res.first;
+            if (res.second == nullptr) {
+                printf("Error\n");
+                exit(1);
+            }
             memset(res.second, 0, new_associate_size * kCellSize);
             count += Rehash(i, res.second);
-            mem_allocator_.Release(buckets_mem_block_ids_[i]);
+            mem_allocator_.Release(old_mem_block_id);
         }
         associate_size_ = new_associate_size;
         capacity_ *= 2;
@@ -137,6 +142,7 @@ public:
     }
 
     size_t Rehash(int bi, char* bucket_addr) {
+        // printf("Rehash bucket %d\n", bi);
         size_t count = 0;
         // rehash bucket bi
         auto bucket_meta = locateBucket(bi);

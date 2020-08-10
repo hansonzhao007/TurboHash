@@ -65,6 +65,7 @@ private:
     inline void toNextValidBitMap() {
         while(!bitmap_ && associate_i_ < associate_size_) {
             associate_i_++;
+            if (associate_i_ == associate_size_) return;
             char* cell_addr = bucket_addr_ + ( associate_i_ << CellMeta::CellSizeLeftShift );
             bitmap_ = BitSet(*(uint32_t*)(cell_addr) & CellMeta::BitMapMask); 
         }
