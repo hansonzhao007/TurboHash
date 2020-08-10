@@ -4,7 +4,7 @@
 
 namespace turbo {
 
-const int kMaxProbeLen = 8;
+const int kMaxProbeLen = 16;
 
 class ProbeWithinCell {
 public:

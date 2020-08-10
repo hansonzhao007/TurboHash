@@ -26,7 +26,7 @@ uint64_t wyhash64() {
 
 const uint64_t MASK64 = (~(UINT64_C(63)));
 
-void  __attribute__((optimize("O0"),always_inline))
+inline void // __attribute__((optimize("O0"),always_inline))
 RndAccess(char* addr, uint64_t size_mask) {
     uint64_t off = wyhash64() & size_mask;
     int loop = FLAGS_loop;
@@ -37,7 +37,7 @@ RndAccess(char* addr, uint64_t size_mask) {
     }
 };
 
-void  __attribute__((optimize("O0"),always_inline))
+inline void  // __attribute__((optimize("O0"),always_inline))
 ConAccess(char* addr, uint64_t size_mask) {
     uint64_t off = wyhash64() & size_mask;
     int loop = FLAGS_loop;
@@ -48,26 +48,26 @@ ConAccess(char* addr, uint64_t size_mask) {
     }
 }
 
-void   __attribute__((optimize("O0"),always_inline))
+inline void  // __attribute__((optimize("O0"),always_inline))
 RndWrite(char* addr, uint64_t size_mask) {
     uint64_t off = wyhash64() & size_mask;
     int loop = FLAGS_loop;
     while (loop--) {
         uint64_t off = wyhash64() & size_mask;
         volatile char tmp = *(addr + off);
-        memset(addr + off, 8, 8);
+        memset(addr + off, 32, 8);
         off += 64;
     }
 };
 
-void   __attribute__((optimize("O0"),always_inline))
+inline void  // __attribute__((optimize("O0"),always_inline))
 ConWrite(char* addr, uint64_t size_mask) {
     uint64_t off = wyhash64() & size_mask;
     int loop = FLAGS_loop;
     while (loop--) {
         uint64_t off_tmp = wyhash64() & size_mask;
         volatile char tmp = *(addr + off);
-        memset(addr + off, 8, 8);
+        memset(addr + off, 32, 8);
         off += 64;
     }
 }
@@ -127,6 +127,7 @@ void AccessCacheLineSize() {
         double duration = time_end - time_start;
         fprintf(file, "%f, ", duration / repeat);
     }
+    debug_perf_stop();
     fflush(file);
     fclose(file);
 }

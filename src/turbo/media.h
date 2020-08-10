@@ -20,7 +20,7 @@ public:
         }
     }
 
-    static inline void* Store(const util::Slice& key, const util::Slice& value, char* addr, uint16_t log_id, uint32_t log_offse) {
+    static inline void* Store(const util::Slice& key, const util::Slice& value) {
         ValueType type = kTypeValue;
         size_t key_len = key.size();
         size_t value_len = value.size();

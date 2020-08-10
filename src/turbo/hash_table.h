@@ -6,6 +6,7 @@
 #include <vector>
 #include <libpmem.h>
 
+#include "allocator.h"
 #include "bucket_iterator.h"
 #include "format.h"
 #include "bitset.h"
@@ -75,20 +76,15 @@ public:
         }
 
         buckets_ = new BucketMeta[bucket_count];
-        cells_   = (char*) aligned_alloc(kCellSize, bucket_count_ * associate_size_ * kCellSize);
-        memset(cells_, 0, bucket_count_ * associate_size_ * kCellSize);
+        buckets_mem_block_ids_ = new int[bucket_count];
         for (size_t i = 0; i < bucket_count; ++i) {
-            buckets_[i].__addr = cells_ + i * associate_size_ * kCellSize;
+            auto res = mem_allocator_.Allocate(associate_size_);
+            buckets_[i].__addr = res.second;
+            buckets_mem_block_ids_[i] = res.first;
+            memset(buckets_[i].__addr, 0, associate_size_ * kCellSize);
             buckets_[i].info.associate_size = associate_size_;
         }
-
-        // queue init
-        size_t QUEUE_SIZE = 1 << 10;
-        queue_.resize(QUEUE_SIZE);
-        queue_size_mask_ = QUEUE_SIZE - 1;
-        queue_head_for_log_ = 0;
-        queue_head_ = 0;
-        queue_tail_ = 0;
+        
         WarmUp();
     }
 
@@ -106,12 +102,14 @@ public:
             printf("cannot rehash. current associate size reach maximum size 65536: %lu\n", associate_size_);
             return;
         }
-        char* new_cells = (char*) aligned_alloc(kCellSize, bucket_count_ * new_associate_size * kCellSize);
+        
         for (size_t i = 0; i < bucket_count_; ++i) {
-            count += Rehash(i, new_cells + i * new_associate_size * kCellSize);
+            auto res = mem_allocator_.Allocate(new_associate_size);
+            buckets_mem_block_ids_[i] = res.first;
+            memset(res.second, 0, new_associate_size * kCellSize);
+            count += Rehash(i, res.second);
+            mem_allocator_.Release(buckets_mem_block_ids_[i]);
         }
-        free(cells_);
-        cells_ = new_cells;
         associate_size_ = new_associate_size;
         capacity_ *= 2;
         printf("Rehash %lu entries\n", count);
@@ -195,43 +193,15 @@ public:
     ~DramHashTable() {
 
     }
-    
 
     bool Put(const util::Slice& key, const util::Slice& value) {
-        uint16_t log_id;
-        uint32_t log_offset;
-        // // step 1: put the entry to queue_, thread safe
-        // // obtain current queue tail and advance queue tail atomically
-        // uint32_t queue_tail = queue_tail_.fetch_add(1, std::memory_order_relaxed);
-        // // add kv pair to queue
-        // uint32_t queue_index = queue_tail & queue_size_mask_;
-        // queue_[queue_index] = {kTypeValue, {key, value}};
-
-        // // step 2: wait until we obtain the ownership. spinlock
-        // // will wait until queue_index is equal to queue_head_.
-        // // means it is my turn
-        // while (queue_tail != queue_head_.load(std::memory_order_relaxed));
-        // // {{{ ======= atomic process start
-        // // step 3: calculate the offset in the log and release the onwership to next request. (atomic)
-        // size_t record_size = Media::FormatRecordSize(kTypeValue, key, value);
-        // // if log offset is larger than file size, we create a new log file
-        // if (cur_log_offset_ + record_size > kMaxLogFileSize) {
-        //     createNewLogFile();
-        // }
-        // uint16_t log_id = cur_log_id_;
-        // uint32_t log_offset = cur_log_offset_;
-        // cur_log_offset_ += record_size;
-        // // ======= atomic process end }}}
-        // // release spinlock by adding queue_head
-        // queue_head_.fetch_add(1, std::memory_order_relaxed);
-
-        // step 4: write record to log_offset
         // calculate hash value of the key
         size_t hash_value = Hasher::hash(key.data(), key.size());
-        // store the kv pair to media
-        void* media_offset = storeValueToMedia(key, value, log_id, log_offset);
 
-        // step 5: update DRAM index, thread safe
+        // store the kv pair to media
+        void* media_offset = Media::Store(key, value);
+
+        // update DRAM index, thread safe
         return insertSlot(key, hash_value, media_offset);
     }
 
@@ -275,7 +245,7 @@ public:
 
     void IterateBucket(uint32_t i) {
         auto bucket_meta = locateBucket(i);
-        BucketIterator<CellMeta> iter(bucket_meta.Address(), bucket_meta.info.associate_size);
+        BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.info.associate_size);
         while (iter.valid()) {
             auto res = (*iter);
             SlotInfo& info = res.first;
@@ -335,7 +305,7 @@ public:
             probe.next();
             count_sum += count;
         }
-        sprintf(buffer, "\tBucket valid slot count: %d\n", count_sum);
+        sprintf(buffer, "\t%10u Bucket valid slot count: %d. Usage Ratio: %f\n", bucket_i, count_sum, (double)count_sum / (CellMeta::SlotSize() * meta.AssociateSize()));
         res += buffer;
         return res;
     }
@@ -354,49 +324,49 @@ public:
     }
 
 private:
-    inline std::string logFileName(uint32_t log_seq) {
-        char buf[128];
-        sprintf(buf, "%s/%010u_%010u.ldata", path_.c_str(), log_seq, 0);
-        return buf;
-    }
+    // inline std::string logFileName(uint32_t log_seq) {
+    //     char buf[128];
+    //     sprintf(buf, "%s/%010u_%010u.ldata", path_.c_str(), log_seq, 0);
+    //     return buf;
+    // }
 
     // create a pmem log, create a log_id->pmem_addr mapping
-    inline void createNewLogFile() {
-        printf("Create a new log\n");
-        char* pmem_addr = nullptr;
-        size_t mapped_len_;
-        int is_pmem_;
+    // inline void createNewLogFile() {
+    //     printf("Create a new log\n");
+    //     char* pmem_addr = nullptr;
+    //     size_t mapped_len_;
+    //     int is_pmem_;
         
-        cur_log_offset_ = 0;
-        cur_log_id_++;
-        if (cur_log_id_ >= 65536) {
-            cur_log_id_ = 0;
-        }
-        log_seq_++;
+    //     cur_log_offset_ = 0;
+    //     cur_log_id_++;
+    //     if (cur_log_id_ >= 65536) {
+    //         cur_log_id_ = 0;
+    //     }
+    //     log_seq_++;
 
-        std::string filename = logFileName(log_seq_);
-        if (Media::isOptane() && (pmem_addr = (char *)pmem_map_file(filename.c_str(), kMaxLogFileSize, PMEM_FILE_CREATE, 0666, &mapped_len_, &is_pmem_)) == NULL) {
-            perror("pmem_map_file");
-            exit(1) ;
-        }
-        logid2filename_[cur_log_id_] = filename;
-        logid2pmem_[cur_log_id_] = pmem_addr;
-    }
+    //     std::string filename = logFileName(log_seq_);
+    //     if (Media::isOptane() && (pmem_addr = (char *)pmem_map_file(filename.c_str(), kMaxLogFileSize, PMEM_FILE_CREATE, 0666, &mapped_len_, &is_pmem_)) == NULL) {
+    //         perror("pmem_map_file");
+    //         exit(1) ;
+    //     }
+    //     logid2filename_[cur_log_id_] = filename;
+    //     logid2pmem_[cur_log_id_] = pmem_addr;
+    // }
 
     inline uint32_t bucketIndex(uint64_t hash) {
         return hash & bucket_mask_;
     }
 
     inline BucketMeta locateBucket(uint32_t bi) {
-        return BucketMeta(cells_ + bi * associate_size_ * kCellSize, associate_size_);
-        // return buckets_[bi];
+        // return BucketMeta(cells_ + bi * associate_size_ * kCellSize, associate_size_);
+        return buckets_[bi];
     }
     // offset.first: bucket index
     // offset.second: associate index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
-        return cells_ + offset.first * associate_size_ * kCellSize + offset.second * kCellSize;
-        // return  buckets_[offset.first].Address() +  // locate the bucket
-        //         offset.second * kCellSize;          // locate the associate cell
+        // return cells_ + offset.first * associate_size_ * kCellSize + offset.second * kCellSize;
+        return  buckets_[offset.first].Address() +  // locate the bucket
+                offset.second * kCellSize;          // locate the associate cell
     }
   
     inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
@@ -445,59 +415,45 @@ private:
 
 
     inline bool insertSlot(const Slice& key, size_t hash_value, void* media_offset) {
-        // atomically update the media offset to relative slot
         bool retry_find = false;
-        do {
-            // concurrent insertion may find the same position
+        do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
             auto res = findSlotForInsert(key, hash_value);
 
-            if (res.second) {
-                // find a valid slot
-                // obtain the cell lock
+            if (res.second) { // find a valid slot
                 char* cell_addr = locateCell({res.first.bucket, res.first.associate});
-                SpinLockScope lock_scope((turbo_bitspinlock*)cell_addr);
                 
-                CellMeta meta(cell_addr);
-                // util::PrefetchForWrite((void*)cell_addr);
-                if (likely(!meta.Occupy(res.first.slot) || res.first.equal_key)) {
-                    // if the slot is not occupied or the slot has same key with request
-                    // we update the slot 
-
+                SpinLockScope lock_scope((turbo_bitspinlock*)cell_addr); // Lock current cell
+                
+                CellMeta meta(cell_addr);   // obtain the meta part
+                
+                if (likely(!meta.Occupy(res.first.slot) ||  // if the slot is not occupied or
+                    res.first.equal_key)) {                 // the slot has same key, update the slot
                     // update slot content (including pointer and H1), H2 and bitmap
                     updateSlotAndMeta(cell_addr, res.first, media_offset);
                     if (!res.first.equal_key) size_.fetch_add(1, std::memory_order_relaxed);
                     return true;
                 }
-                else {
-                    // if current slot already occupies by another 
-                    // concurrent thread, we retry find slot.
+                else { // current slot has been occupied by another concurrent thread, retry.
                     #ifdef LTHASH_DEBUG_OUT
                     printf("retry find slot. %s\n", key.ToString().c_str());
                     #endif
-                    // printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
                     retry_find = true;
                 }
+            }
+            else { // cannot find a valid slot for insertion, rehash current bucket then retry
+                // printf("=========== Need Rehash ==========\n");
+                printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
+                break;
             }
         } while (retry_find);
         
         return false;
     }
 
-
-    // Store the value to media and return the pointer to the media position
-    // where the value stores
-    inline void* storeValueToMedia(const Slice& key, const Slice& value, uint16_t log_id, uint32_t log_offset) {
-        // calculate optane address
-        char* pmem_addr = logid2pmem_[log_id] + log_offset;
-        void* buffer = Media::Store(key, value, pmem_addr, log_id, log_offset);
-        return buffer;
-    }
-
     inline bool slotKeyEqual(const HashSlot& slot, const Slice& key) {
         Slice res = Media::ParseKey(reinterpret_cast<void*>(slot.meta.entry));
         return res == key;
     }
-
 
     inline const Slice extractSlice(const HashSlot& slot, size_t len) {
         return  Media::ParseKey(reinterpret_cast<void*>(slot.meta.entry));
@@ -507,36 +463,36 @@ private:
     // Find a valid slot for insertion
     // Return: std::pair
     //      first: the slot info that should insert the key
-    //      second: whether we can find a empty slot to insert
+    //      second: whether we can find a valid(empty or belong to the same key) slot to insert
     // Node: Only when the second value is true, can we insert this key
     inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        // BucketMeta bucket_meta = locateBucket(bucket_i);
         ProbeStrategy probe(partial_hash.H1_, associate_size_ - 1 /*bucket_meta.AssociateSize() - 1*/, bucket_i, bucket_count_);
 
-        // limit probe count
-        int probe_count = 0;
+        int probe_count = 0; // limit probe times
         while (probe && probe_count++ < ProbeStrategy::MAX_PROBE_LEN) {
             auto offset = probe.offset();
             char* cell_addr = locateCell(offset);
             CellMeta meta(cell_addr);
-            // locate if there is any H2 match in this cell
-            for (int i : meta.MatchBitSet(partial_hash.H2_)) {
-                // i is the slot index in current cell, each slot
-                // occupies 8-byte
 
+            // if this is a update request, we overwrite existing slot
+            for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // if there is any H2 match in this cell (H2 is 8-byte)
+                                                                // i is the slot index in current cell, each slot occupies 8-byte
                 // locate the slot reference
                 const HashSlot& slot = *locateSlot(cell_addr, i);
 
-                // compare if the H1 partial hash is equal
-                if (likely(slot.meta.H1 == partial_hash.H1_)) {
-                    // compare the actual key pointed by the pointer 
-                    // with the parameter key
-                    if (likely(slotKeyEqual(slot, key))) {
-                        return {{offset.first, offset.second, i, partial_hash.H1_, partial_hash.H2_, true}, true};
+                if (likely(slot.meta.H1 == partial_hash.H1_)) { // compare if the H1 partial hash is equal (H1 is 16-byte)
+                    if (likely(slotKeyEqual(slot, key))) {      // compare if the slot key is equal
+                        return {{   .bucket = offset.first, 
+                                    .associate = offset.second, 
+                                    .slot = i, 
+                                    .H1 = partial_hash.H1_, 
+                                    .H2 = partial_hash.H2_, 
+                                    .equal_key = true /* update existing slot*/}, 
+                                true};
                     }
-                    else {
+                    else {                                      // two key is not equal, go to next slot
                         #ifdef LTHASH_DEBUG_OUT
                         Slice slot_key =  extractSlice(slot, key.size());
                         printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Insert key: %15s, 0x%016lx, Slot key: %15s, 0x%016lx\n", 
@@ -553,11 +509,18 @@ private:
                     }
                 }
             }
+
+            // return an empty slot for new insertion
             auto empty_bitset = meta.EmptyBitSet(); 
-            if (likely(empty_bitset)) {
-                // there is empty slot for insertion, so we return a slot
-                for (int i : empty_bitset) {
-                    return {{offset.first, offset.second, i, partial_hash.H1_, partial_hash.H2_, false}, true};
+            if (likely(empty_bitset)) {                 
+                for (int i : empty_bitset) { // there is empty slot, return its meta
+                    return {{   .bucket = offset.first, 
+                                .associate = offset.second, 
+                                .slot = i, 
+                                .H1 = partial_hash.H1_, 
+                                .H2 = partial_hash.H2_, 
+                                .equal_key = false /* a new slot */}, 
+                            true};
                 }
             }
             
@@ -573,35 +536,42 @@ private:
         #endif
         // only when all the probes fail and there is no empty slot
         // exists in this bucket. 
-        return {{}, false};
+        return {{
+                    .bucket = bucket_i,
+                    .associate = 0,
+                    .slot = 0, 
+                    .H1 = partial_hash.H1_, 
+                    .H2 = partial_hash.H2_, 
+                    .equal_key = false /* a new slot */},
+                false};
     }
     
     inline std::pair<SlotInfo, bool> findSlot(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        // BucketMeta bucket_meta = locateBucket(bucket_i);
         ProbeStrategy probe(partial_hash.H1_, associate_size_ - 1 /* bucket_meta.AssociateSize() - 1*/, bucket_i, bucket_count_);
 
-        // limit probe count
-        int probe_count = 0;
+        int probe_count = 0; // limit probe times
         while (probe && probe_count++ < ProbeStrategy::MAX_PROBE_LEN) {
             auto offset = probe.offset();
             char* cell_addr = locateCell(offset);
             CellMeta meta(cell_addr);
-            // locate if there is any H2 match in this cell
-            for (int i : meta.MatchBitSet(partial_hash.H2_)) {
-                // i is the slot index in current cell, each slot occupies 8-byte
 
+            
+            for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell
+                                                                // i is the slot index in current cell, each slot occupies 8-byte
                 // locate the slot reference
                 const HashSlot& slot = *locateSlot(cell_addr, i);
 
-                // compare if the H1 partial hash is equal
-                if (likely(slot.meta.H1 == partial_hash.H1_)) {
-                    // compare the actual key pointed by the pointer 
-                    // with the parameter key
-                    if (likely(slotKeyEqual(slot, key))) {
-                        // slotKeyEqual is very expensive 
-                        return {{offset.first, offset.second, i, partial_hash.H1_, partial_hash.H2_, true} , true};
+                if (likely(slot.meta.H1 == partial_hash.H1_)) { // Compare if the H1 partial hash is equal.
+                    if (likely(slotKeyEqual(slot, key))) {      // If the slot key is equal to search key. SlotKeyEqual is very expensive 
+                        return {{   .bucket = offset.first, 
+                                    .assocaite = offset.second, 
+                                    .slot = i, 
+                                    .H1 = partial_hash.H1_, 
+                                    .H2 = partial_hash.H2_, 
+                                    .equal_key = true /* key is equal */} , 
+                                true};
                     }
                     else {
                         #ifdef LTHASH_DEBUG_OUT
@@ -633,8 +603,8 @@ private:
                     
                 }
             }
-            // if this cell still has empty slot, then it means the key
-            // does't exist.
+
+            // if this cell still has empty slot, then it means the key does't exist.
             if (likely(meta.EmptyBitSet())) {
                 return {{}, false};
             }
@@ -650,37 +620,29 @@ private:
     }
 
 private:
-    std::string   path_ = "./";         // default path for pmem
-    char*         cells_ = nullptr;
+    MemAllocator<CellMeta, 65536> mem_allocator_;
+    BucketMeta*   buckets_;
+    int*          buckets_mem_block_ids_;
     const size_t  bucket_count_ = 0;
     const size_t  bucket_mask_  = 0;
     size_t        associate_size_ = 0;
     size_t        associate_mask_  = 0;
     size_t        capacity_ = 0;
     std::atomic<size_t> size_;
+    
 
-    // ----- circular queue for synchronizing put requests -----
-    std::vector<std::pair<char, std::pair<Slice, Slice> > > queue_; // queue that store request sequence. (type, kv entry)
-    uint32_t              queue_size_mask_;
-    std::atomic<uint32_t> queue_tail_;
-    std::atomic<uint32_t> queue_head_;
-    uint32_t              queue_head_for_log_;  // used for background logging thread
- 
-    std::string logid2filename_[65536]; // log_id -> pmem file: After rebooting, this should be loaded from persistent memory,
-                                                                    //                      then logid2pmem_ is updated.
     // {{{ guarded by spinlock (while loop)
     uint64_t    log_seq_ = 0;
     uint16_t    cur_log_id_ = 0;
     uint32_t    cur_log_offset_ = 0;    // logid2pmem_[cur_log_id_] + cur_log_offset_ : actual address in pmem
-    char*       logid2pmem_[65536];     // map that stores the pmem file initial address, should be initialized when rebooting. log_id_ -> pmem_addr
     // }}}
-
 
     const int       kCellSize = CellMeta::CellSize();
     const int       kCellSizeLeftShift = CellMeta::CellSizeLeftShift;
     const size_t    kMaxLogFileSize = 4LU << 30;        // 4 GB
 
-    BucketMeta*     buckets_;
+    
+    
 };
 
 }
