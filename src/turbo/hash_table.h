@@ -5,6 +5,8 @@
 #include <atomic>
 #include <vector>
 #include <libpmem.h>
+#include <algorithm>
+#include <numeric>
 
 #include "allocator.h"
 #include "bucket_iterator.h"
@@ -34,6 +36,7 @@ public:
     virtual size_t Size() = 0;
     virtual void WarmUp() = 0;
     virtual void ReHashAll() = 0;
+    virtual void DebugInfo() = 0;
     virtual std::string ProbeStrategyName() = 0;
 };
 
@@ -92,32 +95,60 @@ public:
         }
     }
 
+    void DebugInfo() {
+        printf("%s\n", PrintMemAllocator().c_str());
+    }
+    std::string PrintMemAllocator() {
+        return mem_allocator_.ToString();
+    }
+
     void ReHashAll() override {
         // enlarge space 
-        size_t count = 0;
-        for (size_t i = 0; i < bucket_count_; ++i) {
-            int old_mem_block_id = buckets_mem_block_ids_[i];
-            auto bucket_meta = locateBucket(i);
-            uint32_t new_associate_size = bucket_meta.AssociateSize() * 2;
 
-            // if current bucket cannot enlarge any more, continue
-            if (new_associate_size > kAssociateSizeLimit) {
-                printf("Cannot rehash bucket %lu\n", i);
-                continue;
-            }
+        int rehash_thread = 4;
+        printf("Rehash all threads: %d\n", rehash_thread);
+        std::vector<std::thread> workers(rehash_thread);
+        std::vector<size_t> counts(rehash_thread, 0);
+        std::vector<size_t> add_capacity(rehash_thread, 0);
+        for (int t = 0; t < rehash_thread; t++) {
+            workers[t] = std::thread([&, t]
+            {
+                size_t start_b = bucket_count_ / rehash_thread * t;
+                size_t end_b   = start_b + bucket_count_ / rehash_thread;
+                for (size_t i = start_b; i < end_b; ++i) {
+                    int old_mem_block_id = buckets_mem_block_ids_[i];
+                    auto bucket_meta = locateBucket(i);
+                    uint32_t new_associate_size = bucket_meta.AssociateSize() << 1;
 
-            auto res = mem_allocator_.Allocate(new_associate_size);
-            buckets_mem_block_ids_[i] = res.first;
-            if (res.second == nullptr) {
-                printf("Error\n");
-                exit(1);
-            }
-            memset(res.second, 0, new_associate_size * kCellSize);
-            count += Rehash(i, res.second);
-            mem_allocator_.Release(old_mem_block_id);
-            capacity_.fetch_add(bucket_meta.AssociateSize() * CellMeta::SlotSize());
+                    // if current bucket cannot enlarge any more, continue
+                    if (new_associate_size > kAssociateSizeLimit) {
+                        printf("Cannot rehash bucket %lu\n", i);
+                        continue;
+                    }
+
+                    auto res = mem_allocator_.Allocate(new_associate_size);
+                    buckets_mem_block_ids_[i] = res.first;
+                    if (res.second == nullptr) {
+                        printf("Error\n");
+                        exit(1);
+                    }
+                    memset(res.second, 0, new_associate_size * kCellSize);
+                    counts[t] += Rehash(i, res.second);
+                    mem_allocator_.Release(old_mem_block_id);
+                    add_capacity[t] += bucket_meta.AssociateSize() * CellMeta::SlotSize();
+                    // capacity_.fetch_add(bucket_meta.AssociateSize() * CellMeta::SlotSize());
+                }
+                
+            });
         }
-        printf("Rehash %lu entries\n", count);
+        std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
+        {
+            t.join();
+        });
+        size_t rehash_count = std::accumulate(counts.begin(), counts.end(), 0);
+        size_t add_capacitys = std::accumulate(add_capacity.begin(), add_capacity.end(), 0);
+        capacity_.fetch_add(add_capacitys);
+        printf("Rehash %lu entries\n", rehash_count);
     }
 
     // return the associate index and slot index
@@ -412,7 +443,7 @@ private:
                 }
                 else { // current slot has been occupied by another concurrent thread, retry.
                     // #ifdef LTHASH_DEBUG_OUT
-                    printf("retry find slot. %s\n", key.ToString().c_str());
+                    // printf("retry find slot. %s\n", key.ToString().c_str());
                     // #endif
                     retry_find = true;
                 }

@@ -93,7 +93,7 @@ public:
                 workers[t] = std::thread([&, t]
                 {
                     // core function
-                    // Env::PinCore(kThreadIDs[t]);
+                    Env::PinCore(kThreadIDs[t]);
                     std::string value;
                     bool res = true;
                     size_t i = 0;
@@ -149,6 +149,7 @@ public:
         printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
         read_fun();
 
+        // hashtable->DebugInfo();
         delete hashtable;
         return inserted_num;
     }
@@ -167,7 +168,7 @@ public:
             auto time_start = Env::Default()->NowNanos();
             for (int t = 0; t < FLAGS_thread_write; t++) {
                 workers[t] = std::thread([&, t] {
-                    // Env::PinCore(kThreadIDs[t]);
+                    Env::PinCore(kThreadIDs[t]);
                     uint64_t i = 0;
                     bool res = true;
                     size_t start_offset = random() % max_range;
@@ -203,7 +204,7 @@ public:
                     workers[t] = std::thread([&, t]
                     {
                         // core function
-                        // Env::PinCore(kThreadIDs[t]);
+                        Env::PinCore(kThreadIDs[t]);
                         std::string value;
                         bool res = true;
                         size_t i = 0;
@@ -281,7 +282,7 @@ public:
             workers[t] = std::thread([&, t]
             {
                 // core function
-                // Env::PinCore(kThreadIDs[t]);
+                Env::PinCore(kThreadIDs[t]);
                 size_t i = 0;
                 auto iter = map.begin();
                 size_t start_offset = random() % inserted_num;
@@ -336,7 +337,7 @@ public:
             workers[t] = std::thread([&, t]
             {
                 // core function
-                // Env::PinCore(kThreadIDs[t]);
+                Env::PinCore(kThreadIDs[t]);
                 size_t i = 0;
                 std::string out;
                 bool is_find = false;
@@ -404,9 +405,9 @@ int main(int argc, char *argv[]) {
 
     HashBench hash_bench(FLAGS_bucket_size, FLAGS_associate_size, FLAGS_cell_type);
     size_t inserted_num;
-    inserted_num = hash_bench.TurboHashSpeedTest();
+    // inserted_num = hash_bench.TurboHashSpeedTest();
     
-    // inserted_num = hash_bench.TestRehash();
+    inserted_num = hash_bench.TestRehash();
     // hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
     // hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
     // hash_bench.HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);

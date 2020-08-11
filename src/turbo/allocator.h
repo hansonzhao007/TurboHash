@@ -3,6 +3,7 @@
 #include <cassert>
 #include <deque>
 #include <unordered_map>
+#include "spinlock.h"
 #include "cell_meta.h"
 
 namespace turbo
@@ -96,8 +97,9 @@ public:
             cur_addr_ = start_addr_;
             return true;
         }
-        else
+        else {
             return false;
+        }
     }
 
     inline int Reference() {
@@ -112,6 +114,11 @@ public:
         return block_id_;
     }
 
+    std::string ToString() {
+        char buffer[1024];
+        sprintf(buffer, "ID: %d, size: %lu, remain: %lu, ref: %d\n", block_id_, size_, remaining_, ref_);
+        return buffer;
+    }
 private:
     char*   start_addr_;    // start address of MemBlock
     char*   cur_addr_;      // current position for space allocation
@@ -127,7 +134,8 @@ class MemAllocator {
 public:
     MemAllocator(int initial_blocks = 1):
         cur_mem_block_(nullptr),
-        next_id_(0) {
+        next_id_(0),
+        spin_lock_(0) {
         AddMemBlock(initial_blocks);
         cur_mem_block_ = GetMemBlock();
     }
@@ -136,7 +144,8 @@ public:
     // Return:
     // int: the MemBlock ID
     // char*: address in MemBlock
-    inline std::pair<int, char*> Allocate(int count) {
+    inline std::pair<int, char*> Allocate(size_t count) {
+        SpinLockScope lock(&spin_lock_);
         if (cur_mem_block_->Remaining() < count) {
             // if remaining space is not enough, allocate a new MemBlock
             cur_mem_block_ = GetMemBlock();
@@ -146,10 +155,12 @@ public:
             fprintf(stderr, "MemAllocator::Allocate addr is nullptr\n");
             exit(1);
         }
+        
         return {cur_mem_block_->ID(), addr};
     }
 
     inline void Release(int id) {
+        SpinLockScope lock(&spin_lock_);
         auto iter = mem_block_map_.find(id);
         if (iter != mem_block_map_.end()) {
             bool should_recycle = iter->second->Release();
@@ -159,7 +170,37 @@ public:
         }
     }
 
-    
+    inline std::pair<int, char*> AllocateAndRelease(size_t count, int id) {
+        SpinLockScope lock(&spin_lock_);
+
+        if (cur_mem_block_->Remaining() < count) {
+            // if remaining space is not enough, allocate a new MemBlock
+            cur_mem_block_ = GetMemBlock();
+        }
+        char* addr = cur_mem_block_->Allocate(count);
+        if (addr == nullptr) {
+            fprintf(stderr, "MemAllocator::Allocate addr is nullptr\n");
+            exit(1);
+        }
+
+        auto iter = mem_block_map_.find(id);
+        if (iter != mem_block_map_.end()) {
+            bool should_recycle = iter->second->Release();
+            if (should_recycle) {
+                RecycleMemBlock(iter->second);
+            }
+        }
+
+        return {cur_mem_block_->ID(), addr};
+    }
+
+    std::string ToString() {
+        std::string res;
+        for (auto& mb : mem_block_map_) {
+            res.append(mb.second->ToString());
+        }
+        return res;
+    }
 private:
     inline void AddMemBlock(int n) {
         // add n MemBlock to free_mem_block_list_
@@ -188,6 +229,7 @@ private:
     std::unordered_map<int, MemBlock<CellMeta>*> mem_block_map_;
     MemBlock<CellMeta>* cur_mem_block_;
     int next_id_;
+    turbo_bitspinlock spin_lock_;
 };
 } // namespace turbo
 

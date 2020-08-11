@@ -18,6 +18,7 @@ public:
         else if (type == kTypeDeletion) {
             return key.size() + 5;
         }
+        return 0;
     }
 
     static inline void* Store(const util::Slice& key, const util::Slice& value) {

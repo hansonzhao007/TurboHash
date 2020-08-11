@@ -40,7 +40,7 @@ find_package(Threads REQUIRED)
 set(CMAKE_CXX_FLAGS "-pthread")
 
 # add avx512 sse2 sse3 support
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -mavx -mavx512f -msse -msse2 -msse3 -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -mavx -mavx512f -msse -msse2 -msse3 -march=native -Wall")
 
 # check existence of jemalloc
 include(CheckIncludeFile)
