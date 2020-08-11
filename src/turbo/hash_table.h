@@ -93,10 +93,8 @@ public:
     }
 
     void ReHashAll() override {
-        // enlarge space 
-
         int rehash_thread = 4;
-        printf("Rehash all threads: %d\n", rehash_thread);
+        printf("Rehash threads: %d\n", rehash_thread);
         std::vector<std::thread> workers(rehash_thread);
         std::vector<size_t> counts(rehash_thread, 0);
         std::vector<size_t> add_capacity(rehash_thread, 0);
@@ -293,7 +291,7 @@ public:
 
     void IterateBucket(uint32_t i) {
         auto bucket_meta = locateBucket(i);
-        BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.info.associate_size);
+        BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.AssociateSize());
         while (iter.valid()) {
             auto res = (*iter);
             SlotInfo& info = res.first;
@@ -341,7 +339,7 @@ public:
         BucketMeta meta = locateBucket(bucket_i);
         sprintf(buffer, "----- bucket %10u -----\n", bucket_i);
         res += buffer;
-        ProbeStrategy probe(0, meta.AssociateSize() - 1, bucket_i);
+        ProbeStrategy probe(0, meta.AssociateMask(), bucket_i);
         uint32_t i = 0;
         int count_sum = 0;
         while (probe) {
@@ -383,8 +381,8 @@ private:
     // offset.first: bucket index
     // offset.second: associate index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
-        return  buckets_[offset.first].Address() +  // locate the bucket
-                offset.second * kCellSize;          // locate the associate cell
+        return  buckets_[offset.first].Address() +      // locate the bucket
+                (offset.second << kCellSizeLeftShift);  // locate the associate cell
     }
   
     inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
@@ -446,6 +444,7 @@ private:
                 
                 if (likely(!meta.Occupy(res.first.slot) ||  // if the slot is not occupied or
                     res.first.equal_key)) {                 // the slot has same key, update the slot
+
                     // update slot content (including pointer and H1), H2 and bitmap
                     updateSlotAndMeta(cell_addr, res.first, media_offset);
                     if (!res.first.equal_key) size_.fetch_add(1, std::memory_order_relaxed);
@@ -487,10 +486,10 @@ private:
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto bucket_meta = locateBucket(bucket_i);
-        ProbeStrategy probe(partial_hash.H1_, bucket_meta.AssociateSize() - 1, bucket_i);
+        ProbeStrategy probe(partial_hash.H1_, bucket_meta.AssociateMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
-        while (probe && probe_count++ < ProbeStrategy::MAX_PROBE_LEN) {
+        while (probe && (probe_count++ < ProbeStrategy::MAX_PROBE_LEN)) {
             auto offset = probe.offset();
             char* cell_addr = locateCell(offset);
             CellMeta meta(cell_addr);
@@ -501,17 +500,17 @@ private:
                 // locate the slot reference
                 const HashSlot& slot = *locateSlot(cell_addr, i);
 
-                if (likely(slot.H1 == partial_hash.H1_)) { // compare if the H1 partial hash is equal (H1 is 16-byte)
-                    if (likely(slotKeyEqual(slot, key))) {      // compare if the slot key is equal
-                        return {{   offset.first,     /* bucket */
-                                    offset.second,    /* associate */
-                                    i,                /* slot */
-                                    partial_hash.H1_, /* H1 */ 
-                                    partial_hash.H2_, /* H2 */
-                                    true},            /* equal_key */
+                if (likely(slot.H1 == partial_hash.H1_)) {  // compare if the H1 partial hash is equal (H1 is 16-byte)
+                    if (likely(slotKeyEqual(slot, key))) {  // compare if the slot key is equal
+                        return {{   offset.first,           /* bucket */
+                                    offset.second,          /* associate */
+                                    i,                      /* slot */
+                                    partial_hash.H1_,       /* H1 */ 
+                                    partial_hash.H2_,       /* H2 */
+                                    true},                  /* equal_key */
                                 true};
                     }
-                    else {                                      // two key is not equal, go to next slot
+                    else {                                  // two key is not equal, go to next slot
                         #ifdef LTHASH_DEBUG_OUT
                         Slice slot_key =  extractSlice(slot, key.size());
                         printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Insert key: %15s, 0x%016lx, Slot key: %15s, 0x%016lx\n", 
@@ -569,10 +568,10 @@ private:
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto bucket_meta = locateBucket(bucket_i);
-        ProbeStrategy probe(partial_hash.H1_,  bucket_meta.AssociateSize() - 1, bucket_i);
+        ProbeStrategy probe(partial_hash.H1_,  bucket_meta.AssociateMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
-        while (probe && probe_count++ < ProbeStrategy::MAX_PROBE_LEN) {
+        while (probe && (probe_count++ < ProbeStrategy::MAX_PROBE_LEN)) {
             auto offset = probe.offset();
             char* cell_addr = locateCell(offset);
             CellMeta meta(cell_addr);

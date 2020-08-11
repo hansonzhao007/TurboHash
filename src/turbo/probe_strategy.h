@@ -22,11 +22,11 @@ public:
         probe_count_     = 0;
     }
     // indicate whether we have already probed all the assocaite cells
-    operator bool() const {
+    inline operator bool() const {
         return probe_count_ < 1;
     }
 
-    void next() {
+    inline void next() {
         associate_index_++;
         // assocaite_index mod AssociateCount, 
         // AssociateMask should be like 0b11
@@ -34,7 +34,7 @@ public:
         probe_count_++;
     }
 
-    std::pair<uint32_t, uint32_t> offset() {
+    inline std::pair<uint32_t, uint32_t> offset() {
         return {bucket_i_, associate_index_};
     }
 
@@ -68,12 +68,13 @@ public:
         associate_index_ = h_ & associate_mask_;
         probe_count_     = 0;
     }
+    
     // indicate whether we have already probed all the assocaite cells
-    operator bool() const {
+    inline operator bool() const {
         return probe_count_ <= associate_mask_;
     }
 
-    void next() {
+    inline void next() {
         associate_index_++;
         // assocaite_index mod AssociateCount, 
         // AssociateMask should be like 0b11
@@ -81,7 +82,7 @@ public:
         probe_count_++;
     }
 
-    std::pair<uint32_t, uint32_t> offset() {
+    inline std::pair<uint32_t, uint32_t> offset() {
         return {bucket_i_, associate_index_};
     }
 

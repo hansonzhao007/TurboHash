@@ -80,10 +80,8 @@ enum ValueType {
 
 class BucketMeta {
 public:
-    explicit BucketMeta(char* addr, uint16_t associate_size)
-        {
-            data_ = ((uint64_t) addr) << 16;
-            data_ |= (associate_size << 1);
+    explicit BucketMeta(char* addr, uint16_t associate_size) {
+        data_ = (((uint64_t) addr) << 16) | ((associate_size - 1) << 1);
     }
 
     BucketMeta():
@@ -93,8 +91,12 @@ public:
         return (char*)(data_ >> 16);
     }
 
+    inline uint16_t AssociateMask() {
+        // extract bit [1, 15]
+        return ((data_ & 0xFFFF) >> 1);
+    }
     inline uint16_t AssociateSize() {
-        return (data_ >> 1) & 0x7FFF;
+        return  (1 << __builtin_popcount(data_ & 0xFFFE));
     }
 
     inline void SetAddress(char* addr) {
@@ -102,16 +104,16 @@ public:
     }
 
     inline void SetAssociateSize(uint16_t size) {
-        data_ = (data_ & 0xFFFFFFFFFFFF0001) | (size << 1);
+        data_ = (data_ & 0xFFFFFFFFFFFF0001) | ((size - 1) << 1);
     }
 
     inline void Reset(char* addr, uint16_t associate_size) {
-        data_ = ((uint64_t) addr) << 16;
-        data_ |= (associate_size << 1);
+        data_ = (((uint64_t) addr) << 16) | ((associate_size - 1) << 1);
     }
 
     // lowest -> highest
-    // | 1 bit lock | 15 bit associate size | 48 bit address |
+    // | 1 bit lock | 15 bit associate mask | 48 bit address |
+    // 15 bit max value is 2^15 - 1, so we assume that real associate size is the 15 bit value + 1.
     uint64_t data_;
 };
 
