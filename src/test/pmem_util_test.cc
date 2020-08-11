@@ -65,7 +65,6 @@ Benchmark(const std::string& path) {
 void Test() {
     Env::Default()->PinCore(0);
     IPMWatcher watcher("profilerWPQ");
-    int interval = 1024;
     auto metric_before = watcher.Profiler();
     PCMMetric pcm_monitor("single");
     uint64_t byte_read = FLAGS_filesize;

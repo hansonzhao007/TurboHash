@@ -47,7 +47,7 @@ int main() {
             size_t loop = 100000;
             while (loop--) {
                 usleep(1);
-                SpinLockScope lock_scope((turbo_bitspinlock*)lock_value);
+                SpinLockScope<0> lock_scope((turbo_bitspinlock*)lock_value);
                 // critical section
                 shared_num++;
                 // turbo_bit_spin_unlock(lock_value, 0);
@@ -65,11 +65,11 @@ int main() {
 
     {
         std::atomic<int> tmp(0);
-        std::vector<std::thread> workers;
-        auto start_time = Env::Default()->NowNanos();
+        std::vector<std::thread> workers2;
+        start_time = Env::Default()->NowNanos();
         for (int i = 0; i < kThreadNum; i++) {
             // each worker add 10000,
-            workers.push_back(std::thread([&shared_num, &tmp, i]() 
+            workers2.push_back(std::thread([&shared_num, &tmp, i]() 
             {   
                 util::Env::Default()->PinCore(kThreadIDs[i]);
                 int loop = 1000000;
@@ -78,11 +78,11 @@ int main() {
                 }
             }));
         }
-        std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
+        std::for_each(workers2.begin(), workers2.end(), [](std::thread &t) 
         {
             t.join();
         });
-        auto end_time = Env::Default()->NowNanos();
+        end_time = Env::Default()->NowNanos();
         printf("fetchadd Speed: %f Mops/s. Add result: %d\n", 
             (double)tmp.load() / (end_time - start_time) * 1000.0,
             tmp.load());

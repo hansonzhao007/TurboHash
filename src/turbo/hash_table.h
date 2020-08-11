@@ -31,10 +31,10 @@ public:
     virtual ~HashTable() {}
     virtual bool Put(const util::Slice& key, const util::Slice& value) = 0;
     virtual bool Get(const std::string& key, std::string* value) = 0;
+    virtual bool Find(const std::string& key, uint64_t& data_offset) = 0;
     virtual void Delete(const Slice& key) = 0;
     virtual double LoadFactor() = 0;
     virtual size_t Size() = 0;
-    virtual void WarmUp() = 0;
     virtual void ReHashAll() = 0;
     virtual void DebugInfo() = 0;
     virtual std::string ProbeStrategyName() = 0;
@@ -67,7 +67,6 @@ public:
         bucket_count_(bucket_count),
         bucket_mask_(bucket_count - 1),
         capacity_(bucket_count * associate_count * CellMeta::SlotSize()),
-        cur_log_offset_(0),
         size_(0) {
         if (!isPowerOfTwo(bucket_count) ||
             !isPowerOfTwo(associate_count)) {
@@ -79,20 +78,11 @@ public:
         buckets_mem_block_ids_ = new int[bucket_count];
         for (size_t i = 0; i < bucket_count; ++i) {
             auto res = mem_allocator_.Allocate(associate_count);
-            buckets_[i].__addr = res.second;
+            memset(res.second, 0, associate_count * kCellSize);
+            buckets_[i].Reset(res.second, associate_count);
             buckets_mem_block_ids_[i] = res.first;
-            memset(buckets_[i].__addr, 0, associate_count * kCellSize);
-            buckets_[i].info.associate_size = associate_count;
         }
         
-        WarmUp();
-    }
-
-    void WarmUp() override {
-        char * addr = nullptr;
-        for (int i = 0; i < 1000; i++) {
-            addr = buckets_[i].__addr;
-        }
     }
 
     void DebugInfo() {
@@ -115,13 +105,14 @@ public:
             {
                 size_t start_b = bucket_count_ / rehash_thread * t;
                 size_t end_b   = start_b + bucket_count_ / rehash_thread;
+                printf("Rehash bucket [%lu, %lu)\n", start_b, end_b);
                 for (size_t i = start_b; i < end_b; ++i) {
                     int old_mem_block_id = buckets_mem_block_ids_[i];
                     auto bucket_meta = locateBucket(i);
                     uint32_t new_associate_size = bucket_meta.AssociateSize() << 1;
 
                     // if current bucket cannot enlarge any more, continue
-                    if (new_associate_size > kAssociateSizeLimit) {
+                    if (unlikely(new_associate_size > kAssociateSizeLimit)) {
                         printf("Cannot rehash bucket %lu\n", i);
                         continue;
                     }
@@ -132,11 +123,9 @@ public:
                         printf("Error\n");
                         exit(1);
                     }
-                    memset(res.second, 0, new_associate_size * kCellSize);
                     counts[t] += Rehash(i, res.second);
                     mem_allocator_.Release(old_mem_block_id);
                     add_capacity[t] += bucket_meta.AssociateSize() * CellMeta::SlotSize();
-                    // capacity_.fetch_add(bucket_meta.AssociateSize() * CellMeta::SlotSize());
                 }
                 
             });
@@ -173,11 +162,9 @@ public:
     }
 
     size_t Rehash(int bi, char* bucket_addr) {
-        // printf("Rehash bucket %d\n", bi);
         size_t count = 0;
-        // rehash bucket bi
         auto bucket_meta = locateBucket(bi);
-        uint32_t old_associate_size = bucket_meta.info.associate_size;
+        uint32_t old_associate_size = bucket_meta.AssociateSize();
 
         // create new bucket and initialize its meta
         uint32_t new_associate_size      = old_associate_size << 1;
@@ -186,22 +173,30 @@ public:
             printf("rehash bucket is not power of 2. %u\n", new_associate_size);
             exit(1);
         }
-        BucketMeta new_bucket_meta;
+        
         char* new_bucket_addr = bucket_addr;
         if (new_bucket_addr == nullptr) {
             perror("rehash alloc memory fail\n");
             exit(1);
         }
-        new_bucket_meta.__addr = new_bucket_addr;
-        // memset(new_bucket_meta.Address(), 0, new_associate_size * kCellSize);
-        new_bucket_meta.info.associate_size = new_associate_size;
+
+        BucketMeta new_bucket_meta(new_bucket_addr, new_associate_size);
+     
+        // reset all cell's meta data
+        for (size_t i = 0; i < new_associate_size; ++i) {
+            char* des_cell_addr = new_bucket_addr + (i << kCellSizeLeftShift);
+            memset(des_cell_addr, 0, CellMeta::size());
+        }
 
         // iterator old bucket and insert slots info to new bucket
         // old: |11111111|22222222|33333333|44444444|   
         //       ========>
         // new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444    |
-        std::vector<uint8_t> slot_vec(new_associate_size, CellMeta::StartSlotPos());
-        BucketIterator<CellMeta> iter(bi, bucket_meta.Address(), bucket_meta.info.associate_size);
+        
+        // record next avaliable slot position of each cell within new bucket for rehash
+        std::vector<uint8_t> slot_vec(new_associate_size, CellMeta::StartSlotPos());   
+        BucketIterator<CellMeta> iter(bi, bucket_meta.Address(), bucket_meta.AssociateSize()); 
+
         while (iter.valid()) { // iterator every slot in this bucket
             count++;
             // obtain old slot info and slot content
@@ -224,6 +219,7 @@ public:
         }
         // replace old bucket meta in buckets_
         buckets_[bi] = new_bucket_meta;
+        // printf("Rehash bucket %d. %lu entries\n", bi, count);
         return count;
     }
 
@@ -248,14 +244,29 @@ public:
         auto res = findSlot(key, hash_value);
         if (res.second) {
             // find a key in hash table
-
-            return true;
+            auto datanode = Media::ParseData(res.first.entry);
+            if (datanode.first  == kTypeValue) {
+                value->assign(datanode.second.second.data(), datanode.second.second.size());
+                return true;
+            }
+            else {
+                // this key has been deleted
+                return false;
+            }
         }
         return false;
     }
 
-    void Delete(const Slice& key) {
+    bool Find(const std::string& key, uint64_t& data_offset) {
+        size_t hash_value = Hasher::hash(key.data(), key.size());
+        auto res = findSlot(key, hash_value);
+        data_offset = res.first.entry;
+        return res.second;
+    }
 
+    void Delete(const Slice& key) {
+        assert(key.size() != 0);
+        printf("%s\n", key.ToString().c_str());
     }
 
     double LoadFactor() {
@@ -288,10 +299,10 @@ public:
             SlotInfo& info = res.first;
             info.bucket = i;
             HashSlot& slot = res.second;
-            auto datanode = Media::ParseData(reinterpret_cast<void*>(slot.meta.entry));
+            auto datanode = Media::ParseData(slot.entry);
             printf("%s, addr: %16lx. key: %.8s, value: %s\n", 
                 info.ToString().c_str(),
-                slot.meta.entry, 
+                slot.entry, 
                 datanode.second.first.ToString().c_str(),
                 datanode.second.second.ToString().c_str());
             ++iter;
@@ -302,15 +313,15 @@ public:
         size_t count = 0;
         for (size_t i = 0; i < bucket_count_; ++i) {
             auto bucket_meta = locateBucket(i);
-            BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.info.associate_size);
+            BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.AssociateSize());
             while (iter.valid()) {
                 auto res = (*iter);
                 SlotInfo& info = res.first;
                 HashSlot& slot = res.second;
-                auto datanode = Media::ParseData(reinterpret_cast<void*>(slot.meta.entry));
+                auto datanode = Media::ParseData(slot.entry);
                 printf("%s, addr: %16lx. key: %.8s, value: %s\n", 
                     info.ToString().c_str(),
-                    slot.meta.entry, 
+                    slot.entry, 
                     datanode.second.first.ToString().c_str(),
                     datanode.second.second.ToString().c_str());
                 ++iter;
@@ -330,7 +341,7 @@ public:
         BucketMeta meta = locateBucket(bucket_i);
         sprintf(buffer, "----- bucket %10u -----\n", bucket_i);
         res += buffer;
-        ProbeStrategy probe(0, meta.AssociateSize() - 1, bucket_i, bucket_count_);
+        ProbeStrategy probe(0, meta.AssociateSize() - 1, bucket_i);
         uint32_t i = 0;
         int count_sum = 0;
         while (probe) {
@@ -366,13 +377,12 @@ private:
     }
 
     inline BucketMeta locateBucket(uint32_t bi) {
-        // return BucketMeta(cells_ + bi * associate_size_ * kCellSize, associate_size_);
         return buckets_[bi];
     }
+
     // offset.first: bucket index
     // offset.second: associate index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
-        // return cells_ + offset.first * associate_size_ * kCellSize + offset.second * kCellSize;
         return  buckets_[offset.first].Address() +  // locate the bucket
                 offset.second * kCellSize;          // locate the associate cell
     }
@@ -400,8 +410,8 @@ private:
 
         // set 2 byte H1 and 6 byte pointer
         HashSlot* slot_pos = locateSlot(cell_addr, info.slot);
-        slot_pos->meta.entry = (uint64_t)media_offset;
-        slot_pos->meta.H1 = info.H1;
+        slot_pos->entry = (uint64_t)media_offset;
+        slot_pos->H1 = info.H1;
        
         // obtain bitmap
         decltype(CellMeta::BitMapType())* bitmap = (decltype(CellMeta::BitMapType())*)cell_addr;
@@ -430,7 +440,7 @@ private:
             if (res.second) { // find a valid slot
                 char* cell_addr = locateCell({res.first.bucket, res.first.associate});
                 
-                SpinLockScope lock_scope((turbo_bitspinlock*)cell_addr); // Lock current cell
+                SpinLockScope<0> lock_scope((turbo_bitspinlock*)cell_addr); // Lock current cell
                 
                 CellMeta meta(cell_addr);   // obtain the meta part
                 
@@ -459,12 +469,12 @@ private:
     }
 
     inline bool slotKeyEqual(const HashSlot& slot, const Slice& key) {
-        Slice res = Media::ParseKey(reinterpret_cast<void*>(slot.meta.entry));
+        Slice res = Media::ParseKey(reinterpret_cast<void*>(slot.entry));
         return res == key;
     }
 
     inline const Slice extractSlice(const HashSlot& slot, size_t len) {
-        return  Media::ParseKey(reinterpret_cast<void*>(slot.meta.entry));
+        return  Media::ParseKey(reinterpret_cast<void*>(slot.entry));
     }
 
     
@@ -477,7 +487,7 @@ private:
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto bucket_meta = locateBucket(bucket_i);
-        ProbeStrategy probe(partial_hash.H1_, bucket_meta.AssociateSize() - 1, bucket_i, bucket_count_);
+        ProbeStrategy probe(partial_hash.H1_, bucket_meta.AssociateSize() - 1, bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && probe_count++ < ProbeStrategy::MAX_PROBE_LEN) {
@@ -491,14 +501,14 @@ private:
                 // locate the slot reference
                 const HashSlot& slot = *locateSlot(cell_addr, i);
 
-                if (likely(slot.meta.H1 == partial_hash.H1_)) { // compare if the H1 partial hash is equal (H1 is 16-byte)
+                if (likely(slot.H1 == partial_hash.H1_)) { // compare if the H1 partial hash is equal (H1 is 16-byte)
                     if (likely(slotKeyEqual(slot, key))) {      // compare if the slot key is equal
-                        return {{   .bucket = offset.first, 
-                                    .associate = offset.second, 
-                                    .slot = i, 
-                                    .H1 = partial_hash.H1_, 
-                                    .H2 = partial_hash.H2_, 
-                                    .equal_key = true /* update existing slot*/}, 
+                        return {{   offset.first,     /* bucket */
+                                    offset.second,    /* associate */
+                                    i,                /* slot */
+                                    partial_hash.H1_, /* H1 */ 
+                                    partial_hash.H2_, /* H2 */
+                                    true},            /* equal_key */
                                 true};
                     }
                     else {                                      // two key is not equal, go to next slot
@@ -523,12 +533,12 @@ private:
             auto empty_bitset = meta.EmptyBitSet(); 
             if (likely(empty_bitset)) {                 
                 for (int i : empty_bitset) { // there is empty slot, return its meta
-                    return {{   .bucket = offset.first, 
-                                .associate = offset.second, 
-                                .slot = i, 
-                                .H1 = partial_hash.H1_, 
-                                .H2 = partial_hash.H2_, 
-                                .equal_key = false /* a new slot */}, 
+                    return {{   offset.first, 
+                                offset.second, 
+                                i, 
+                                partial_hash.H1_, 
+                                partial_hash.H2_, 
+                                false /* a new slot */}, 
                             true};
                 }
             }
@@ -546,42 +556,35 @@ private:
         // only when all the probes fail and there is no empty slot
         // exists in this bucket. 
         return {{
-                    .bucket = bucket_i,
-                    .associate = 0,
-                    .slot = 0, 
-                    .H1 = partial_hash.H1_, 
-                    .H2 = partial_hash.H2_, 
-                    .equal_key = false /* a new slot */},
+                    bucket_i,
+                    0,
+                    0, 
+                    partial_hash.H1_, 
+                    partial_hash.H2_, 
+                    false /* a new slot */},
                 false};
     }
     
-    inline std::pair<SlotInfo, bool> findSlot(const Slice& key, size_t hash_value) {
+    inline std::pair<HashSlot, bool> findSlot(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto bucket_meta = locateBucket(bucket_i);
-        ProbeStrategy probe(partial_hash.H1_,  bucket_meta.AssociateSize() - 1, bucket_i, bucket_count_);
+        ProbeStrategy probe(partial_hash.H1_,  bucket_meta.AssociateSize() - 1, bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && probe_count++ < ProbeStrategy::MAX_PROBE_LEN) {
             auto offset = probe.offset();
             char* cell_addr = locateCell(offset);
             CellMeta meta(cell_addr);
-
             
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell
                                                                 // i is the slot index in current cell, each slot occupies 8-byte
                 // locate the slot reference
                 const HashSlot& slot = *locateSlot(cell_addr, i);
 
-                if (likely(slot.meta.H1 == partial_hash.H1_)) { // Compare if the H1 partial hash is equal.
+                if (likely(slot.H1 == partial_hash.H1_)) { // Compare if the H1 partial hash is equal.
                     if (likely(slotKeyEqual(slot, key))) {      // If the slot key is equal to search key. SlotKeyEqual is very expensive 
-                        return {{   .bucket = offset.first, 
-                                    .assocaite = offset.second, 
-                                    .slot = i, 
-                                    .H1 = partial_hash.H1_, 
-                                    .H2 = partial_hash.H2_, 
-                                    .equal_key = true /* key is equal */} , 
-                                true};
+                        return {slot, true};
                     }
                     else {
                         #ifdef LTHASH_DEBUG_OUT
@@ -594,7 +597,7 @@ private:
                         //     partial_hash.H2_,
                         //     partial_hash.H1_,
                         //     extraceSlice(slot, key.size()).ToString().c_str(),
-                        //     slot.meta.H1
+                        //     slot.H1
                         //     );
                         
                         Slice slot_key =  extractSlice(slot, key.size());
@@ -616,13 +619,13 @@ private:
 
             // if this cell still has empty slot, then it means the key does't exist.
             if (likely(meta.EmptyBitSet())) {
-                return {{}, false};
+                return {{0, 0}, false};
             }
             
             probe.next();
         }
         // after all the probe, no key exist
-        return {{}, false};
+        return {{0, 0}, false};
     }
 
     inline bool isPowerOfTwo(uint32_t n) {
@@ -637,13 +640,6 @@ private:
     const size_t  bucket_mask_  = 0;
     std::atomic<size_t> capacity_;
     std::atomic<size_t> size_;
-    
-
-    // {{{ guarded by spinlock (while loop)
-    uint64_t    log_seq_ = 0;
-    uint16_t    cur_log_id_ = 0;
-    uint32_t    cur_log_offset_ = 0;    // logid2pmem_[cur_log_id_] + cur_log_offset_ : actual address in pmem
-    // }}}
 
     const int       kCellSize = CellMeta::CellSize();
     const int       kCellSizeLeftShift = CellMeta::CellSizeLeftShift;

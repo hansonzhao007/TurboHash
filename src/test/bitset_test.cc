@@ -7,8 +7,6 @@
 
 using namespace util;
 int main() {
-    uint64_t SIZE = 1 << 30;
-    char* large_space = (char*) malloc(SIZE);
 
     turbo::BitSet bitset(0x05);
     for (int i : bitset) {

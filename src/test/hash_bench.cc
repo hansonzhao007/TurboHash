@@ -37,7 +37,7 @@ DEFINE_int32(cell_type, 0, "\
     1: 256 byte cell");
 DEFINE_bool(locate_cell_with_h1, false, "using partial hash h1 to locate cell inside bucket or not");
 // use numactl --hardware command to check numa node info
-static int kThreadIDs[16] = {16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7 };
+// static int kThreadIDs[16] = {16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7 };
 
 class HashBench {
 public:
@@ -68,7 +68,6 @@ public:
         uint64_t i = 0;
         bool res = true;
         auto key_iterator = key_trace_.trace_at(0, max_count_);
-        hashtable->WarmUp();
         
         auto time_start = Env::Default()->NowNanos();
         while (res && i < max_count_) {
@@ -93,7 +92,8 @@ public:
                 workers[t] = std::thread([&, t]
                 {
                     // core function
-                    Env::PinCore(kThreadIDs[t]);
+                    // Env::PinCore(kThreadIDs[t]);
+                    uint64_t data_offset;
                     std::string value;
                     bool res = true;
                     size_t i = 0;
@@ -101,7 +101,7 @@ public:
                     if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
                     auto key_iterator = key_trace_.trace_at(start_offset, inserted_num);
                     while (kRunning && key_iterator.Valid() && res) {
-                        res = hashtable->Get(key_iterator.Next(), &value);
+                        res = hashtable->Find(key_iterator.Next(), data_offset);
                         if ((i++ & 0xFFFFF) == 0) {
                             fprintf(stderr, "thread: %2d reading%*s-%03d->\r", t,  int(i >> 20), " ", int(i >> 20));fflush(stderr);
                         }
@@ -158,7 +158,6 @@ public:
     size_t TurboHashSpeedTest() {
         util::Stats stats;
         turbo::HashTable* hashtable = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
-        hashtable->WarmUp();
         std::string name = "turbo:" + hashtable->ProbeStrategyName();
         size_t max_range = max_count_ * FLAGS_loadfactor;
         {
@@ -168,7 +167,7 @@ public:
             auto time_start = Env::Default()->NowNanos();
             for (int t = 0; t < FLAGS_thread_write; t++) {
                 workers[t] = std::thread([&, t] {
-                    Env::PinCore(kThreadIDs[t]);
+                    // Env::PinCore(kThreadIDs[t]);
                     uint64_t i = 0;
                     bool res = true;
                     size_t start_offset = random() % max_range;
@@ -204,15 +203,15 @@ public:
                     workers[t] = std::thread([&, t]
                     {
                         // core function
-                        Env::PinCore(kThreadIDs[t]);
-                        std::string value;
-                        bool res = true;
+                        // Env::PinCore(kThreadIDs[t]);
+                        uint64_t data_offset;
+                        bool res;
                         size_t i = 0;
                         size_t start_offset = random() % max_range;
                         if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
                         auto key_iterator = key_trace_.trace_at(start_offset, max_range);
                         while (kRunning && key_iterator.Valid() && res) {
-                            res = hashtable->Get(key_iterator.Next(), &value);
+                            res = hashtable->Find(key_iterator.Next(), data_offset);
                             if ((i++ & 0xFFFFF) == 0) {
                                 fprintf(stderr, "thread: %2d reading%*s-%03d->\r", t,  int(i >> 20), " ", int(i >> 20));fflush(stderr);
                             }
@@ -259,7 +258,6 @@ public:
         HashMap map;
         std::string key = "ltkey";
         uint64_t i = 0;
-        bool res = true;
         map.reserve(inserted_num);
         auto key_iterator = key_trace_.trace_at(0, inserted_num);
         auto time_start = Env::Default()->NowNanos();
@@ -282,7 +280,7 @@ public:
             workers[t] = std::thread([&, t]
             {
                 // core function
-                Env::PinCore(kThreadIDs[t]);
+                // Env::PinCore(kThreadIDs[t]);
                 size_t i = 0;
                 auto iter = map.begin();
                 size_t start_offset = random() % inserted_num;
@@ -315,7 +313,6 @@ public:
     void CuckooSpeedTest(const std::string& name, size_t inserted_num) {
         libcuckoo::cuckoohash_map<std::string, std::string> map;
         uint64_t i = 0;
-        bool res = true;
         map.reserve(inserted_num);
         auto key_iterator = key_trace_.trace_at(0, inserted_num);
         auto time_start = Env::Default()->NowNanos();
@@ -337,7 +334,7 @@ public:
             workers[t] = std::thread([&, t]
             {
                 // core function
-                Env::PinCore(kThreadIDs[t]);
+                // Env::PinCore(kThreadIDs[t]);
                 size_t i = 0;
                 std::string out;
                 bool is_find = false;
@@ -393,8 +390,8 @@ public:
 
 private:
     size_t max_count_;
-    std::string value_;
     RandomKeyTrace key_trace_;
+    std::string value_;
     static bool kRunning;
 };
 bool HashBench::kRunning = true;
@@ -404,7 +401,7 @@ int main(int argc, char *argv[]) {
     ParseCommandLineFlags(&argc, &argv, true);
 
     HashBench hash_bench(FLAGS_bucket_size, FLAGS_associate_size, FLAGS_cell_type);
-    size_t inserted_num;
+    size_t inserted_num = 0;
     // inserted_num = hash_bench.TurboHashSpeedTest();
     
     inserted_num = hash_bench.TestRehash();

@@ -34,16 +34,6 @@
 #define _mm_clwb(addr)\
     asm volatile("clwb %0" : "+m" (*(volatile char *)(addr)));
 
-// #define _mm_clflush(addr) \
-//     asm volatile("clflush %0" : "+m" (*(volatile char *)addr));
-// #define _mm_clflushopt(addr)\
-//     asm volatile(".byte 0x66; clflush %0" : "+m" (*(volatile char *)(addr)));
-// #define _mm_clwb(addr) \
-//     asm volatile(".byte 0x66; xsaveopt %0" : "+m" (*(volatile char *)(addr)));
-// #define _mm_pcommit()\
-//     asm volatile(".byte 0x66, 0x0f, 0xae, 0xf8");
-
-// #define FENCE_ALL
 
 namespace util {
 
@@ -72,6 +62,9 @@ MFence() {
     __asm__ __volatile__ ("mfence" ::: "memory");
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 void __attribute__((optimize("O0")))
 ClearCache() {
     static const int size = 20*1024*1024; // Allocate 20M. Set much larger then L3
@@ -257,7 +250,7 @@ Store1024_NT(char* dest, int N = 0) {
 force_inline void
 StoreNKB_NT(char* dest, int N) {
 	// store N KB to dest
-    char* old = dest;
+    // char* old = dest;
 	for (int i = 0; i < N; ++i) {
 		Store1024_NT(dest);
 		dest += 1024;
@@ -352,10 +345,12 @@ Store1024_WB(char* dest, int N = 0) {
     _mm_sfence();
 }
 
+#pragma GCC diagnostic pop
+
 force_inline void
 StoreNKB_WB(char* dest, int N) {
 	// store N KB to dest
-    char* old = dest;
+    // char* old = dest;
 	for (int i = 0; i < N; ++i) {
 		Store1024_WB(dest);
 		dest += 1024;
@@ -429,8 +424,8 @@ struct IPMInfo{
     std::vector<std::string> split(std::string str, std::string token){
         std::vector<std::string>result;
         while(str.size()){
-            int index = str.find(token);
-            if(index!=std::string::npos){
+            size_t index = str.find(token);
+            if(index != std::string::npos){
                 result.push_back(str.substr(0,index));
                 str = str.substr(index+token.size());
                 if(str.size()==0)result.push_back(str);
@@ -483,7 +478,7 @@ public:
     ~IPMWatcher() {
         // uint64_t end_time_ = Env::Default()->NowMicros();
         metrics_after_ = Profiler();
-        for (int i = 0; i < metrics_before_.size(); ++i) {
+        for (size_t i = 0; i < metrics_before_.size(); ++i) {
             auto& info_before = metrics_before_[i];
             auto& info_after  = metrics_after_[i];
             IPMMetric metric(info_before, info_after);
@@ -542,7 +537,7 @@ public:
     WriteAmplificationWatcher(const IPMWatcher& watcher): watcher_(watcher) {
         auto tmp = watcher_.Profiler();
         before_ = watcher_.Profiler();
-        for (int i = 0; i < before_.size(); ++i) {
+        for (size_t i = 0; i < before_.size(); ++i) {
             IPMMetric metric(tmp[i], before_[i]);
             dimm_bias_.push_back(metric.GetByteWriteToDIMM());
             imc_bias_.push_back(metric.GetByteWriteFromIMC());
@@ -552,7 +547,7 @@ public:
 
     ~WriteAmplificationWatcher() {
         after_ = watcher_.Profiler();
-        for (int i = 0; i < before_.size(); ++i) {
+        for (size_t i = 0; i < before_.size(); ++i) {
             IPMMetric metric(before_[i], after_[i]);
             printf("%s. WA(Bias): %2.4f. Write to DIMM: %10lu. Write from IMC: %10lu \n%s. WA(Fix) : %2.4f. Write to DIMM: %10lu. Write from IMC: %10lu \n", 
                 before_[i].dimm_name.c_str(),

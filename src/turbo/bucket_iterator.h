@@ -48,7 +48,7 @@ typedef std::pair<SlotInfo, HashSlot> value_type;
         char* cell_addr = bucket_addr_ + associate_i_ * CellMeta::CellSize();
         HashSlot* slot = (HashSlot*)(cell_addr + slot_index * 8);
         uint8_t H2 = *(uint8_t*)(cell_addr + slot_index);
-        return  { {bi_ /* ignore bucket index */, associate_i_ /* associate index */, *bitmap_ /* slot index*/, (uint16_t)slot->meta.H1, H2, false}, 
+        return  { {bi_ /* ignore bucket index */, associate_i_ /* associate index */, *bitmap_ /* slot index*/, (uint16_t)slot->H1, H2, false}, 
                 *slot};
     }
 

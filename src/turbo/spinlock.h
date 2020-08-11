@@ -98,9 +98,9 @@ inline void turbo_bit_spin_unlock(turbo_bitspinlock *lock, int bit_pos)
     *lock &= ~(1 << bit_pos);
 }
 
+template<int kBitLockPosition>
 class SpinLockScope {
 public:
-    static const int kBitLockPosition = 0;
     SpinLockScope(turbo_bitspinlock *lock):
         lock_(lock) {
         turbo_bit_spin_lock(lock, kBitLockPosition);

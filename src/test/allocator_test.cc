@@ -35,15 +35,15 @@ int main() {
         int block_count = 10;
         MemAllocator<CellMeta128, 65536> allocater(block_count);
         for (int i = 0; i < block_count; i++) {
-            auto res = allocater.Allocate(65536);
-            printf("mem block id: %d\n", res.first);
+            auto tmp = allocater.Allocate(65536);
+            printf("mem block id: %d\n", tmp.first);
         }
         for (int i = 0; i < block_count; i++) {
             allocater.Release(i);
         }
         for (int i = 0; i < block_count; i++) {
-            auto res = allocater.Allocate(65536);
-            printf("mem block id: %d\n", res.first);
+            auto tmp = allocater.Allocate(65536);
+            printf("mem block id: %d\n", tmp.first);
         }
 
     }

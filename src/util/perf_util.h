@@ -1,4 +1,4 @@
-#pragma
+#pragma once
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
@@ -19,7 +19,7 @@ debug_perf_ppid(void)
   // look for "perf record"
   if (nr < 11) return;
   tmp[nr] = '\0';
-  for (int i = 0; i < nr; i++) {
+  for (size_t i = 0; i < nr; i++) {
     if (tmp[i] == 0) tmp[i] = ' '; 
   }
   char * const perf = strstr(tmp, "perf record");

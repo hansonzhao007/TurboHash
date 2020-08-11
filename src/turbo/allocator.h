@@ -40,7 +40,7 @@ public:
         block_id_(block_id) {
         // Allocate memory space for this MemBlock
         size_t space = size_ * CellMeta::CellSize();
-        if (space & 0xfff != 0) {
+        if ((space & 0xfff) != 0) {
             // space is not several times of 4KB
             printf("MemBlock size is not 4KB aligned. %lu", space);
             exit(1);
@@ -145,7 +145,7 @@ public:
     // int: the MemBlock ID
     // char*: address in MemBlock
     inline std::pair<int, char*> Allocate(size_t count) {
-        SpinLockScope lock(&spin_lock_);
+        SpinLockScope<0> lock(&spin_lock_);
         if (cur_mem_block_->Remaining() < count) {
             // if remaining space is not enough, allocate a new MemBlock
             cur_mem_block_ = GetMemBlock();
@@ -160,7 +160,7 @@ public:
     }
 
     inline void Release(int id) {
-        SpinLockScope lock(&spin_lock_);
+        SpinLockScope<0> lock(&spin_lock_);
         auto iter = mem_block_map_.find(id);
         if (iter != mem_block_map_.end()) {
             bool should_recycle = iter->second->Release();
@@ -171,7 +171,7 @@ public:
     }
 
     inline std::pair<int, char*> AllocateAndRelease(size_t count, int id) {
-        SpinLockScope lock(&spin_lock_);
+        SpinLockScope<0> lock(&spin_lock_);
 
         if (cur_mem_block_->Remaining() < count) {
             // if remaining space is not enough, allocate a new MemBlock

@@ -50,36 +50,36 @@ constexpr bool kLittleEndian = true;
 
 
 
-static inline bool atomic_compare_exchange(int* ptr, int compare, int exchange) {
-    return __atomic_compare_exchange_n(ptr, &compare, exchange,
-            0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
-}
+// static inline bool atomic_compare_exchange(int* ptr, int compare, int exchange) {
+//     return __atomic_compare_exchange_n(ptr, &compare, exchange,
+//             0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+// }
 
-static inline void atomic_store(int* ptr, int value) {
-    __atomic_store_n(ptr, 0, __ATOMIC_SEQ_CST);
-}
+// static inline void atomic_store(int* ptr, int value) {
+//     __atomic_store_n(ptr, 0, __ATOMIC_SEQ_CST);
+// }
 
-static inline int atomic_add_fetch(int* ptr, int d) {
-    return __atomic_add_fetch(ptr, d, __ATOMIC_SEQ_CST);
-}
+// static inline int atomic_add_fetch(int* ptr, int d) {
+//     return __atomic_add_fetch(ptr, d, __ATOMIC_SEQ_CST);
+// }
 
 
-class SpinLock {
-public:
-  SpinLock() {
-    locked_ = 0;
-  }
-  inline void Lock() {
-      while (!atomic_compare_exchange(&locked_, 0, 1)) {
-      }
-  }
-  inline void Unlock() {
-      atomic_store(&locked_, 0);
-  }
+// class SpinLock {
+// public:
+//   SpinLock() {
+//     locked_ = 0;
+//   }
+//   inline void Lock() {
+//       while (!atomic_compare_exchange(&locked_, 0, 1)) {
+//       }
+//   }
+//   inline void Unlock() {
+//       atomic_store(&locked_, 0);
+//   }
 
-private:
-  int locked_;
-};
+// private:
+//   int locked_;
+// };
 
 class CondVar;
 

@@ -2,7 +2,7 @@
 #include "util/io_report.h"
 
 #include "test_util.h"
-const uint64_t KEY_COUNT = 80000000;;
+const uint64_t KEY_COUNT = 80000000;
 using namespace util;
 int main() {
     char str[128] = "1234567890";
@@ -62,7 +62,7 @@ int main() {
         for (i = 0; key_iterator.Valid(); i++) {
             const std::string& k = key_iterator.Next();
             if ((i & 0xFFFFF) == 0) {
-                fprintf(stderr, "iteration %*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+                fprintf(stderr, "iteration %*s-%03d->. key: %s\r", int(i >> 20), " ", int(i >> 20), k.c_str());fflush(stderr);
             }
         }
         time_end = Env::Default()->NowMicros();

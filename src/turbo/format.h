@@ -10,30 +10,15 @@ namespace turbo {
 using Status = util::Status;
 using Slice = util::Slice;
 
-union HashSlot
-{
-    /* data */
-    struct {
-        uint64_t ptr:48;
-        uint64_t  H1:16;
-    } dram;
-
-    struct {
-        uint32_t offset;
-        uint16_t log_id;
-        uint16_t H1;
-    } pmm;
-
-    struct {
-        uint64_t entry:48;
-        uint64_t H1:16;
-    } meta;
+struct HashSlot{
+    uint64_t entry:48;
+    uint64_t H1:16;
 };
 
 // 64 bit hash function is used to locate initial position of keys
 // bucket_hash_: index within each bucket
-// H2: 1 byte hash for parallel comparison
 // H1: 2 byte partial key
+// H2: 1 byte hash for parallel comparison
 #define BUCKET_H_SIZE uint32_t
 #define LTHASH_H3_SIZE uint8_t
 #define LTHASH_H2_SIZE uint8_t 
@@ -57,8 +42,8 @@ public:
     uint32_t bucket;        // bucket index
     uint16_t associate;     // associate index
     uint8_t  slot;          // slot index
-    LTHASH_H2_SIZE H2;
     LTHASH_H1_SIZE H1;
+    LTHASH_H2_SIZE H2;
     bool equal_key;
     SlotInfo(uint32_t b, uint32_t a, int s, LTHASH_H1_SIZE h1, LTHASH_H2_SIZE h2, bool euqal):
         bucket(b),
@@ -95,26 +80,39 @@ enum ValueType {
 
 class BucketMeta {
 public:
-    BucketMeta(char* addr, uint16_t associate_size):
-        __addr(addr)
+    explicit BucketMeta(char* addr, uint16_t associate_size)
         {
-            info.associate_size = associate_size;
+            data_ = ((uint64_t) addr) << 16;
+            data_ |= (associate_size << 1);
     }
-    BucketMeta(){}
+
+    BucketMeta():
+        data_(0) {}
+    
     inline char* Address() {
-        return (char*)(uint64_t(__addr) & 0x0000FFFFFFFFFFFF);
+        return (char*)(data_ >> 16);
     }
+
     inline uint16_t AssociateSize() {
-        return info.associate_size;
+        return (data_ >> 1) & 0x7FFF;
     }
-    union {
-        char* __addr;
-        struct {
-            uint32_t none0;
-            uint16_t none1;
-            uint16_t associate_size;
-        } info;
-    };
+
+    inline void SetAddress(char* addr) {
+        data_ = (data_ & 0xFFFF) | (((uint64_t)addr) << 16);
+    }
+
+    inline void SetAssociateSize(uint16_t size) {
+        data_ = (data_ & 0xFFFFFFFFFFFF0001) | (size << 1);
+    }
+
+    inline void Reset(char* addr, uint16_t associate_size) {
+        data_ = ((uint64_t) addr) << 16;
+        data_ |= (associate_size << 1);
+    }
+
+    // lowest -> highest
+    // | 1 bit lock | 15 bit associate size | 48 bit address |
+    uint64_t data_;
 };
 
 

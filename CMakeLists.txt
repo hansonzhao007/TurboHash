@@ -4,11 +4,6 @@ project (pmem VERSION 0.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# include(CheckCXXCompilerFlag)
-# CHECK_CXX_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
-# if(COMPILER_SUPPORTS_MARCH_NATIVE)
-#     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
-# endif()
 
 # default using release mode
 if(NOT CMAKE_BUILD_TYPE)
@@ -35,19 +30,37 @@ include_directories(
     "${CMAKE_BINARY_DIR}/lib/abseil-cpp"
 )
 
+if(CMAKE_COMPILER_IS_GNUCXX)
+    execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion
+                    OUTPUT_VARIABLE GCC_VERSION)
+    if(GCC_VERSION VERSION_GREATER 7.5 OR GCC_VERSION VERSION_EQUAL 7.5)
+        set(CMAKE_CXX_FLAGS "-Wall -Wextra ") #-Wpedantic")
+    else(GCC_VERSION VERSION_GREATER 7.5 OR GCC_VERSION VERSION_EQUAL 7.5)
+        set(CMAKE_CXX_FLAGS "-Wall -Wextra ") # -pedantic")
+    endif(GCC_VERSION VERSION_GREATER 7.5 OR GCC_VERSION VERSION_EQUAL 7.5)
+endif(CMAKE_COMPILER_IS_GNUCXX)
+if(CMAKE_CXX_COMPILER MATCHES "clang")
+    set(CMAKE_CXX_FLAGS "-Wall -Wextra -pedantic")
+endif(CMAKE_CXX_COMPILER MATCHES "clang")
+
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
+if(COMPILER_SUPPORTS_MARCH_NATIVE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+endif()
+
 # add pthread support
 find_package(Threads REQUIRED)
-set(CMAKE_CXX_FLAGS "-pthread")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
 # add avx512 sse2 sse3 support
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -mavx -mavx512f -msse -msse2 -msse3 -march=native -Wall")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -mavx -mavx512f -msse -msse2 -msse3")
 
 # check existence of jemalloc
 include(CheckIncludeFile)
 check_include_file("jemalloc/jemalloc.h" HAVE_JEMALLOC)
 if(HAVE_JEMALLOC)
   add_definitions(-DJEMALLOC)
-  message("has jemalloc")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -ljemalloc ")
 endif()
 

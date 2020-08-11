@@ -39,18 +39,18 @@ public:
         return buffer;
     }
 
-    static inline void* Delete(const util::Slice& key, char* addr) {
-        ValueType type = kTypeValue;
-        size_t key_len = key.size();
-        char* buffer = (char*)malloc(FormatRecordSize(type, key, ""));
-        // store value type
-        memcpy(buffer, &type, 1);
-        // store key len
-        memcpy(buffer + 1, &key_len, 4);
-        // store key
-        memcpy(buffer + 5, key.data(), key_len);
-        return buffer;
-    }
+    // static inline void* Delete(const util::Slice& key, char* addr) {
+    //     ValueType type = kTypeValue;
+    //     size_t key_len = key.size();
+    //     char* buffer = (char*)malloc(FormatRecordSize(type, key, ""));
+    //     // store value type
+    //     memcpy(buffer, &type, 1);
+    //     // store key len
+    //     memcpy(buffer + 1, &key_len, 4);
+    //     // store key
+    //     memcpy(buffer + 5, key.data(), key_len);
+    //     return buffer;
+    // }
 
     static inline util::Slice ParseKey(const void* _addr) {
         char* addr = (char*) _addr;
@@ -60,8 +60,8 @@ public:
     }
 
 
-    static inline std::pair<ValueType, std::pair<util::Slice, util::Slice> > ParseData(const void* _addr) {
-        char* addr = (char*) _addr;
+    static inline std::pair<ValueType, std::pair<util::Slice, util::Slice> > ParseData(uint64_t offset) {
+        char* addr = (char*) offset;
         ValueType type = kTypeValue;
         uint32_t key_len = 0;
         uint32_t value_len = 0;
@@ -76,8 +76,8 @@ public:
             printf("Prase type incorrect: %d\n", type);
             exit(1);
         }
-        
     }
+
 };
 
 

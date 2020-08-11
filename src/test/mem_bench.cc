@@ -75,7 +75,7 @@ DEFINE_int64(filesize, 2ULL << 30, "default file size");
 DEFINE_int32(block_size, 256, "unit size");
 DEFINE_int32(offset_interval, -1, "offset set interval unit, if not set, will equal to block_size");
 DEFINE_int32(thread, 8, "thread num");
-DEFINE_int32(num, 100000000, "number of operations");
+DEFINE_uint32(num, 100000000, "number of operations");
 
 // XPBuffer profiling
 DEFINE_int32(n_end, 1024, "maximum interval size, uint: 256 byte");
@@ -161,9 +161,10 @@ double FillRandomWB(uint64_t block_size, int thread_index, int thread_num) {
         func = Store256_WB;
     } else if (512 == block_size) {
         func = Store512_WB;
-    } else if (
-        block_size % 1024 == 0 &&
-        block_size > 0) {
+    } else // if (
+        // block_size % 1024 == 0 &&
+        //block_size > 0) 
+    {
         func = StoreNKB_WB;
     }
 
@@ -334,7 +335,6 @@ void XPBufferSizeProfiler() {
         int64_t left_byte = 100 << 20;
         IPMWatcher watcher("bench_matrix");
         auto start = watcher.Profiler();
-        auto time_start = Env::Default()->NowMicros();
         while (repeat-- > 0 && left_byte > 0) {
             for (int i = 0; i < N; ++i) {
                 // update first 64 byte
@@ -858,15 +858,15 @@ void BenchMatrix(BenchType bench_type) {
         // print read result for all block size
         printf("\033[32m\nMode: matrix\nFinal Results (%s. %2d threads. PMDK: %s)\033[0m\n", DecodeTypeToString(bench_type).c_str(), thread_num, FLAGS_pmdk ? "true" : "false");
         printf("\033[34m\n");
-        for (int i = 0; i < kBufferVector.size(); ++i) {
+        for (size_t i = 0; i < kBufferVector.size(); ++i) {
             printf("|-- %7lu B --", kBufferVector[i]);
         }
         printf("|\n");
-        for (int i = 0; i < kBufferVector.size(); i++) {
+        for (size_t i = 0; i < kBufferVector.size(); i++) {
             printf("|%10.1f MB/s", read_throughputs[i]);
         }
         printf("| Read\n");
-        for (int i = 0; i < kBufferVector.size(); i++) {
+        for (size_t i = 0; i < kBufferVector.size(); i++) {
             printf("|%10.1f MB/s", write_throughputs[i]);
         }
         printf("| Write\033[0m\n");
@@ -879,29 +879,29 @@ void BenchMatrix(BenchType bench_type) {
     printf("\033[32m\nMode: matrix\nResults Matrix (%s.)\033[0m\n", DecodeTypeToString(bench_type).c_str());
     // print read matrix
     printf("\033[34m Read Matrix:\n");
-    for (int i = 0; i < kBufferVector.size(); ++i) {
+    for (size_t i = 0; i < kBufferVector.size(); ++i) {
         printf("|-- %7lu B --", kBufferVector[i]);
     }
     printf("|\n");
-    for (int t = 0; t < result_matrix_read.size(); ++t) {
-        for (int i = 0; i < kBufferVector.size(); i++) {
+    for (size_t t = 0; t < result_matrix_read.size(); ++t) {
+        for (size_t i = 0; i < kBufferVector.size(); i++) {
             printf("|%10.1f MB/s", result_matrix_read[t][i]);
         }
-        printf("| %2d\n", t + 1);
+        printf("| %2lu\n", t + 1);
     }
     printf("|\033[0m\n");
 
     // print write matrix
     printf("\033[34m Write Matrix:\n");
-    for (int i = 0; i < kBufferVector.size(); ++i) {
+    for (size_t i = 0; i < kBufferVector.size(); ++i) {
         printf("|-- %7lu B --", kBufferVector[i]);
     }
     printf("|\n");
-    for (int t = 0; t < result_matrix_write.size(); ++t) {
-        for (int i = 0; i < kBufferVector.size(); i++) {
+    for (size_t t = 0; t < result_matrix_write.size(); ++t) {
+        for (size_t i = 0; i < kBufferVector.size(); i++) {
             printf("|%10.1f MB/s", result_matrix_write[t][i]);
         }
-        printf("| %2d\n", t + 1);
+        printf("| %2lu\n", t + 1);
     }
     printf("|\033[0m\n");
 
@@ -1008,11 +1008,11 @@ void BenchAllThread(BenchType bench_type, uint64_t block_size) {
         printf("|---- %3d ----", i+1);
     }
     printf("|\n");
-    for (int i = 0; i < results_read.size(); i++) {
+    for (size_t i = 0; i < results_read.size(); i++) {
         printf("|%8.1f MB/s", results_read[i]);
     }
     printf("| Read\n");
-    for (int i = 0; i < results_write.size(); i++) {
+    for (size_t i = 0; i < results_write.size(); i++) {
         printf("|%8.1f MB/s", results_write[i]);
     }
     printf("| Write\033[0m\n");
@@ -1066,15 +1066,15 @@ void BenchAllBlockSize(BenchType bench_type, int thread_num) {
     // print result for all block size
     printf("\033[32m\nMode: row_block\nFinal Results (%s. %2d threads. PMDK: %s)\033[0m\n", DecodeTypeToString(bench_type).c_str(), thread_num, FLAGS_pmdk ? "true" : "false");
     printf("\033[34m");
-    for (int i = 0; i < kBufferVector.size(); ++i) {
+    for (size_t i = 0; i < kBufferVector.size(); ++i) {
         printf("|-- %7lu B --", kBufferVector[i]);
     }
     printf("|\n");
-    for (int i = 0; i < kBufferVector.size(); i++) {
+    for (size_t i = 0; i < kBufferVector.size(); i++) {
         printf("|%10.1f MB/s", throughputs_read[i]);
     }
     printf("| Read\n");
-    for (int i = 0; i < kBufferVector.size(); i++) {
+    for (size_t i = 0; i < kBufferVector.size(); i++) {
         printf("|%10.1f MB/s", throughputs_write[i]);
     }
     printf("| Write\033[0m\n");

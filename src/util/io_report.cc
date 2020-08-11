@@ -72,7 +72,7 @@ void Stats::PrintSpeed(int64_t done, uint64_t now) {
 }
 
 void Stats::FinishedSingleOp() {
-    int64_t done = done_.fetch_add(1, std::memory_order_relaxed);
+    uint64_t done = done_.fetch_add(1, std::memory_order_relaxed);
     uint64_t now = Env::Default()->NowNanos();
     if (done >= next_report_) {
         if      (next_report_ < 1000)   next_report_ += 100;

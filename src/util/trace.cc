@@ -365,7 +365,7 @@ struct itostr_helper {
 } hlp_init;
 unsigned itostr_helper::out[10000];
 
-std::string itostr(uint64_t o) {
+std::string itostr(int64_t o) {
 	typedef itostr_helper hlp;
     static unsigned blocks[3];
 	unsigned *b = blocks + 2;

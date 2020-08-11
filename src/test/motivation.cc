@@ -26,6 +26,9 @@ uint64_t wyhash64() {
 
 const uint64_t MASK64 = (~(UINT64_C(63)));
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 inline void // __attribute__((optimize("O0"),always_inline))
 RndAccess(char* addr, uint64_t size_mask) {
     uint64_t off = wyhash64() & size_mask;
@@ -35,7 +38,7 @@ RndAccess(char* addr, uint64_t size_mask) {
         volatile char tmp = *(addr + off);
         off += 64;
     }
-};
+}
 
 inline void  // __attribute__((optimize("O0"),always_inline))
 ConAccess(char* addr, uint64_t size_mask) {
@@ -58,7 +61,7 @@ RndWrite(char* addr, uint64_t size_mask) {
         memset(addr + off, 32, 8);
         off += 64;
     }
-};
+}
 
 inline void  // __attribute__((optimize("O0"),always_inline))
 ConWrite(char* addr, uint64_t size_mask) {
@@ -71,9 +74,9 @@ ConWrite(char* addr, uint64_t size_mask) {
         off += 64;
     }
 }
+#pragma GCC diagnostic pop
 
 void AccessCacheLineSize() {
-    char buffer[64];
     const uint64_t repeat = 5000000;
     const uint64_t size = 8LU << 30;
     uint64_t size_mask = (size - 1) & MASK64;

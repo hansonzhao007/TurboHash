@@ -42,6 +42,8 @@ public:
         return c*xorshift(p*xorshift(n,32),32);
     }
     
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
     static inline uint64_t MurmurHash64A ( const void * key, int len)
     {
         const uint64_t m = UINT64_C(0xc6a4a7935bd1e995);
@@ -85,6 +87,7 @@ public:
 
         return h;
     }
+#pragma GCC diagnostic pop
 };
 
 }

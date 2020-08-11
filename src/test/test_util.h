@@ -44,7 +44,6 @@ std::string* GenerateAllKeysInRange(size_t min, size_t max) {
 class RandomKeyTrace {
 public:
     RandomKeyTrace(size_t count) {
-        seed_  = 31415926;
         count_ = count;
         keys_ = GenerateRandomKeys(0, 3000000000L, count_);
     }
@@ -55,7 +54,7 @@ public:
 
     class Iterator {
     public:
-        Iterator(std::string* keys, size_t start_index, size_t range, int seed):
+        Iterator(std::string* keys, size_t start_index, size_t range):
             keys_(keys),
             range_(range),                        
             end_index_(start_index % range_), 
@@ -66,7 +65,7 @@ public:
         }
 
         inline bool Valid() {
-            return begin_ || cur_index_ != end_index_;
+            return (begin_ || cur_index_ != end_index_);
         }
 
         inline std::string& Next() {
@@ -92,11 +91,9 @@ public:
     };
 
     Iterator trace_at(size_t start_index, size_t range) {
-        return Iterator(keys_, start_index, range, seed_);
+        return Iterator(keys_, start_index, range);
     }
     
-
-    int seed_;
     size_t count_;
     std::string* keys_;
 };

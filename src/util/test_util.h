@@ -36,7 +36,9 @@ class RandomGenerator {
   int pos_;
 
  public:
-  RandomGenerator() {
+  RandomGenerator():
+    data_(""),
+    pos_(0) {
     // We use a limited amount of data over and over again and ensure
     // that it is larger than the compression window (32KB), and also
     // large enough to serve all typical value sizes we want to write.

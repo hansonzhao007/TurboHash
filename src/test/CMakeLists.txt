@@ -7,7 +7,7 @@ db_test(allocator_test)
 # run as sudo
 db_test(pmem_util_test)
 
-db_exe(string_convert)
+# db_exe(string_convert)
 db_exe(hash_bench)
 db_exe(mem_bench)
 db_exe(motivation)

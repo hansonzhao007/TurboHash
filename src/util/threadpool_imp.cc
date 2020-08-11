@@ -177,8 +177,8 @@ void ThreadPoolImpl::Impl::LowerCPUPriority() {
 }
 
 void ThreadPoolImpl::Impl::BGThread(size_t thread_id) {
-  bool low_io_priority = false;
-  bool low_cpu_priority = false;
+  // bool low_io_priority = false;
+  // bool low_cpu_priority = false;
 
   while (true) {
     // Wait until there is an item that is ready to run
@@ -218,8 +218,8 @@ void ThreadPoolImpl::Impl::BGThread(size_t thread_id) {
     queue_len_.store(static_cast<unsigned int>(queue_.size()),
                      std::memory_order_relaxed);
 
-    bool decrease_io_priority = (low_io_priority != low_io_priority_);
-    bool decrease_cpu_priority = (low_cpu_priority != low_cpu_priority_);
+    // bool decrease_io_priority = (low_io_priority != low_io_priority_);
+    // bool decrease_cpu_priority = (low_cpu_priority != low_cpu_priority_);
     lock.unlock();
     
     func();

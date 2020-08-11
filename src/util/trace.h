@@ -172,7 +172,7 @@ std::vector<YCSB_Op> YCSB_LoadGenerate(int64_t range, uint64_t max_num, YCSBLoad
 
 // https://stackoverflow.com/questions/4351371/c-performance-challenge-integer-to-stdstring-conversion
 struct itostr_helper;
-std::string itostr(uint64_t o);
+std::string itostr(int64_t o);
 
 class RandomString {
 public:
