@@ -35,7 +35,7 @@ public:
     virtual void Delete(const Slice& key) = 0;
     virtual double LoadFactor() = 0;
     virtual size_t Size() = 0;
-    virtual void ReHashAll() = 0;
+    virtual void MinorReHashAll() = 0;
     virtual void DebugInfo() = 0;
     virtual std::string ProbeStrategyName() = 0;
 };
@@ -77,7 +77,7 @@ public:
         buckets_ = new BucketMeta[bucket_count];
         buckets_mem_block_ids_ = new int[bucket_count];
         for (size_t i = 0; i < bucket_count; ++i) {
-            auto res = mem_allocator_.Allocate(associate_count);
+            auto res = mem_allocator_.AllocateNoSafe(associate_count);
             memset(res.second, 0, associate_count * kCellSize);
             buckets_[i].Reset(res.second, associate_count);
             buckets_mem_block_ids_[i] = res.first;
@@ -92,9 +92,33 @@ public:
         return mem_allocator_.ToString();
     }
 
-    void ReHashAll() override {
+    void MinorReHashAll() override {
+        // allocate new mem space together
+        int* old_mem_block_ids = (int*)malloc(bucket_count_ * sizeof(int));
+        char** new_mem_block_addr = (char**)malloc(bucket_count_ * sizeof(char*));
+        for (size_t i = 0; i < bucket_count_; ++i) {
+            auto bucket_meta = locateBucket(i);
+            uint32_t new_associate_size = bucket_meta.AssociateSize() << 1;
+            // if current bucket cannot enlarge any more, continue
+            if (unlikely(new_associate_size > kAssociateSizeLimit)) {
+                printf("Cannot rehash bucket %lu\n", i);
+                continue;
+            }
+            auto res = mem_allocator_.AllocateNoSafe(new_associate_size);
+            if (res.second == nullptr) {
+                printf("Error\n");
+                exit(1);
+            }
+            old_mem_block_ids[i] = buckets_mem_block_ids_[i];
+            buckets_mem_block_ids_[i] = res.first;
+            new_mem_block_addr[i] = res.second;
+            capacity_.fetch_add(bucket_meta.AssociateSize() * CellMeta::SlotSize());
+            // printf("bucket %lu. Allocate address: 0x%lx. size: %lu\n", i, res.second, new_associate_size);
+        }
+
+        // rehash for all the buckets
         int rehash_thread = 4;
-        printf("Rehash threads: %d\n", rehash_thread);
+        // printf("Rehash threads: %d\n", rehash_thread);
         std::vector<std::thread> workers(rehash_thread);
         std::vector<size_t> counts(rehash_thread, 0);
         std::vector<size_t> add_capacity(rehash_thread, 0);
@@ -103,27 +127,9 @@ public:
             {
                 size_t start_b = bucket_count_ / rehash_thread * t;
                 size_t end_b   = start_b + bucket_count_ / rehash_thread;
-                printf("Rehash bucket [%lu, %lu)\n", start_b, end_b);
+                // printf("Rehash bucket [%lu, %lu)\n", start_b, end_b);
                 for (size_t i = start_b; i < end_b; ++i) {
-                    int old_mem_block_id = buckets_mem_block_ids_[i];
-                    auto bucket_meta = locateBucket(i);
-                    uint32_t new_associate_size = bucket_meta.AssociateSize() << 1;
-
-                    // if current bucket cannot enlarge any more, continue
-                    if (unlikely(new_associate_size > kAssociateSizeLimit)) {
-                        printf("Cannot rehash bucket %lu\n", i);
-                        continue;
-                    }
-
-                    auto res = mem_allocator_.Allocate(new_associate_size);
-                    buckets_mem_block_ids_[i] = res.first;
-                    if (res.second == nullptr) {
-                        printf("Error\n");
-                        exit(1);
-                    }
-                    counts[t] += Rehash(i, res.second);
-                    mem_allocator_.Release(old_mem_block_id);
-                    add_capacity[t] += bucket_meta.AssociateSize() * CellMeta::SlotSize();
+                    counts[t] += MinorRehash(i, new_mem_block_addr[i]);
                 }
                 
             });
@@ -132,9 +138,16 @@ public:
         {
             t.join();
         });
+
+        // release the old mem block space
+        for (size_t i = 0; i < bucket_count_; ++i) {
+            mem_allocator_.ReleaseNoSafe(old_mem_block_ids[i]);
+        }
+
         size_t rehash_count = std::accumulate(counts.begin(), counts.end(), 0);
-        size_t add_capacitys = std::accumulate(add_capacity.begin(), add_capacity.end(), 0);
-        capacity_.fetch_add(add_capacitys);
+
+        free(old_mem_block_ids);
+        free(new_mem_block_addr);
         printf("Rehash %lu entries\n", rehash_count);
     }
 
@@ -159,7 +172,7 @@ public:
         return {ai, slot_vec[ai]++};
     }
 
-    size_t Rehash(int bi, char* bucket_addr) {
+    size_t MinorRehash(int bi, char* bucket_addr) {
         size_t count = 0;
         auto bucket_meta = locateBucket(bi);
         uint32_t old_associate_size = bucket_meta.AssociateSize();
@@ -177,7 +190,9 @@ public:
             perror("rehash alloc memory fail\n");
             exit(1);
         }
-
+        // printf("bucket: %d. old addr: 0x%lx, new addr: 0x%lx. new size: %u\n",
+        //         bi, bucket_meta.Address(), new_bucket_addr, new_associate_size);
+                
         BucketMeta new_bucket_meta(new_bucket_addr, new_associate_size);
      
         // reset all cell's meta data
@@ -268,7 +283,7 @@ public:
     }
 
     double LoadFactor() {
-        return (double) size_.load(std::memory_order_relaxed) / capacity_;
+        return (double) size_.load(std::memory_order_relaxed) / capacity_.load(std::memory_order_relaxed);
     }
 
     size_t Size() { return size_.load(std::memory_order_relaxed);}

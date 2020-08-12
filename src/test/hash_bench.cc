@@ -126,25 +126,25 @@ public:
 
         printf("Start Rehashing\n");
         time_start = Env::Default()->NowNanos();
-        hashtable->ReHashAll();
+        hashtable->MinorReHashAll();
         time_end   = Env::Default()->NowNanos();
         printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
         read_fun();
 
         time_start = Env::Default()->NowNanos();
-        hashtable->ReHashAll();
+        hashtable->MinorReHashAll();
         time_end   = Env::Default()->NowNanos();
         printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
         read_fun();
 
         time_start = Env::Default()->NowNanos();
-        hashtable->ReHashAll();
+        hashtable->MinorReHashAll();
         time_end   = Env::Default()->NowNanos();
         printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
         read_fun();
 
         time_start = Env::Default()->NowNanos();
-        hashtable->ReHashAll();
+        hashtable->MinorReHashAll();
         time_end   = Env::Default()->NowNanos();
         printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
         read_fun();

@@ -144,7 +144,21 @@ public:
     // Return:
     // int: the MemBlock ID
     // char*: address in MemBlock
-    inline std::pair<int, char*> Allocate(size_t count) {
+    inline std::pair<int, char*> AllocateNoSafe(size_t count) {
+        if (cur_mem_block_->Remaining() < count) {
+            // if remaining space is not enough, allocate a new MemBlock
+            cur_mem_block_ = GetMemBlock();
+        }
+        char* addr = cur_mem_block_->Allocate(count);
+        if (addr == nullptr) {
+            fprintf(stderr, "MemAllocator::Allocate addr is nullptr\n");
+            exit(1);
+        }
+        
+        return {cur_mem_block_->ID(), addr};
+    }
+
+    inline std::pair<int, char*> AllocateSafe(size_t count) {
         SpinLockScope<0> lock(&spin_lock_);
         if (cur_mem_block_->Remaining() < count) {
             // if remaining space is not enough, allocate a new MemBlock
@@ -159,8 +173,7 @@ public:
         return {cur_mem_block_->ID(), addr};
     }
 
-    inline void Release(int id) {
-        SpinLockScope<0> lock(&spin_lock_);
+    inline void ReleaseNoSafe(int id) {
         auto iter = mem_block_map_.find(id);
         if (iter != mem_block_map_.end()) {
             bool should_recycle = iter->second->Release();
@@ -170,19 +183,8 @@ public:
         }
     }
 
-    inline std::pair<int, char*> AllocateAndRelease(size_t count, int id) {
+    inline void ReleaseSafe(int id) {
         SpinLockScope<0> lock(&spin_lock_);
-
-        if (cur_mem_block_->Remaining() < count) {
-            // if remaining space is not enough, allocate a new MemBlock
-            cur_mem_block_ = GetMemBlock();
-        }
-        char* addr = cur_mem_block_->Allocate(count);
-        if (addr == nullptr) {
-            fprintf(stderr, "MemAllocator::Allocate addr is nullptr\n");
-            exit(1);
-        }
-
         auto iter = mem_block_map_.find(id);
         if (iter != mem_block_map_.end()) {
             bool should_recycle = iter->second->Release();
@@ -190,10 +192,8 @@ public:
                 RecycleMemBlock(iter->second);
             }
         }
-
-        return {cur_mem_block_->ID(), addr};
     }
-
+    
     std::string ToString() {
         std::string res;
         for (auto& mb : mem_block_map_) {
