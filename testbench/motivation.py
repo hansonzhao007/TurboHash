@@ -2,6 +2,9 @@
 import csv
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
+                               AutoMinorLocator)
 # import matplotlib as mpl
 plt.rcParams["font.family"] = "serif"
 data = pd.read_csv('motivation1.csv', skipinitialspace=True)
@@ -28,60 +31,66 @@ data['seq_w_l1_miss_ratio'] = data.seq_w_l1_miss / data.seq_w_l1_load
 data['seq_w_tlb_miss_ratio'] = data.seq_w_tlb_miss / data.seq_w_tlb_load
 
 
-
-def PlotMiss(data, lines, latency, filename):
+def PlotMiss(data, lines, latency, filename, islog):
     markers = ['x', '+', '.', 'o']
-    colors = ['#2077B4', '#FF7F0E', '#2CA02C', '#D62728']
-    styles = ['bs-','rs--','b+-','r+--']
-    fig, ax = plt.subplots()
+    colors = ('#2077B4', '#FF7F0E', '#2CA02C', '#D62728')
+    styles = ['bs-','rs--','bd-','rd--']
+    fig, ax = plt.subplots(figsize=(4, 3.6))
     ax2 = ax.twinx()
-    data[latency].plot.bar(ax=ax2, alpha=0.8, zorder=-10, color=("white", "white"), edgecolor='k', fontsize=12)
+
+    # plot bar
+    data[latency].plot.bar(ax=ax2, alpha=0.8, color=("white", "white"), edgecolor='k', fontsize=12)
     bars = ax2.patches
     hatches = ''.join(h*len(data) for h in 'x .')
     for bar, hatch in zip(bars, hatches):
         bar.set_hatch(hatch)
-    ax2.legend(bbox_to_anchor=[1.08, 1.1], loc='center right', ncol=1, edgecolor='white')
-    ax2.set_ylabel('lentency(ns)', fontsize=16)
-
-    data[lines].plot(ax=ax, style=styles, fillstyle='none', markersize=12, zorder=1000,fontsize=12)
-    ax.legend(bbox_to_anchor=[-0.08, 1.1], loc='center left', ncol=2, edgecolor='white')
-    ax.set_yscale('log')
-    ax.set_xticklabels(data.access_size.values, fontsize=16)
-    ax.set_xlim([-0.5, 5.5])
-    ax.set_ylabel('Number of Misses', fontsize=16)
-    ax.set_zorder(ax2.get_zorder()+1)
-    ax.patch.set_visible(False)
-    ax.set_xlabel("Number of 64-byte Cacheline", fontsize=16)
-    fig.savefig(filename, bbox_inches='tight' )
-
+    ax2.text(0.96, 0.97, "ns", 
+        horizontalalignment='center',
+        verticalalignment='center',
+        transform = ax.transAxes,
+        fontsize=12)
+    start, end = ax2.get_ylim()
+    ax2.yaxis.set_major_locator(MultipleLocator(500))
+    ax2.yaxis.set_major_formatter(FormatStrFormatter('%d'))
+    # For the minor ticks, use no labels; default NullFormatter.
+    ax2.yaxis.set_minor_locator(MultipleLocator(100))
+    ax2.tick_params(axis="y", direction="inout", pad=-24)
+    ax2.set_yticklabels(["", " ", "500", "1k"])
+    ax2.set_xlim([-0.5, 5.8])
+    ax2.set_axisbelow(True)
     
-
-def PlotMissRatio(data, lines, latency, filename):
-    markers = ['x', '+', '.', 'o']
-    colors = ['#2077B4', '#FF7F0E', '#2CA02C', '#D62728']
-    styles = ['bs-','rs--','b+-','r+--']
-    fig, ax = plt.subplots()
-    ax2 = ax.twinx()
-    data[latency].plot.bar(ax=ax2, alpha=0.8, zorder=-10, color=("white", "white"), edgecolor='k', fontsize=12)
-    bars = ax2.patches
-    hatches = ''.join(h*len(data) for h in 'x .')
-    for bar, hatch in zip(bars, hatches):
-        bar.set_hatch(hatch)
-    ax2.legend(bbox_to_anchor=[1.15, 1.1], loc='center right', ncol=1, edgecolor='white')
-    ax2.set_ylabel('lentency(ns)', fontsize=16)
-
-    data[lines].plot(ax=ax, style=styles, fillstyle='none', markersize=12, zorder=1000,fontsize=12)
-    ax.legend(bbox_to_anchor=[-0.15, 1.1], loc='center left', ncol=2, edgecolor='white')
+    # plot line
+    data[lines].plot(ax=ax, style=styles, fillstyle='none', markersize=10, fontsize=12)
+    if islog:
+        ax.set_yscale('log')
     ax.set_xticklabels(data.access_size.values, fontsize=16)
-    ax.set_xlim([-0.5, 5.5])
-    ax.set_ylabel('Miss Ratio', fontsize=16)
+    ax.text(-0.07, 0.97, "miss", 
+        horizontalalignment='center',
+        verticalalignment='center',
+        transform = ax.transAxes,
+        fontsize=12)
     ax.set_zorder(ax2.get_zorder()+1)
     ax.patch.set_visible(False)
-    ax.set_xlabel("Number of 64-byte Cacheline", fontsize=16)
-    fig.savefig(filename, bbox_inches='tight' )
+    ax.set_xlabel("Number of Accessed Blocks", fontsize=16)
 
-PlotMiss(data, r_lines, r_latency, "motivation_read.pdf")
-PlotMiss(data, w_lines, w_latency, "motivation_write.pdf")
+    # combine legend
+    legend_position = (-0.02, 1.03)
+    if not islog:
+        legend_position = (-0.02, 0.84)
+    lines, labels = ax.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    labels = ["R_L1", "R_TLB", "S_L1", "S_TLB", "R_Latency", "S_Latency"]
+    ax2.legend(lines + lines2, labels, bbox_to_anchor=legend_position, loc="upper left", fontsize=10, edgecolor='none')
+    ax.get_legend().remove()
 
-PlotMissRatio(data, r_miss_ratio, r_latency, "motivation_read_ratio.pdf")
-PlotMissRatio(data, w_miss_ratio, w_latency, "motivation_write_ratio.pdf")
+    ax2.grid(which='major', linestyle='--', zorder=0)
+    ax2.grid(which='minor', linestyle='--', zorder=0, linewidth=0.3)
+    
+    fig.savefig(filename, bbox_inches='tight', pad_inches=0 )
+
+
+PlotMiss(data, r_lines, r_latency, "motivation_read.pdf", True)
+PlotMiss(data, w_lines, w_latency, "motivation_write.pdf", True)
+
+PlotMiss(data, r_miss_ratio, r_latency, "motivation_read_ratio.pdf", False)
+PlotMiss(data, w_miss_ratio, w_latency, "motivation_write_ratio.pdf", False)
