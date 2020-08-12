@@ -116,50 +116,55 @@ public:
             // printf("bucket %lu. Allocate address: 0x%lx. size: %lu\n", i, res.second, new_associate_size);
         }
 
+        // auto rehash_start = util::Env::Default()->NowMicros();
         // rehash for all the buckets
         int rehash_thread = 4;
         // printf("Rehash threads: %d\n", rehash_thread);
+        
         std::vector<std::thread> workers(rehash_thread);
-        std::vector<size_t> counts(rehash_thread, 0);
         std::vector<size_t> add_capacity(rehash_thread, 0);
+        std::atomic<size_t> rehash_count(0);
         for (int t = 0; t < rehash_thread; t++) {
             workers[t] = std::thread([&, t]
             {
                 size_t start_b = bucket_count_ / rehash_thread * t;
                 size_t end_b   = start_b + bucket_count_ / rehash_thread;
+                size_t counts  = 0;
                 // printf("Rehash bucket [%lu, %lu)\n", start_b, end_b);
                 for (size_t i = start_b; i < end_b; ++i) {
-                    counts[t] += MinorRehash(i, new_mem_block_addr[i]);
+                    counts += MinorRehash(i, new_mem_block_addr[i]);
                 }
-                
+                rehash_count.fetch_add(counts, std::memory_order_relaxed);
             });
         }
         std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
         {
             t.join();
         });
-
+        // auto rehash_end = util::Env::Default()->NowMicros();
+    
+        // size_t rehash_count = std::accumulate(counts.begin(), counts.end(), 0);
+        // printf("Real rehash speed: %f Mops/s\n", (double)rehash_count / (rehash_end - rehash_start));
         // release the old mem block space
         for (size_t i = 0; i < bucket_count_; ++i) {
             mem_allocator_.ReleaseNoSafe(old_mem_block_ids[i]);
         }
 
-        size_t rehash_count = std::accumulate(counts.begin(), counts.end(), 0);
-
         free(old_mem_block_ids);
         free(new_mem_block_addr);
-        printf("Rehash %lu entries\n", rehash_count);
+        printf("Rehash %lu entries\n", rehash_count.load());
     }
 
     // return the associate index and slot index
-    inline std::pair<uint16_t, uint8_t> findNextSlotInRehash(std::vector<uint8_t>& slot_vec, uint16_t h1, uint16_t associate_mask) {
+    inline std::pair<uint16_t, uint8_t> findNextSlotInRehash(uint8_t* slot_vec, uint16_t h1, uint16_t associate_mask) {
         uint16_t ai = h1 & associate_mask;
         int loop_count = 0;
 
         // find next cell that is not full yet
         uint32_t SLOT_MAX_RANGE = CellMeta::SlotMaxRange(); 
         while (slot_vec[ai] >= SLOT_MAX_RANGE) {
-            ai++;
+            // because we use linear probe, if this cell is full, we go to next cell
+            ai += ProbeStrategy::PROBE_STEP; 
             loop_count++;
             if (unlikely(loop_count > ProbeStrategy::MAX_PROBE_LEN)) {
                 printf("ERROR!!! Even we rehash this bucket, we cannot find a valid slot within %d probe\n", ProbeStrategy::MAX_PROBE_LEN);
@@ -172,7 +177,7 @@ public:
         return {ai, slot_vec[ai]++};
     }
 
-    size_t MinorRehash(int bi, char* bucket_addr) {
+    size_t MinorRehash(int bi, char* new_bucket_addr) {
         size_t count = 0;
         auto bucket_meta = locateBucket(bi);
         uint32_t old_associate_size = bucket_meta.AssociateSize();
@@ -184,15 +189,10 @@ public:
             printf("rehash bucket is not power of 2. %u\n", new_associate_size);
             exit(1);
         }
-        
-        char* new_bucket_addr = bucket_addr;
         if (new_bucket_addr == nullptr) {
             perror("rehash alloc memory fail\n");
             exit(1);
         }
-        // printf("bucket: %d. old addr: 0x%lx, new addr: 0x%lx. new size: %u\n",
-        //         bi, bucket_meta.Address(), new_bucket_addr, new_associate_size);
-                
         BucketMeta new_bucket_meta(new_bucket_addr, new_associate_size);
      
         // reset all cell's meta data
@@ -207,7 +207,9 @@ public:
         // new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444    |
         
         // record next avaliable slot position of each cell within new bucket for rehash
-        std::vector<uint8_t> slot_vec(new_associate_size, CellMeta::StartSlotPos());   
+        uint8_t* slot_vec = (uint8_t*)malloc(new_associate_size);
+        memset(slot_vec, CellMeta::StartSlotPos(), new_associate_size);
+        // std::vector<uint8_t> slot_vec(new_associate_size, CellMeta::StartSlotPos());   
         BucketIterator<CellMeta> iter(bi, bucket_meta.Address(), bucket_meta.AssociateSize()); 
 
         while (iter.valid()) { // iterator every slot in this bucket
@@ -232,7 +234,7 @@ public:
         }
         // replace old bucket meta in buckets_
         buckets_[bi] = new_bucket_meta;
-        // printf("Rehash bucket %d. %lu entries\n", bi, count);
+        free(slot_vec);
         return count;
     }
 
@@ -474,7 +476,7 @@ private:
             }
             else { // cannot find a valid slot for insertion, rehash current bucket then retry
                 // printf("=========== Need Rehash ==========\n");
-                // printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
+                printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
                 break;
             }
         } while (retry_find);

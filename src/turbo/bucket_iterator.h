@@ -42,11 +42,11 @@ typedef std::pair<SlotInfo, HashSlot> value_type;
         return *this;
     }
 
-    value_type operator*() const {
+    inline value_type operator*() const {
         // return the associate index, slot index and its slot content
         uint8_t slot_index = *bitmap_;
         char* cell_addr = bucket_addr_ + associate_i_ * CellMeta::CellSize();
-        HashSlot* slot = (HashSlot*)(cell_addr + slot_index * 8);
+        HashSlot* slot = (HashSlot*)(cell_addr + (slot_index << 3));
         uint8_t H2 = *(uint8_t*)(cell_addr + slot_index);
         return  { {bi_ /* ignore bucket index */, associate_i_ /* associate index */, *bitmap_ /* slot index*/, (uint16_t)slot->H1, H2, false}, 
                 *slot};
