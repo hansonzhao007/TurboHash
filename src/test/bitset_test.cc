@@ -7,7 +7,7 @@
 
 using namespace util;
 int main() {
-
+    srand(time(NULL));
     turbo::BitSet bitset(0x05);
     for (int i : bitset) {
         printf("has bit in pos: %d\n", i);
@@ -72,5 +72,25 @@ int main() {
 
     }
     
+
+    #ifdef __SIZEOF_INT128__
+        printf("Support int128\n");
+    #else
+        printf("Not Support int128\n");
+    #endif
+    
+    turbo::BitSet randomPickBit(0x0000FFFC);
+    for (int i = 0; i < 16; i++) {
+        printf("Random pick one bit: %d\n", randomPickBit.pickOne());
+    }
+
+    auto time_start = util::Env::Default()->NowMicros();
+    int pick_time = 100000000;
+    for (int i = 0; i < pick_time; ++i) {
+        volatile int res = randomPickBit.pickOne();
+    }
+    auto time_end  = util::Env::Default()->NowMicros();
+
+    printf("Random Pick Speed: %f Mops/s\n", (double)pick_time / (time_end - time_start));
     return 0;
 }

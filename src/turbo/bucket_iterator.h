@@ -61,7 +61,9 @@ typedef std::pair<SlotInfo, HashSlot> value_type;
         sprintf(buffer, "associate: %8d, slot: %2d", associate_i_, *bitmap_);
         return buffer;
     }
+
 private:
+
     inline void toNextValidBitMap() {
         while(!bitmap_ && associate_i_ < associate_size_) {
             associate_i_++;
@@ -70,15 +72,18 @@ private:
             bitmap_ = BitSet(*(uint32_t*)(cell_addr) & CellMeta::BitMapMask); 
         }
     }
+
     friend bool operator==(const BucketIterator& a, const BucketIterator& b) {
         return  a.associate_i_ == b.associate_i_ &&
                 a.bitmap_ == b.bitmap_;
                 
     }
+
     friend bool operator!=(const BucketIterator& a, const BucketIterator& b) {
         return  a.associate_i_ != b.associate_i_ ||
                 a.bitmap_ != b.bitmap_;
     }
+
     uint32_t    bi_;
     uint32_t    associate_size_;
     uint32_t    associate_i_; 

@@ -10,6 +10,7 @@ class ProbeWithinCell {
 public:
     static const int MAX_PROBE_LEN = kMaxProbeLen;
     static const int PROBE_STEP = 1;
+
     ProbeWithinCell(uint64_t initial_hash, uint32_t associate_mask, uint32_t bucket_i) {
         h_               = initial_hash;
         associate_mask_  = associate_mask;
@@ -18,7 +19,7 @@ public:
         probe_count_     = 0;
     }
 
-    void reset() {
+    inline void reset() {
         associate_index_ = h_ & associate_mask_;
         probe_count_     = 0;
     }
@@ -66,7 +67,7 @@ public:
         probe_count_     = 0;
     }
 
-    void reset() {
+    inline void reset() {
         associate_index_ = h_ & associate_mask_;
         probe_count_     = 0;
     }

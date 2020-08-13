@@ -368,7 +368,7 @@ public:
             probe.next();
             count_sum += count;
         }
-        sprintf(buffer, "\t%10u Bucket valid slot count: %d. Usage Ratio: %f\n", bucket_i, count_sum, (double)count_sum / (CellMeta::SlotSize() * meta.AssociateSize()));
+        sprintf(buffer, "\tBucket %u: valid slot count: %d. Usage Ratio: %f\n", bucket_i, count_sum, (double)count_sum / (CellMeta::SlotSize() * meta.AssociateSize()));
         res += buffer;
         return res;
     }
@@ -469,7 +469,7 @@ private:
                 }
                 else { // current slot has been occupied by another concurrent thread, retry.
                     // #ifdef LTHASH_DEBUG_OUT
-                    // printf("retry find slot. %s\n", key.ToString().c_str());
+                    printf("retry find slot. %s\n", key.ToString().c_str());
                     // #endif
                     retry_find = true;
                 }
@@ -547,16 +547,17 @@ private:
 
             // return an empty slot for new insertion
             auto empty_bitset = meta.EmptyBitSet(); 
-            if (likely(empty_bitset)) {                 
-                for (int i : empty_bitset) { // there is empty slot, return its meta
-                    return {{   offset.first, 
-                                offset.second, 
-                                i, 
-                                partial_hash.H1_, 
-                                partial_hash.H2_, 
+            if (likely(empty_bitset)) {
+                // for (int i : empty_bitset) { // there is empty slot, return its meta
+
+                    return {{   offset.first,           /* bucket */
+                                offset.second,          /* associate */
+                                empty_bitset.pickOne(), /* slot */
+                                partial_hash.H1_,       /* H1 */
+                                partial_hash.H2_,       /* H2 */
                                 false /* a new slot */}, 
                             true};
-                }
+                // }
             }
             
             // probe the next cell in the same bucket

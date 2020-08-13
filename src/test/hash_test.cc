@@ -9,7 +9,34 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 
 void OtherTest() {
+    const size_t count = 100000000;
+    {
+        auto time_start = util::Env::Default()->NowMicros();
+        for (size_t i = 0; i < count; ++i) {
+            volatile uint64_t rnd_num = turbo::wyhash64();
+        }
+        auto time_end   = util::Env::Default()->NowMicros();
+        printf("wyhash64 speed: %f Mops/s\n", (double)count / (time_end - time_start));
+    }
     
+    {
+        auto time_start = util::Env::Default()->NowMicros();
+        for (size_t i = 0; i < count; ++i) {
+            volatile uint64_t rnd_num = turbo::lehmer64();
+        }
+        auto time_end   = util::Env::Default()->NowMicros();
+        printf("lehmer64 speed: %f Mops/s\n", (double)count / (time_end - time_start));
+    }
+
+    {
+        auto time_start = util::Env::Default()->NowMicros();
+        for (size_t i = 0; i < count; ++i) {
+            volatile uint64_t rnd_num = turbo::wyhash32();
+        }
+        auto time_end   = util::Env::Default()->NowMicros();
+        printf("wyhash32 speed: %f Mops/s\n", (double)count / (time_end - time_start));
+    }
+
 }
 
 const size_t COUNT = 100000;

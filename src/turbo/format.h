@@ -5,7 +5,7 @@
 #include "util/status.h"
 #include "util/coding.h"
 #include "hash_function.h"
-
+#include "spinlock.h"
 namespace turbo {
 using Status = util::Status;
 using Slice = util::Slice;
@@ -111,6 +111,7 @@ public:
         data_ = (((uint64_t) addr) << 16) | ((associate_size - 1) << 1);
     }
 
+    
     // lowest -> highest
     // | 1 bit lock | 15 bit associate mask | 48 bit address |
     // 15 bit max value is 2^15 - 1, so we assume that real associate size is the 15 bit value + 1.
