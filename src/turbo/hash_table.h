@@ -74,7 +74,23 @@ public:
             exit(1);
         }
 
-        buckets_ = new BucketMeta[bucket_count];
+        size_t bucket_meta_space = bucket_count * sizeof(BucketMeta);
+        size_t bucket_meta_space_huge = (bucket_meta_space + HUGEPAGE_SIZE - 1) / HUGEPAGE_SIZE * HUGEPAGE_SIZE;
+        printf("BucketMeta space required: %lu. ", bucket_meta_space);
+        
+        BucketMeta* buckets_addr = (BucketMeta*) mmap(ADDR, bucket_meta_space_huge, PROTECTION, FLAGS, -1, 0);
+        if (buckets_addr == MAP_FAILED) {
+            buckets_addr = (BucketMeta* ) aligned_alloc(sizeof(BucketMeta), bucket_meta_space);
+            if (buckets_addr == nullptr) {
+                fprintf(stderr, "malloc %lu space fail.\n", bucket_meta_space);
+                exit(1);
+            }
+            printf(" Allocated: %lu\n", bucket_meta_space);
+        }
+        else {
+            printf(" Allocated: %lu\n", bucket_meta_space_huge);
+        }
+        buckets_ = buckets_addr;
         buckets_mem_block_ids_ = new int[bucket_count];
         for (size_t i = 0; i < bucket_count; ++i) {
             auto res = mem_allocator_.AllocateNoSafe(associate_count);
