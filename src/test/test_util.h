@@ -7,19 +7,18 @@
 
 #include "util/trace.h"
 
-std::string* GenerateRandomKeys(size_t min, size_t max, size_t count, int32_t seeds = 123) {
-    std::string* res = new std::string[count];
+void GenerateRandomKeys(std::vector<std::string>& res, size_t min, size_t max, size_t count, int32_t seeds = 123) {
+    res.resize(count);
     
     util::TraceUniform trace(seeds, min, max);
     
     for (size_t i = 0; i < count; ++i) {
-        res[i].append("key").append(std::to_string(trace.Next()));
+        res[i] = ("key" + std::to_string(trace.Next()));
         if ((i & 0xFFFFF) == 0) {
             fprintf(stderr, "generate%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
         }
     }
     printf("\r");
-    return res;
 }
 
 int ShuffleFun(int i) {
@@ -45,17 +44,16 @@ class RandomKeyTrace {
 public:
     RandomKeyTrace(size_t count) {
         count_ = count;
-        keys_ = GenerateRandomKeys(0, 3000000000L, count_);
+        GenerateRandomKeys(keys_, 0, 3000000000L, count_);
     }
 
     ~RandomKeyTrace() {
-        delete[] keys_;
     }
 
     class Iterator {
     public:
-        Iterator(std::string* keys, size_t start_index, size_t range):
-            keys_(keys),
+        Iterator(std::vector<std::string>* pkey_vec, size_t start_index, size_t range):
+            pkey_vec_(pkey_vec),
             range_(range),                        
             end_index_(start_index % range_), 
             cur_index_(start_index % range_),
@@ -75,7 +73,7 @@ public:
             if (cur_index_ >= range_) {
                 cur_index_ = 0;
             }
-            return keys_[index];
+            return (*pkey_vec_)[index];
         }
 
         std::string Info() {
@@ -83,7 +81,7 @@ public:
             sprintf(buffer, "valid: %s, cur i: %lu, end_i: %lu, range: %lu", Valid() ? "true" : "false", cur_index_, end_index_, range_);
             return buffer;
         }
-        std::string* keys_;
+        std::vector<std::string>* pkey_vec_;
         size_t range_;
         size_t end_index_;
         size_t cur_index_;
@@ -91,11 +89,11 @@ public:
     };
 
     Iterator trace_at(size_t start_index, size_t range) {
-        return Iterator(keys_, start_index, range);
+        return Iterator(&keys_, start_index, range);
     }
     
     size_t count_;
-    std::string* keys_;
+    std::vector<std::string> keys_;
 };
 
 class RandomKeyTrace2 {

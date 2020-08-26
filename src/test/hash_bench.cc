@@ -36,15 +36,17 @@ DEFINE_int32(cell_type, 0, "\
     0: 128 byte cell, \
     1: 256 byte cell");
 DEFINE_bool(locate_cell_with_h1, false, "using partial hash h1 to locate cell inside bucket or not");
+
+DEFINE_int32(value_size, 1, "default value size");
 // use numactl --hardware command to check numa node info
 // static int kThreadIDs[16] = {16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7 };
 
 class HashBench {
 public:
-    HashBench(size_t bucket_count, size_t assocaite_count, size_t cell_type):
+    HashBench(size_t bucket_count, size_t assocaite_count, size_t cell_type, int value_size):
         max_count_(bucket_count * assocaite_count * (cell_type == 0 ? 14 : 28)),
         key_trace_(max_count_),
-        value_(64, 'v') {
+        value_(value_size, 'v') {
         arm_sig_int();
         signal(SIGALRM, &sigalrm_handler);  // set a signal handler
     }
@@ -400,11 +402,11 @@ int main(int argc, char *argv[]) {
     debug_perf_ppid();
     ParseCommandLineFlags(&argc, &argv, true);
 
-    HashBench hash_bench(FLAGS_bucket_size, FLAGS_associate_size, FLAGS_cell_type);
+    HashBench hash_bench(FLAGS_bucket_size, FLAGS_associate_size, FLAGS_cell_type, FLAGS_value_size);
     size_t inserted_num = 0;
-    // inserted_num = hash_bench.TurboHashSpeedTest();
+    inserted_num = hash_bench.TurboHashSpeedTest();
     
-    inserted_num = hash_bench.TestRehash();
+    // inserted_num = hash_bench.TestRehash();
     // hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
     // hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
     // hash_bench.HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);

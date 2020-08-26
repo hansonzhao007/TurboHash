@@ -1,7 +1,5 @@
 # CMAKELISTS.TXT UNDER util
 set(UTIL_SRCS
-    "arena.cc"
-    "arena.h"
     "coding.cc"
     "coding.h"
     "comparator.cc"

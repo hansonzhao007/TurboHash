@@ -19,7 +19,6 @@
 #include "util/slice.h"
 #include "util/coding.h"
 #include "util/status.h"
-#include "util/prefetcher.h"
 #include "util/env.h"
 
 // #define LTHASH_DEBUG_OUT
