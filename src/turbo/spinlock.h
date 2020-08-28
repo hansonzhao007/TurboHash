@@ -2,6 +2,9 @@
 #include <cstdint>
 #include <atomic>
 #include <immintrin.h>
+#include <pthread.h>
+#include <error.h>
+#include <stdio.h>
 // http://www.cs.utexas.edu/~pingali/CS378/2015sp/lectures/Spinlocks%20and%20Read-Write%20Locks.htm
 /* Compile read-write barrier */
 #define barrier() asm volatile("": : :"memory")
@@ -110,4 +113,53 @@ public:
         turbo_bit_spin_unlock(lock_, kBitLockPosition);
     }
     turbo_bitspinlock *lock_;
+};
+
+typedef struct __spinlock {
+union {
+    pthread_spinlock_t lock;
+    uint64_t padding[8];
+};
+} SpinLock;
+
+class ShardingLock {
+public:
+    ShardingLock() {
+        for (int i = 0; i < 1024; i++) {
+            pthread_spin_init(&(locks_[i].lock), PTHREAD_PROCESS_SHARED);
+        }
+    }
+
+    void Lock(uint32_t i) {
+        const int r = pthread_spin_lock(&(locks_[i & lock_mask_].lock));
+        if (r != 0) {
+            perror("lock fail");
+            exit(1);
+        }
+    }
+
+    void Unlock(uint32_t i) {
+        pthread_spin_unlock(&(locks_[i & lock_mask_].lock));
+    }
+
+private:
+    uint32_t lock_mask_ = 0x3FF;
+    SpinLock locks_[1024];
+};
+
+
+class ShardLockScope {
+public:
+    ShardLockScope(ShardingLock* lock, uint32_t x):
+        lock_(lock),
+        x_(x) {
+        lock_->Lock(x_);
+    }
+
+    ~ShardLockScope() {
+        lock_->Unlock(x_);
+    }
+private:
+    ShardingLock* lock_;
+    uint32_t x_;
 };

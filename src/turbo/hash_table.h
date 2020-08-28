@@ -465,12 +465,16 @@ private:
     inline bool insertSlot(const Slice& key, size_t hash_value, void* media_offset) {
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
-            auto res = findSlotForInsert(key, hash_value);
+            PartialHash partial_hash(hash_value);
+            
+            ShardLockScope lock_bucket(&locks_, partial_hash.bucket_hash_); // Lock current bucket
+
+            auto res = findSlotForInsert(key, partial_hash);
 
             if (res.second) { // find a valid slot
                 char* cell_addr = locateCell({res.first.bucket, res.first.associate});
                 
-                SpinLockScope<0> lock_scope((turbo_bitspinlock*)cell_addr); // Lock current cell
+                // SpinLockScope<0> lock_scope((turbo_bitspinlock*)cell_addr); // Lock current cell
                 
                 CellMeta meta(cell_addr);   // obtain the meta part
                 
@@ -514,8 +518,7 @@ private:
     //      first: the slot info that should insert the key
     //      second: whether we can find a valid(empty or belong to the same key) slot to insert
     // Node: Only when the second value is true, can we insert this key
-    inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, size_t hash_value) {
-        PartialHash partial_hash(hash_value);
+    inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, const PartialHash& partial_hash) {
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto bucket_meta = locateBucket(bucket_i);
         ProbeStrategy probe(partial_hash.H1_, bucket_meta.AssociateMask(), bucket_i);
@@ -676,6 +679,8 @@ private:
     const int       kCellSize = CellMeta::CellSize();
     const int       kCellSizeLeftShift = CellMeta::CellSizeLeftShift;
     const size_t    kMaxLogFileSize = 4LU << 30;        // 4 GB
+
+    ShardingLock    locks_;
 };
 
 }

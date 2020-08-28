@@ -7,6 +7,7 @@
 #include <atomic>
 #include <unistd.h>
 #include "util/env.h"
+#include "turbo/hash_function.h"
 using namespace util;
 
 
@@ -35,22 +36,20 @@ int main() {
     turbo_bit_spin_unlock(lock_value, 0);
     printf("succ unlock. lock value: %08x\n", *lock_value);
 
+
     *lock_value = 0;
     std::vector<std::thread> workers;
-    size_t shared_num = 0;
     auto start_time = Env::Default()->NowNanos();
+    int kLoops = 100000;
     for (int i = 0; i < kThreadNum; i++) {
         // each worker add 10000,
-        workers.push_back(std::thread([&shared_num, &lock_value, i]() 
+        workers.push_back(std::thread([kLoops, &lock_value, i]() 
         {   
             // util::Env::Default()->PinCore(kThreadIDs[i]);
-            size_t loop = 100000;
+            size_t loop = kLoops;
             while (loop--) {
                 usleep(1);
                 SpinLockScope<0> lock_scope((turbo_bitspinlock*)lock_value);
-                // critical section
-                shared_num++;
-                // turbo_bit_spin_unlock(lock_value, 0);
             }
         }));
     }
@@ -59,9 +58,7 @@ int main() {
         t.join();
     });
     auto end_time = Env::Default()->NowNanos();
-    printf("spinlock Speed: %f Mops/s. Add result: %lu\n", 
-        (double)shared_num / (end_time - start_time) * 1000.0,
-        shared_num);
+    printf("spinlock Speed: %f Mops/s.\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0);
 
     {
         std::atomic<int> tmp(0);
@@ -69,7 +66,7 @@ int main() {
         start_time = Env::Default()->NowNanos();
         for (int i = 0; i < kThreadNum; i++) {
             // each worker add 10000,
-            workers2.push_back(std::thread([&shared_num, &tmp, i]() 
+            workers2.push_back(std::thread([&tmp, i]() 
             {   
                 util::Env::Default()->PinCore(kThreadIDs[i]);
                 int loop = 1000000;
@@ -83,8 +80,32 @@ int main() {
             t.join();
         });
         end_time = Env::Default()->NowNanos();
-        printf("fetchadd Speed: %f Mops/s. Add result: %d\n", 
-            (double)tmp.load() / (end_time - start_time) * 1000.0,
-            tmp.load());
+        printf("fetchadd Speed: %f Mops/s.\n", (double)tmp.load() / (end_time - start_time) * 1000.0);
+    }
+
+    {
+        std::atomic<int> tmp(0);
+        std::vector<std::thread> workers2;
+        start_time = Env::Default()->NowNanos();
+        ShardingLock locks;
+        int kLoops = 100000;
+        for (int i = 0; i < kThreadNum; i++) {
+            // each worker add 10000,
+            workers2.push_back(std::thread([&locks, i, kLoops]() 
+            {   
+                util::Env::Default()->PinCore(kThreadIDs[i]);
+                int loop = kLoops;
+                while (loop--) {
+                    int x = turbo::wyhash32();
+                    ShardLockScope lock(&locks, x);
+                }
+            }));
+        }
+        std::for_each(workers2.begin(), workers2.end(), [](std::thread &t) 
+        {
+            t.join();
+        });
+        end_time = Env::Default()->NowNanos();
+        printf("shardlock Speed: %f Mops/s.\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0);
     }
 }
