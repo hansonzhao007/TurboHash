@@ -37,7 +37,7 @@ DEFINE_int32(cell_type, 0, "\
     1: 256 byte cell");
 DEFINE_bool(locate_cell_with_h1, false, "using partial hash h1 to locate cell inside bucket or not");
 
-DEFINE_int32(value_size, 1, "default value size");
+DEFINE_int32(value_size, 30, "default value size");
 // use numactl --hardware command to check numa node info
 // static int kThreadIDs[16] = {16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7 };
 

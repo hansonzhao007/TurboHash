@@ -12,7 +12,7 @@ using namespace util;
 
 
 static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23};
-const int kThreadNum = 15;
+const int kThreadNum = 16;
 int main() {
     std::atomic<int> aint(0);
     unsigned* lock_value = (unsigned*)malloc(4);
@@ -40,7 +40,7 @@ int main() {
     *lock_value = 0;
     std::vector<std::thread> workers;
     auto start_time = Env::Default()->NowNanos();
-    int kLoops = 100000;
+    int kLoops = 10000;
     for (int i = 0; i < kThreadNum; i++) {
         // each worker add 10000,
         workers.push_back(std::thread([kLoops, &lock_value, i]() 
@@ -68,7 +68,7 @@ int main() {
             // each worker add 10000,
             workers2.push_back(std::thread([&tmp, i]() 
             {   
-                util::Env::Default()->PinCore(kThreadIDs[i]);
+                // util::Env::Default()->PinCore(kThreadIDs[i]);
                 int loop = 1000000;
                 while (loop--) {
                     tmp.fetch_add(1, std::memory_order_relaxed);
@@ -86,14 +86,15 @@ int main() {
     {
         std::atomic<int> tmp(0);
         std::vector<std::thread> workers2;
-        start_time = Env::Default()->NowNanos();
+        
         ShardingLock locks;
         int kLoops = 100000;
+        start_time = Env::Default()->NowNanos();
         for (int i = 0; i < kThreadNum; i++) {
             // each worker add 10000,
             workers2.push_back(std::thread([&locks, i, kLoops]() 
             {   
-                util::Env::Default()->PinCore(kThreadIDs[i]);
+                // util::Env::Default()->PinCore(kThreadIDs[i]);
                 int loop = kLoops;
                 while (loop--) {
                     int x = turbo::wyhash32();

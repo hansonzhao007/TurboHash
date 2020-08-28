@@ -5,6 +5,10 @@
 #include <pthread.h>
 #include <error.h>
 #include <stdio.h>
+
+#define likely(x)       (__builtin_expect(false || (x), true))
+#define unlikely(x)     (__builtin_expect(x, 0))
+
 // http://www.cs.utexas.edu/~pingali/CS378/2015sp/lectures/Spinlocks%20and%20Read-Write%20Locks.htm
 /* Compile read-write barrier */
 #define barrier() asm volatile("": : :"memory")
@@ -130,16 +134,20 @@ public:
         }
     }
 
-    void Lock(uint32_t i) {
+    inline void Lock(uint32_t i) {
         const int r = pthread_spin_lock(&(locks_[i & lock_mask_].lock));
-        if (r != 0) {
+        if (unlikely(r != 0)) {
             perror("lock fail");
             exit(1);
         }
     }
 
-    void Unlock(uint32_t i) {
-        pthread_spin_unlock(&(locks_[i & lock_mask_].lock));
+    inline void Unlock(uint32_t i) {
+        const int r = pthread_spin_unlock(&(locks_[i & lock_mask_].lock));
+        if (unlikely(r != 0)) {
+            perror("unlock fail");
+            exit(1);
+        }
     }
 
 private:
