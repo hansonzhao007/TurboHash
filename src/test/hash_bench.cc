@@ -1,7 +1,7 @@
 #include <immintrin.h>
 #include <cstdlib>
 #include <unordered_map>
-#include <libcuckoo/cuckoohash_map.hh>
+// #include <libcuckoo/cuckoohash_map.hh>
 
 #include "util/env.h"
 #include "turbo/hash_function.h"
@@ -312,60 +312,60 @@ public:
     } 
 
 
-    void CuckooSpeedTest(const std::string& name, size_t inserted_num) {
-        libcuckoo::cuckoohash_map<std::string, std::string> map;
-        uint64_t i = 0;
-        map.reserve(inserted_num);
-        auto key_iterator = key_trace_.trace_at(0, inserted_num);
-        auto time_start = Env::Default()->NowNanos();
-        while (key_iterator.Valid()) {
-            map.insert(key_iterator.Next(), value_);
-            if ((i++ & 0xFFFFF) == 0) {
-                fprintf(stderr, "inserting%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
-            }
-        }
-        auto time_end = Env::Default()->NowNanos();
-        PrintSpeed(name.c_str(), map.load_factor(), map.size(), i, time_end - time_start, false);
+    // void CuckooSpeedTest(const std::string& name, size_t inserted_num) {
+    //     libcuckoo::cuckoohash_map<std::string, std::string> map;
+    //     uint64_t i = 0;
+    //     map.reserve(inserted_num);
+    //     auto key_iterator = key_trace_.trace_at(0, inserted_num);
+    //     auto time_start = Env::Default()->NowNanos();
+    //     while (key_iterator.Valid()) {
+    //         map.insert(key_iterator.Next(), value_);
+    //         if ((i++ & 0xFFFFF) == 0) {
+    //             fprintf(stderr, "inserting%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+    //         }
+    //     }
+    //     auto time_end = Env::Default()->NowNanos();
+    //     PrintSpeed(name.c_str(), map.load_factor(), map.size(), i, time_end - time_start, false);
 
-        std::vector<std::thread> workers(FLAGS_thread_read);
-        std::vector<size_t> counts(FLAGS_thread_read, 0);
-        kRunning = true;
-        if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
-        time_start = Env::Default()->NowNanos();
-        for (int t = 0; t < FLAGS_thread_read; t++) {
-            workers[t] = std::thread([&, t]
-            {
-                // core function
-                // Env::PinCore(kThreadIDs[t]);
-                size_t i = 0;
-                std::string out;
-                bool is_find = false;
-                size_t start_offset = random() % inserted_num;
-                if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
-                auto key_iterator = key_trace_.trace_at(start_offset, inserted_num);
-                do {
-                    is_find = map.find(key_iterator.Next(), out);
-                    if ((i++ & 0xFFFFF) == 0) {
-                        fprintf(stderr, "thread: %2d reading%*s-%03d->\r", t, int(i >> 20), " ", int(i >> 20));fflush(stderr);
-                    }
-                } while (kRunning && key_iterator.Valid() && is_find);
-                if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s, running: %s\n", t, is_find ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
-                counts[t] = i ;
-            });
-        }
-        std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
-        {
-            t.join();
-        });
-        time_end = Env::Default()->NowNanos();
-        size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
-        PrintSpeed(name.c_str(), map.load_factor(), map.size(), read_count, time_end - time_start, true);
+    //     std::vector<std::thread> workers(FLAGS_thread_read);
+    //     std::vector<size_t> counts(FLAGS_thread_read, 0);
+    //     kRunning = true;
+    //     if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
+    //     time_start = Env::Default()->NowNanos();
+    //     for (int t = 0; t < FLAGS_thread_read; t++) {
+    //         workers[t] = std::thread([&, t]
+    //         {
+    //             // core function
+    //             // Env::PinCore(kThreadIDs[t]);
+    //             size_t i = 0;
+    //             std::string out;
+    //             bool is_find = false;
+    //             size_t start_offset = random() % inserted_num;
+    //             if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
+    //             auto key_iterator = key_trace_.trace_at(start_offset, inserted_num);
+    //             do {
+    //                 is_find = map.find(key_iterator.Next(), out);
+    //                 if ((i++ & 0xFFFFF) == 0) {
+    //                     fprintf(stderr, "thread: %2d reading%*s-%03d->\r", t, int(i >> 20), " ", int(i >> 20));fflush(stderr);
+    //                 }
+    //             } while (kRunning && key_iterator.Valid() && is_find);
+    //             if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s, running: %s\n", t, is_find ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
+    //             counts[t] = i ;
+    //         });
+    //     }
+    //     std::for_each(workers.begin(), workers.end(), [](std::thread &t) 
+    //     {
+    //         t.join();
+    //     });
+    //     time_end = Env::Default()->NowNanos();
+    //     size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
+    //     PrintSpeed(name.c_str(), map.load_factor(), map.size(), read_count, time_end - time_start, true);
     
-        if (FLAGS_print_thread_read)
-        for(int i = 0; i < FLAGS_thread_read; i++) {
-            printf("thread %2d read: %10lu\n", i, counts[i]);
-        }
-    }
+    //     if (FLAGS_print_thread_read)
+    //     for(int i = 0; i < FLAGS_thread_read; i++) {
+    //         printf("thread %2d read: %10lu\n", i, counts[i]);
+    //     }
+    // }
 
     
 
