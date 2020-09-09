@@ -1,4 +1,5 @@
 #pragma once
+#include <stdint.h>
 namespace turbo {
 
 class MurMurHash {
@@ -6,7 +7,7 @@ public:
     static inline size_t hash ( const void * key, int len)
     {
         // return (XXH64(key, len, len));
-        return (MurmurHash64A(key, len));
+        return (std::hash<uint64_t>()(MurmurHash64A(key, len)));
     }
 
     static inline uint32_t rotl32 ( uint32_t x, int8_t r )

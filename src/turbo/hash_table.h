@@ -680,7 +680,7 @@ private:
     const int       kCellSizeLeftShift = CellMeta::CellSizeLeftShift;
     const size_t    kMaxLogFileSize = 4LU << 30;        // 4 GB
 
-    ShardingLock    locks_;
+    ShardLock    locks_;
 };
 
 }

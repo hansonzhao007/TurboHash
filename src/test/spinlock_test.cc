@@ -11,7 +11,7 @@
 using namespace util;
 
 
-static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23};
+// static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23};
 const int kThreadNum = 16;
 int main() {
     std::atomic<int> aint(0);
@@ -87,7 +87,7 @@ int main() {
         std::atomic<int> tmp(0);
         std::vector<std::thread> workers2;
         
-        ShardingLock locks;
+        ShardLock locks;
         int kLoops = 100000;
         start_time = Env::Default()->NowNanos();
         for (int i = 0; i < kThreadNum; i++) {
@@ -107,6 +107,34 @@ int main() {
             t.join();
         });
         end_time = Env::Default()->NowNanos();
-        printf("shardlock Speed: %f Mops/s.\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0);
+        printf("ShardLock Speed: %f Mops/s.\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0);
+    }
+
+    {
+        std::atomic<int> tmp(0);
+        std::vector<std::thread> workers2;
+        
+        ShardSpinLock locks(20);
+        int kLoops = 100000;
+        start_time = Env::Default()->NowNanos();
+        for (int i = 0; i < kThreadNum; i++) {
+            // each worker add 10000,
+            workers2.push_back(std::thread([&locks, i, kLoops]() 
+            {   
+                // util::Env::Default()->PinCore(kThreadIDs[i]);
+                int loop = kLoops;
+                while (loop--) {
+                    int x = turbo::wyhash32();
+                    locks.Lock(x);
+                    locks.Unlock(x);
+                }
+            }));
+        }
+        std::for_each(workers2.begin(), workers2.end(), [](std::thread &t) 
+        {
+            t.join();
+        });
+        end_time = Env::Default()->NowNanos();
+        printf("ShardSpinLock Speed: %f Mops/s.\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0);
     }
 }

@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <error.h>
 #include <stdio.h>
-
+#include <cstring>
 #define likely(x)       (__builtin_expect(false || (x), true))
 #define unlikely(x)     (__builtin_expect(x, 0))
 
@@ -126,10 +126,16 @@ union {
 };
 } SpinLock;
 
-class ShardingLock {
+class ShardLock {
 public:
-    ShardingLock() {
-        for (int i = 0; i < 1024; i++) {
+    const int kShard = 1 << 10;
+    ShardLock() {
+        int res = posix_memalign((void**)&locks_, 64, 64 * kShard);
+        if (res != 0) {
+            perror("ShardLock posix memalign fail");
+            exit(1);
+        }
+        for (int i = 0; i < kShard; i++) {
             pthread_spin_init(&(locks_[i].lock), PTHREAD_PROCESS_SHARED);
         }
     }
@@ -151,14 +157,14 @@ public:
     }
 
 private:
-    uint32_t lock_mask_ = 0x3FF;
-    SpinLock locks_[1024];
+    uint32_t lock_mask_ = kShard - 1;
+    SpinLock* locks_;
 };
 
 
 class ShardLockScope {
 public:
-    ShardLockScope(ShardingLock* lock, uint32_t x):
+    ShardLockScope(ShardLock* lock, uint32_t x):
         lock_(lock),
         x_(x) {
         lock_->Lock(x_);
@@ -168,6 +174,29 @@ public:
         lock_->Unlock(x_);
     }
 private:
-    ShardingLock* lock_;
+    ShardLock* lock_;
     uint32_t x_;
+};
+
+class ShardSpinLock {
+public:
+    ShardSpinLock(int left_shift_ccount) {
+        uint32_t count = 1 << left_shift_ccount;
+        mask_ = count - 1;
+        locks_ = (turbo_bitspinlock*)aligned_alloc(64, count*64);
+        memset(locks_, 0, count);
+    }
+    ~ShardSpinLock() {
+        free(locks_);
+    }
+    inline void Lock(int x) {
+        turbo_bit_spin_lock(&locks_[x & mask_], 0);
+    }
+
+    inline void Unlock(int x) {
+        turbo_bit_spin_unlock(&locks_[x & mask_], 0);
+    }
+private:
+    turbo_bitspinlock* locks_;
+    uint32_t mask_;
 };

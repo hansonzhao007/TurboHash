@@ -207,7 +207,7 @@ public:
                         // core function
                         // Env::PinCore(kThreadIDs[t]);
                         uint64_t data_offset;
-                        bool res;
+                        bool res = true;
                         size_t i = 0;
                         size_t start_offset = random() % max_range;
                         if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
@@ -406,7 +406,7 @@ int main(int argc, char *argv[]) {
     size_t inserted_num = 0;
     inserted_num = hash_bench.TurboHashSpeedTest();
     
-    // inserted_num = hash_bench.TestRehash();
+    inserted_num = hash_bench.TestRehash();
     // hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
     // hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
     // hash_bench.HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);
