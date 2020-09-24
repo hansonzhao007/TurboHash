@@ -4,12 +4,13 @@
 
 namespace turbo {
 
-const int kMaxProbeLen = 15;
+const int kMaxProbeLen = 17;
+const int kProbeStep = 1;
 
 class ProbeWithinCell {
 public:
     static const int MAX_PROBE_LEN = kMaxProbeLen;
-    static const int PROBE_STEP = 1;
+    static const int PROBE_STEP = kProbeStep;
 
     ProbeWithinCell(uint64_t initial_hash, uint32_t associate_mask, uint32_t bucket_i) {
         h_               = initial_hash;
@@ -58,7 +59,7 @@ private:
 class ProbeWithinBucket {
 public:
     static const int MAX_PROBE_LEN = kMaxProbeLen;
-    static const int PROBE_STEP = 2;
+    static const int PROBE_STEP = kProbeStep;
     ProbeWithinBucket(uint64_t initial_hash, uint32_t associate_mask, uint32_t bucket_i) {
         h_               = initial_hash;
         associate_mask_  = associate_mask;

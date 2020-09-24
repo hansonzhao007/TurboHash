@@ -30,8 +30,8 @@ public:
     virtual ~HashTable() {}
     virtual bool Put(const util::Slice& key, const util::Slice& value) = 0;
     virtual bool Get(const std::string& key, std::string* value) = 0;
+    // virtual bool Delete(const std::string& key) = 0;
     virtual bool Find(const std::string& key, uint64_t& data_offset) = 0;
-    virtual void Delete(const Slice& key) = 0;
     virtual double LoadFactor() = 0;
     virtual size_t Size() = 0;
     virtual void MinorReHashAll() = 0;
@@ -112,7 +112,7 @@ public:
         int* old_mem_block_ids = (int*)malloc(bucket_count_ * sizeof(int));
         char** new_mem_block_addr = (char**)malloc(bucket_count_ * sizeof(char*));
         for (size_t i = 0; i < bucket_count_; ++i) {
-            auto bucket_meta = locateBucket(i);
+            auto& bucket_meta = locateBucket(i);
             uint32_t new_associate_size = bucket_meta.AssociateSize() << 1;
             // if current bucket cannot enlarge any more, continue
             if (unlikely(new_associate_size > kAssociateSizeLimit)) {
@@ -131,14 +131,14 @@ public:
             // printf("bucket %lu. Allocate address: 0x%lx. size: %lu\n", i, res.second, new_associate_size);
         }
 
-        // auto rehash_start = util::Env::Default()->NowMicros();
+        
         // rehash for all the buckets
         int rehash_thread = 4;
-        // printf("Rehash threads: %d\n", rehash_thread);
-        
+        printf("Rehash threads: %d\n", rehash_thread);
         std::vector<std::thread> workers(rehash_thread);
         std::vector<size_t> add_capacity(rehash_thread, 0);
         std::atomic<size_t> rehash_count(0);
+        auto rehash_start = util::Env::Default()->NowMicros();
         for (int t = 0; t < rehash_thread; t++) {
             workers[t] = std::thread([&, t]
             {
@@ -156,10 +156,8 @@ public:
         {
             t.join();
         });
-        // auto rehash_end = util::Env::Default()->NowMicros();
-    
-        // size_t rehash_count = std::accumulate(counts.begin(), counts.end(), 0);
-        // printf("Real rehash speed: %f Mops/s\n", (double)rehash_count / (rehash_end - rehash_start));
+        auto rehash_end = util::Env::Default()->NowMicros();
+        printf("Real rehash speed: %f Mops/s\n", (double)rehash_count / (rehash_end - rehash_start));
         // release the old mem block space
         for (size_t i = 0; i < bucket_count_; ++i) {
             mem_allocator_.ReleaseNoSafe(old_mem_block_ids[i]);
@@ -194,10 +192,13 @@ public:
 
     size_t MinorRehash(int bi, char* new_bucket_addr) {
         size_t count = 0;
-        auto bucket_meta = locateBucket(bi);
-        uint32_t old_associate_size = bucket_meta.AssociateSize();
+        auto& bucket_meta = locateBucket(bi);
+
+        // Block locating in current bucket
+        buckets_[bi].is_rehashing_.store(true, std::memory_order_relaxed);
 
         // create new bucket and initialize its meta
+        uint32_t old_associate_size = bucket_meta.AssociateSize();
         uint32_t new_associate_size      = old_associate_size << 1;
         uint32_t new_associate_size_mask = new_associate_size - 1;
         if (!isPowerOfTwo(new_associate_size)) {
@@ -247,8 +248,12 @@ public:
             moveSlot(des_cell_addr, res.first, res.second);            
             ++iter;
         }
+
         // replace old bucket meta in buckets_
-        buckets_[bi] = new_bucket_meta;
+        buckets_[bi].data_ = new_bucket_meta.data_;
+
+        // release the rehashing lock
+        buckets_[bi].is_rehashing_.store(false, std::memory_order_acq_rel);
         free(slot_vec);
         return count;
     }
@@ -287,6 +292,7 @@ public:
         return false;
     }
 
+
     bool Find(const std::string& key, uint64_t& data_offset) {
         size_t hash_value = Hasher::hash(key.data(), key.size());
         auto res = findSlot(key, hash_value);
@@ -313,7 +319,7 @@ public:
     void IterateValidBucket() {
         printf("Iterate Valid Bucket\n");
         for (size_t i = 0; i < bucket_count_; ++i) {
-            auto bucket_meta = locateBucket(i);
+            auto& bucket_meta = locateBucket(i);
             BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.info.associate_size);
             if (iter.valid()) {
                 printf("%s\n", PrintBucketMeta(i).c_str());
@@ -322,7 +328,7 @@ public:
     }
 
     void IterateBucket(uint32_t i) {
-        auto bucket_meta = locateBucket(i);
+        auto& bucket_meta = locateBucket(i);
         BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.AssociateSize());
         while (iter.valid()) {
             auto res = (*iter);
@@ -342,7 +348,7 @@ public:
     void IterateAll() {
         size_t count = 0;
         for (size_t i = 0; i < bucket_count_; ++i) {
-            auto bucket_meta = locateBucket(i);
+            auto& bucket_meta = locateBucket(i);
             BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.AssociateSize());
             while (iter.valid()) {
                 auto res = (*iter);
@@ -368,7 +374,7 @@ public:
     std::string PrintBucketMeta(uint32_t bucket_i) {
         std::string res;
         char buffer[1024];
-        BucketMeta meta = locateBucket(bucket_i);
+        BucketMeta& meta = locateBucket(bucket_i);
         sprintf(buffer, "----- bucket %10u -----\n", bucket_i);
         res += buffer;
         ProbeStrategy probe(0, meta.AssociateMask(), bucket_i);
@@ -383,7 +389,7 @@ public:
             probe.next();
             count_sum += count;
         }
-        sprintf(buffer, "\tBucket %u: valid slot count: %d. Usage Ratio: %f\n", bucket_i, count_sum, (double)count_sum / (CellMeta::SlotSize() * meta.AssociateSize()));
+        sprintf(buffer, "\tBucket %u: valid slot count: %d. Load factor: %f\n", bucket_i, count_sum, (double)count_sum / (CellMeta::SlotSize() * meta.AssociateSize()));
         res += buffer;
         return res;
     }
@@ -406,7 +412,8 @@ private:
         return hash & bucket_mask_;
     }
 
-    inline BucketMeta locateBucket(uint32_t bi) {
+    inline BucketMeta& locateBucket(uint32_t bi) const {
+         while(buckets_[bi].is_rehashing_.load(std::memory_order_relaxed)) {}
         return buckets_[bi];
     }
 
@@ -494,8 +501,9 @@ private:
                 }
             }
             else { // cannot find a valid slot for insertion, rehash current bucket then retry
-                // printf("=========== Need Rehash ==========\n");
+                printf("=========== Need Rehash ==========\n");
                 printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
+                
                 break;
             }
         } while (retry_find);
@@ -520,7 +528,7 @@ private:
     // Node: Only when the second value is true, can we insert this key
     inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, const PartialHash& partial_hash) {
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        auto bucket_meta = locateBucket(bucket_i);
+        auto& bucket_meta = locateBucket(bucket_i);
         ProbeStrategy probe(partial_hash.H1_, bucket_meta.AssociateMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
@@ -570,7 +578,7 @@ private:
 
                     return {{   offset.first,           /* bucket */
                                 offset.second,          /* associate */
-                                empty_bitset.pickOne(), /* slot */
+                                *empty_bitset,          /* pick a slot, empty_bitset.pickOne() */ 
                                 partial_hash.H1_,       /* H1 */
                                 partial_hash.H2_,       /* H2 */
                                 false /* a new slot */}, 
@@ -603,7 +611,7 @@ private:
     inline std::pair<HashSlot, bool> findSlot(const Slice& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        auto bucket_meta = locateBucket(bucket_i);
+        auto& bucket_meta = locateBucket(bucket_i);
         ProbeStrategy probe(partial_hash.H1_,  bucket_meta.AssociateMask(), bucket_i);
 
         int probe_count = 0; // limit probe times

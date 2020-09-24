@@ -2,6 +2,7 @@
 #include <stdint.h>
 namespace turbo {
 
+using uint128_t = unsigned __int128;
 class MurMurHash {
 public:
     static inline size_t hash ( const void * key, int len)
@@ -10,37 +11,6 @@ public:
         return (std::hash<uint64_t>()(MurmurHash64A(key, len)));
     }
 
-    static inline uint32_t rotl32 ( uint32_t x, int8_t r )
-    {
-        return (x << r) | (x >> (32 - r));
-    }
-
-    static inline uint64_t rotl64 ( uint64_t x, int8_t r )
-    {
-        return (x << r) | (x >> (64 - r));
-    }
-
-    static inline int hash64to32shift(uint64_t key)
-    {
-        key = (~key) + (key << 18); // key = (key << 18) - key - 1;
-        key = key ^ (key >> 31);
-        key = key * 21; // key = (key + (key << 2)) + (key << 4);
-        key = key ^ (key >> 11);
-        key = key + (key << 6);
-        key = key ^ (key >> 22);
-        return (int) key;
-    }
-
-    static uint64_t xorshift(const uint64_t& n,int i){
-        return n^(n>>i);
-    }
-
-    static uint64_t numhash(const uint64_t& n) {
-        uint64_t p = 0x5555555555555555ull; // pattern of alternating 0 and 1
-        uint64_t c = 17316035218449499591ull;// random uneven integer constant; 
-        return c*xorshift(p*xorshift(n,32),32);
-    }
-    
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
     static inline uint64_t MurmurHash64A ( const void * key, int len)
@@ -93,13 +63,13 @@ public:
 
 
 inline uint64_t lehmer64() {
-    thread_local __uint128_t g_lehmer64_state = random();
+    static thread_local __uint128_t g_lehmer64_state = random();
     g_lehmer64_state *= 0xda942042e4dd58b5;
     return g_lehmer64_state >> 64;
 }
 
 inline uint32_t wyhash32() {
-    thread_local uint32_t wyhash32_x = random();
+    static thread_local uint32_t wyhash32_x = random();
     wyhash32_x += 0x60bee2bee120fc15;
     uint64_t tmp;
     tmp = (uint64_t) wyhash32_x * 0xa3b195354a39b70d;
@@ -110,7 +80,7 @@ inline uint32_t wyhash32() {
 }
 
 inline uint64_t wyhash64() {
-    thread_local uint64_t wyhash64_x = random();
+    static thread_local uint64_t wyhash64_x = random();
     wyhash64_x += 0x60bee2bee120fc15;
     __uint128_t tmp;
     tmp = (__uint128_t) wyhash64_x * 0xa3b195354a39b70d;

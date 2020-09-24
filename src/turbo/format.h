@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <atomic>
 
 #include "util/slice.h"
 #include "util/status.h"
@@ -80,13 +81,22 @@ enum ValueType {
 
 class BucketMeta {
 public:
-    explicit BucketMeta(char* addr, uint16_t associate_size) {
+    explicit BucketMeta(char* addr, uint16_t associate_size):
+        is_rehashing_(false) {
         data_ = (((uint64_t) addr) << 16) | ((associate_size - 1) << 1);
     }
 
     BucketMeta():
-        data_(0) {}
+        data_(0),
+        is_rehashing_(false) {}
     
+    BucketMeta(const BucketMeta& a) {
+        data_ = a.data_;
+        is_rehashing_.store(false);
+    }
+
+    
+
     inline char* Address() {
         return (char*)(data_ >> 16);
     }
@@ -116,6 +126,7 @@ public:
     // | 1 bit lock | 15 bit associate mask | 48 bit address |
     // 15 bit max value is 2^15 - 1, so we assume that real associate size is the 15 bit value + 1.
     uint64_t data_;
+    std::atomic<bool> is_rehashing_;
 };
 
 

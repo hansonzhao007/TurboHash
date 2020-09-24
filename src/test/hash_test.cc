@@ -37,6 +37,15 @@ void OtherTest() {
         printf("wyhash32 speed: %f Mops/s\n", (double)count / (time_end - time_start));
     }
 
+    {
+        auto time_start = util::Env::Default()->NowMicros();
+        for (size_t i = 0; i < count; ++i) {
+            volatile uint64_t rnd_num = turbo::MurMurHash::hash("12345678", 8);
+        }
+        auto time_end   = util::Env::Default()->NowMicros();
+        printf("murmur speed: %f Mops/s\n", (double)count / (time_end - time_start));
+    }
+
 }
 
 const size_t COUNT = 100000;
@@ -83,5 +92,7 @@ int main(int argc, char *argv[]) {
     hashtable->MinorReHashAll();
     hashtable->DebugInfo();
     read_fun();
+
+    printf("size of atomic bool: %d\n", sizeof(std::atomic<bool>));
     return 0;
 }
