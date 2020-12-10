@@ -13,7 +13,6 @@
 #ifndef __ENV_H__
 #define __ENV_H__
 
-#include "slice.h"
 #include "status.h"
 #include "posix_logger.h"
 
@@ -29,23 +28,47 @@
 #define likely(x)       (__builtin_expect(false || (x), true))
 #define unlikely(x)     (__builtin_expect(x, 0))
 
+/** @brief Compiler fence.
+ *
+ * Prevents reordering of loads and stores by the compiler. Not intended to
+ * synchronize the processor's caches. */
+inline void fence() {
+    asm volatile("" : : : "memory");
+}
+
+/** @brief Return the index of the most significant bit set in @a x.
+ * @return 0 if @a x = 0; otherwise the index of first bit set, where the
+ * most significant bit is numbered 1.
+ */
+inline int ffs_msb(unsigned x) {
+    return (x ? __builtin_clz(x) + 1 : 0);
+}
+/** @overload */
+inline int ffs_msb(unsigned long x) {
+    return (x ? __builtin_clzl(x) + 1 : 0);
+}
+/** @overload */
+inline int ffs_msb(unsigned long long x) {
+    return (x ? __builtin_clzll(x) + 1 : 0);
+}
+
 #define __FILENAME__ ((strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__))
 
 #define INFO(M, ...)\
 do {\
-  char buffer[1024] = "[INFO] ";\
-  sprintf(buffer + strlen(buffer), "[%s] %s:%d ", __FILENAME__, __FUNCTION__, __LINE__);\
+  char buffer[1024] = "[ INFO] ";\
+  sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
   sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
-  util::Log(Env::Default()->LOG(), "%s", buffer);\
+  util::Log(util::Env::Default()->LOG(), "%s", buffer);\
 } while(0);
 
 #ifndef NDEBUG
 #define DEBUG(M, ...)\
 do {\
   char buffer[1024] = "[DEBUG] ";\
-  sprintf(buffer + strlen(buffer), "[%s] %s:%d ", __FILENAME__, __FUNCTION__, __LINE__);\
+  sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
   sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
-  util::Log(Env::Default()->LOG(), "%s", buffer);\
+  util::Log(util::Env::Default()->LOG(), "%s", buffer);\
 } while(0);
 #else
 #define DEBUG(M, ...)\
@@ -56,18 +79,18 @@ do {\
 #define ERROR(M, ...)\
 do {\
   char buffer[1024] = "[ERROR] ";\
-  sprintf(buffer + strlen(buffer), "[%s] %s:%d ", __FILENAME__, __FUNCTION__, __LINE__);\
+  sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
   sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
-  util::Log(Env::Default()->LOG(), "%s", buffer);\
+  util::Log(util::Env::Default()->LOG(), "%s", buffer);\
 } while(0);
 
 
 #define WARNING(M, ...)\
 do {\
-  char buffer[1024] = "[WARN] ";\
-  sprintf(buffer + strlen(buffer), "[%s] %s:%d ", __FILENAME__, __FUNCTION__, __LINE__);\
+  char buffer[1024] = "[ WARN] ";\
+  sprintf(buffer + strlen(buffer), "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
   sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
-  util::Log(Env::Default()->LOG(), "%s", buffer);\
+  util::Log(util::Env::Default()->LOG(), "%s", buffer);\
 } while(0);
 
 namespace util {

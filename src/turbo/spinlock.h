@@ -10,10 +10,8 @@
 #define unlikely(x)     (__builtin_expect(x, 0))
 
 // http://www.cs.utexas.edu/~pingali/CS378/2015sp/lectures/Spinlocks%20and%20Read-Write%20Locks.htm
-/* Compile read-write barrier */
-#define barrier() asm volatile("": : :"memory")
-/* Pause instruction to prevent excess processor bus usage */ 
-#define cpu_relax() asm volatile("pause\n": : :"memory")
+#define barrier() asm volatile("": : :"memory") /* Compile read-write barrier */
+#define cpu_relax() asm volatile("pause\n": : :"memory") /* Pause instruction to prevent excess processor bus usage */ 
 
 /** https://stackoverflow.com/questions/30467638/cheapest-least-intrusive-way-to-atomically-update-a-bit
  * \brief Atomically tests and sets a bit (INTEL only)
@@ -80,24 +78,19 @@ inline char turbo_atomic_bittestandreset_x86(volatile unsigned int* ptr, unsigne
 
 #define SPINLOCK_FREE 0
 typedef unsigned int turbo_bitspinlock;
-
 inline bool turbo_lockbusy(turbo_bitspinlock *lock, int bit_pos) {
     return (*lock) & (1 << bit_pos);
 }
-
 inline void turbo_bit_spin_lock(turbo_bitspinlock *lock, int bit_pos)
 {
-    
     while(1) {
         // test & set return 0 if success
         if (turbo_atomic_bittestandset_x86(lock, bit_pos) == SPINLOCK_FREE) {
             return;
         }
-        while ((*lock) & (1 << bit_pos)) __builtin_ia32_pause();
+        while (turbo_lockbusy(lock, bit_pos)) __builtin_ia32_pause();
     }
-    
 }
-
 inline void turbo_bit_spin_unlock(turbo_bitspinlock *lock, int bit_pos)
 {
     barrier();
@@ -109,6 +102,7 @@ class SpinLockScope {
 public:
     SpinLockScope(turbo_bitspinlock *lock):
         lock_(lock) {
+        // lock the bit lock
         turbo_bit_spin_lock(lock, kBitLockPosition);
     }
     ~SpinLockScope() {
@@ -125,80 +119,6 @@ union {
 };
 } SpinLock;
 
-class ShardLock {
-public:
-    const int kShard = 1 << 10;
-    ShardLock() {
-        int res = posix_memalign((void**)&locks_, 64, 64 * kShard);
-        if (res != 0) {
-            perror("ShardLock posix memalign fail");
-            exit(1);
-        }
-        for (int i = 0; i < kShard; i++) {
-            pthread_spin_init(&(locks_[i].lock), PTHREAD_PROCESS_SHARED);
-        }
-    }
-
-    inline void Lock(uint32_t i) {
-        const int r = pthread_spin_lock(&(locks_[i & lock_mask_].lock));
-        if (unlikely(r != 0)) {
-            perror("lock fail");
-            exit(1);
-        }
-    }
-
-    inline void Unlock(uint32_t i) {
-        const int r = pthread_spin_unlock(&(locks_[i & lock_mask_].lock));
-        if (unlikely(r != 0)) {
-            perror("unlock fail");
-            exit(1);
-        }
-    }
-
-private:
-    uint32_t lock_mask_ = kShard - 1;
-    SpinLock* locks_;
-};
-
-
-class ShardLockScope {
-public:
-    ShardLockScope(ShardLock* lock, uint32_t x):
-        lock_(lock),
-        x_(x) {
-        lock_->Lock(x_);
-    }
-
-    ~ShardLockScope() {
-        lock_->Unlock(x_);
-    }
-private:
-    ShardLock* lock_;
-    uint32_t x_;
-};
-
-class ShardSpinLock {
-public:
-    ShardSpinLock(int left_shift_ccount) {
-        uint32_t count = 1 << left_shift_ccount;
-        mask_ = count - 1;
-        locks_ = (turbo_bitspinlock*)aligned_alloc(64, count*64);
-        memset(locks_, 0, count);
-    }
-    ~ShardSpinLock() {
-        free(locks_);
-    }
-    inline void Lock(int x) {
-        turbo_bit_spin_lock(&locks_[x & mask_], 0);
-    }
-
-    inline void Unlock(int x) {
-        turbo_bit_spin_unlock(&locks_[x & mask_], 0);
-    }
-private:
-    turbo_bitspinlock* locks_;
-    uint32_t mask_;
-};
 
 // https://rigtorp.se/spinlock/
 class AtomicSpinLock {

@@ -25,16 +25,6 @@
 
 namespace turbo {
 
-
-/** @brief Compiler fence.
- *
- * Prevents reordering of loads and stores by the compiler. Not intended to
- * synchronize the processor's caches. */
-inline void fence() {
-    asm volatile("" : : : "memory");
-}
-
-
 class HashTable {
 public:
     virtual ~HashTable() {}
@@ -204,9 +194,6 @@ public:
         size_t count = 0;
         auto& bucket_meta = locateBucket(bi);
 
-        // Block locating in current bucket
-        buckets_[bi].is_rehashing_.store(true, std::memory_order_relaxed);
-
         // create new bucket and initialize its meta
         uint32_t old_associate_size = bucket_meta.AssociateSize();
         uint32_t new_associate_size      = old_associate_size << 1;
@@ -261,9 +248,7 @@ public:
 
         // replace old bucket meta in buckets_
         buckets_[bi].data_ = new_bucket_meta.data_;
-
-        // release the rehashing lock
-        buckets_[bi].is_rehashing_.store(false, std::memory_order_acq_rel);
+        
         free(slot_vec);
         return count;
     }
@@ -423,7 +408,6 @@ private:
     }
 
     inline BucketMeta& locateBucket(uint32_t bi) const {
-         while(buckets_[bi].is_rehashing_.load(std::memory_order_relaxed)) {}
         return buckets_[bi];
     }
 
@@ -483,9 +467,7 @@ private:
     inline bool insertSlot(const Slice& key, size_t hash_value, void* media_offset) {
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
-            PartialHash partial_hash(hash_value);
-            
-            // ShardLockScope lock_bucket(&locks_, partial_hash.bucket_hash_); // Lock current bucket
+            PartialHash partial_hash(hash_value);            
 
             auto res = findSlotForInsert(key, partial_hash);
 
@@ -506,7 +488,7 @@ private:
                 }
                 else { // current slot has been occupied by another concurrent thread, retry.
                     // #ifdef LTHASH_DEBUG_OUT
-                    // printf("retry find slot. %s\n", key.ToString().c_str());
+                    INFO("retry find slot. %s\n", key.ToString().c_str());
                     // #endif
                     retry_find = true;
                 }
@@ -698,8 +680,6 @@ private:
     const int       kCellSize = CellMeta::CellSize();
     const int       kCellSizeLeftShift = CellMeta::CellSizeLeftShift;
     const size_t    kMaxLogFileSize = 4LU << 30;        // 4 GB
-
-    ShardLock    locks_;
 };
 
 }

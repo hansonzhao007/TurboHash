@@ -13,7 +13,7 @@ void OtherTest() {
     {
         auto time_start = util::Env::Default()->NowMicros();
         for (size_t i = 0; i < count; ++i) {
-            volatile uint64_t rnd_num = turbo::wyhash64();
+            turbo::wyhash64();
         }
         auto time_end   = util::Env::Default()->NowMicros();
         printf("wyhash64 speed: %f Mops/s\n", (double)count / (time_end - time_start));
@@ -22,7 +22,7 @@ void OtherTest() {
     {
         auto time_start = util::Env::Default()->NowMicros();
         for (size_t i = 0; i < count; ++i) {
-            volatile uint64_t rnd_num = turbo::lehmer64();
+            turbo::lehmer64();
         }
         auto time_end   = util::Env::Default()->NowMicros();
         printf("lehmer64 speed: %f Mops/s\n", (double)count / (time_end - time_start));
@@ -31,7 +31,7 @@ void OtherTest() {
     {
         auto time_start = util::Env::Default()->NowMicros();
         for (size_t i = 0; i < count; ++i) {
-            volatile uint64_t rnd_num = turbo::wyhash32();
+            turbo::wyhash32();
         }
         auto time_end   = util::Env::Default()->NowMicros();
         printf("wyhash32 speed: %f Mops/s\n", (double)count / (time_end - time_start));
@@ -40,7 +40,7 @@ void OtherTest() {
     {
         auto time_start = util::Env::Default()->NowMicros();
         for (size_t i = 0; i < count; ++i) {
-            volatile uint64_t rnd_num = turbo::MurMurHash::hash("12345678", 8);
+            turbo::MurMurHash::hash("12345678", 8);
         }
         auto time_end   = util::Env::Default()->NowMicros();
         printf("murmur speed: %f Mops/s\n", (double)count / (time_end - time_start));
@@ -93,6 +93,6 @@ int main(int argc, char *argv[]) {
     hashtable->DebugInfo();
     read_fun();
 
-    printf("size of atomic bool: %d\n", sizeof(std::atomic<bool>));
+    printf("size of atomic bool: %lu\n", sizeof(std::atomic<bool>));
     return 0;
 }

@@ -87,7 +87,7 @@ int main() {
     auto time_start = util::Env::Default()->NowMicros();
     int pick_time = 100000000;
     for (int i = 0; i < pick_time; ++i) {
-        volatile int res = randomPickBit.pickOne();
+        randomPickBit.pickOne();
     }
     auto time_end  = util::Env::Default()->NowMicros();
 

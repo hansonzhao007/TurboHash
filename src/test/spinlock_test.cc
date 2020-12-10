@@ -8,10 +8,7 @@
 #include <unistd.h>
 #include "util/env.h"
 #include "turbo/hash_function.h"
-#include "turbo/nodeversion.hh"
 using namespace util;
-
-static nodeversion32 global_epoch_lock(false);
 
 // static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23};
 std::string print_binary(uint32_t bitmap)
@@ -60,7 +57,6 @@ int main() {
     turbo_bit_spin_unlock(lock_value, 0);
     printf("succ unlock. lock value: %08x\n", *lock_value);
 
-
     int kLoops = 100000;
 
     {
@@ -87,57 +83,6 @@ int main() {
     }
 
     {
-        std::atomic<int> tmp(0);
-        std::vector<std::thread> workers2;        
-        ShardLock locks;
-        auto start_time = Env::Default()->NowNanos();
-        for (int i = 0; i < kThreadNum; i++) {
-            // each worker add 10000,
-            workers2.push_back(std::thread([&locks, i, kLoops]() 
-            {   
-                // util::Env::Default()->PinCore(kThreadIDs[i]);
-                int loop = kLoops;
-                while (loop--) {
-                    int x = turbo::wyhash32();
-                    ShardLockScope lock(&locks, x);
-                }
-            }));
-        }
-        std::for_each(workers2.begin(), workers2.end(), [](std::thread &t) 
-        {
-            t.join();
-        });
-        auto end_time = Env::Default()->NowNanos();
-        printf("ShardLock Speed: %f Mops/s.\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0);
-    }
-
-    {
-        std::atomic<int> tmp(0);
-        std::vector<std::thread> workers2;        
-        ShardSpinLock locks(10);        
-        auto start_time = Env::Default()->NowNanos();
-        for (int i = 0; i < kThreadNum; i++) {
-            // each worker add 10000,
-            workers2.push_back(std::thread([&locks, i, kLoops]() 
-            {   
-                // util::Env::Default()->PinCore(kThreadIDs[i]);
-                int loop = kLoops;
-                while (loop--) {                    
-                    int x = turbo::wyhash32();                    
-                    locks.Lock(x);
-                    locks.Unlock(x);
-                }
-            }));
-        }
-        std::for_each(workers2.begin(), workers2.end(), [](std::thread &t) 
-        {
-            t.join();
-        });
-        auto end_time = Env::Default()->NowNanos();
-        printf("ShardSpinLock Speed: %f Mops/s.\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0);
-    }
-
-    {
         int sum = 0;
         std::vector<std::thread> workers2;        
         AtomicSpinLock locks;
@@ -160,30 +105,6 @@ int main() {
         });
         auto end_time = Env::Default()->NowNanos();
         printf("AtomicSpinLock Speed: %f Mops/s. sum: %d\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0, sum);
-    }
-
-    {
-        int sum = 0;
-        std::vector<std::thread> workers2;        
-        auto start_time = Env::Default()->NowNanos();
-        for (int i = 0; i < kThreadNum; i++) {
-            // each worker add 10000,
-            workers2.push_back(std::thread([&global_epoch_lock, i, kLoops, &sum]() 
-            {   
-                int loop = kLoops;
-                while (loop--) {
-                    global_epoch_lock.lock();
-                    sum++;                   
-                    global_epoch_lock.unlock();
-                }
-            }));
-        }
-        std::for_each(workers2.begin(), workers2.end(), [](std::thread &t) 
-        {
-            t.join();
-        });
-        auto end_time = Env::Default()->NowNanos();
-        printf("global_epoch_lock Speed: %f Mops/s. sum: %d\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0, sum);
     }
     
     {
@@ -209,21 +130,8 @@ int main() {
             t.join();
         });
         auto end_time = Env::Default()->NowNanos();
-        printf("spinlock Speed: %f Mops/s. sum: %d\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0, sum);
+        printf("SpinLockScope Speed: %f Mops/s. sum: %d\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0, sum);
     }
 
-    // {
-    //     char* tmp_mem = new char [17];
-    //     memset(tmp_mem, 0xFF, 17);
-    //     printf("tmp_mem content: %s\n", print_binary(*(uint32_t*)tmp_mem).c_str());
-    //     tmp_mem[2] = 'a';
-    //     printf("tmp_mem content: %s\n", print_binary(*(uint32_t*)tmp_mem).c_str());
-
-    //     std::atomic<bool>* spinloc = (std::atomic<bool>*)(tmp_mem);
-    //     printf("spinlock_init val: %d\n", spinloc->load());
-    //     spinloc->store(true);
-    //     printf("spinlock_init val: %d\n", spinloc->load());
-    //     printf("tmp_mem content: %s\n", print_binary(*(uint32_t*)tmp_mem).c_str());
-    // }
     
 }

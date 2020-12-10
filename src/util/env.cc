@@ -52,7 +52,8 @@ Env::Env():
     // IncBackgroundThreadsIfNeeded(0 , Env::Priority::BOTTOM);
     // IncBackgroundThreadsIfNeeded(1 , Env::Priority::LOW);
     // IncBackgroundThreadsIfNeeded(2 , Env::Priority::HIGH);
-    NewLogger("my.log", &logger_);
+    std::string logfile_name = "log" + std::to_string(NowMicros()/1000000) + ".log";
+    NewLogger(logfile_name, &logger_);
 }
 
 Env::~Env() {
