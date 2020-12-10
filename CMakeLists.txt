@@ -78,7 +78,7 @@ link_directories(/usr/lib)
 link_directories(/usr/local/lib)
 link_directories(${PROJECT_SOURCE_DIR}/lib/pcm)
 
-list(APPEND THIRDPARTY_LIBS pmem vmem PCM)
+list(APPEND THIRDPARTY_LIBS pmem vmem PCM pmemobj)
 
 # all the binary will be in the build folder
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})

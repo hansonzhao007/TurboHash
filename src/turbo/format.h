@@ -71,7 +71,7 @@ public:
         return buffer;
     }
 };
-    
+
 // bits 0 - 6 are uesd as magic number to indicate the start of a record
 enum ValueType {
     kTypeDeletion = 0x2A,   // 0b 0_0101010

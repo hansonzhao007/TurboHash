@@ -93,15 +93,14 @@ inline void turbo_bit_spin_lock(turbo_bitspinlock *lock, int bit_pos)
         if (turbo_atomic_bittestandset_x86(lock, bit_pos) == SPINLOCK_FREE) {
             return;
         }
-        while ((*lock) & (1 << bit_pos)) /* cpu_relax();*/ _mm_pause();
+        while ((*lock) & (1 << bit_pos)) __builtin_ia32_pause();
     }
     
 }
 
 inline void turbo_bit_spin_unlock(turbo_bitspinlock *lock, int bit_pos)
 {
-    // barrier();
-    std::atomic_thread_fence(std::memory_order_acq_rel);
+    barrier();
     *lock &= ~(1 << bit_pos);
 }
 
@@ -201,6 +200,7 @@ private:
     uint32_t mask_;
 };
 
+// https://rigtorp.se/spinlock/
 class AtomicSpinLock {
 public:
   std::atomic<bool> lock_ = {0};

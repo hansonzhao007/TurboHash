@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include <atomic>
 #include <vector>
-// #include <libpmem.h>
 #include <algorithm>
 #include <numeric>
 
+#include <jemalloc/jemalloc.h>
 #include "allocator.h"
 #include "bucket_iterator.h"
 #include "format.h"
@@ -24,6 +24,16 @@
 // #define LTHASH_DEBUG_OUT
 
 namespace turbo {
+
+
+/** @brief Compiler fence.
+ *
+ * Prevents reordering of loads and stores by the compiler. Not intended to
+ * synchronize the processor's caches. */
+inline void fence() {
+    asm volatile("" : : : "memory");
+}
+
 
 class HashTable {
 public:
@@ -462,7 +472,8 @@ private:
         // Prevent StoreStore reorder
         // https://www.modernescpp.com/index.php/fences-as-memory-barriers
         // https://preshing.com/20130922/acquire-and-release-fences/
-        std::atomic_thread_fence(std::memory_order_release);
+        // std::atomic_thread_fence(std::memory_order_release);
+        fence();
 
         // set bitmap
         *bitmap = (*bitmap) | (1 << info.slot);
@@ -474,14 +485,14 @@ private:
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
             PartialHash partial_hash(hash_value);
             
-            ShardLockScope lock_bucket(&locks_, partial_hash.bucket_hash_); // Lock current bucket
+            // ShardLockScope lock_bucket(&locks_, partial_hash.bucket_hash_); // Lock current bucket
 
             auto res = findSlotForInsert(key, partial_hash);
 
             if (res.second) { // find a valid slot
                 char* cell_addr = locateCell({res.first.bucket, res.first.associate});
                 
-                // SpinLockScope<0> lock_scope((turbo_bitspinlock*)cell_addr); // Lock current cell
+                SpinLockScope<0> lock_scope((turbo_bitspinlock*)cell_addr); // Lock current cell
                 
                 CellMeta meta(cell_addr);   // obtain the meta part
                 
@@ -495,7 +506,7 @@ private:
                 }
                 else { // current slot has been occupied by another concurrent thread, retry.
                     // #ifdef LTHASH_DEBUG_OUT
-                    printf("retry find slot. %s\n", key.ToString().c_str());
+                    // printf("retry find slot. %s\n", key.ToString().c_str());
                     // #endif
                     retry_find = true;
                 }
