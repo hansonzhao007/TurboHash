@@ -9,5 +9,6 @@ db_test(hello_libpmem)
 
 # db_exe(string_convert)
 db_exe(hash_bench)
+db_exe(hash_bench_old)
 # db_exe(mem_bench)
 db_exe(motivation)

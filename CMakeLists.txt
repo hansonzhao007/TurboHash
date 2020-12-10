@@ -1,4 +1,10 @@
 cmake_minimum_required(VERSION 3.14)
+
+# THIS HAS TO COME BEFORE THE PROJECT LINE
+set(CMAKE_C_COMPILER "clang")
+set(CMAKE_CXX_COMPILER "clang++")
+# THIS HAS TO COME BEFORE THE PROJECT LINE
+
 # set the project name
 project (pmem VERSION 0.0.1 LANGUAGES C CXX)
 
@@ -7,7 +13,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # default using release mode
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE RelWithDebInfo) # RelWithDebInfo
+  set(CMAKE_BUILD_TYPE Release) # RelWithDebInfo
 endif()
 
 # add Intel PCM library
@@ -40,7 +46,7 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     endif(GCC_VERSION VERSION_GREATER 7.5 OR GCC_VERSION VERSION_EQUAL 7.5)
 endif(CMAKE_COMPILER_IS_GNUCXX)
 if(CMAKE_CXX_COMPILER MATCHES "clang")
-    set(CMAKE_CXX_FLAGS "-Wall -Wextra -pedantic")
+    set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 endif(CMAKE_CXX_COMPILER MATCHES "clang")
 
 include(CheckCXXCompilerFlag)
@@ -56,12 +62,19 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 # add avx512 sse2 sse3 support
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -mavx -mavx512f -msse -msse2 -msse3")
 
+# check existence of libcuckoo/cuckoohash_map.hh
+include(CheckIncludeFile)
+check_include_file("libcuckoo/cuckoohash_map.hh" HAVE_CUCKOO)
+if(HAVE_CUCKOO)
+  add_definitions(-DCUCKOO)
+endif()
+
 # check existence of jemalloc
 include(CheckIncludeFile)
 check_include_file("jemalloc/jemalloc.h" HAVE_JEMALLOC)
 if(HAVE_JEMALLOC)
   add_definitions(-DJEMALLOC)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -ljemalloc ")
+  list(APPEND THIRDPARTY_LIBS jemalloc)
 endif()
 
 # In GCC, this will invoke the "-I" command
@@ -117,6 +130,10 @@ endforeach()
 get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY LINK_DIRECTORIES)
 foreach(dir ${dirs})
   message(STATUS "lib dir='${dir}'")
+endforeach()
+
+foreach(tlib ${THIRDPARTY_LIBS})
+  message(STATUS "lib name='${tlib}'")
 endforeach()
 
 

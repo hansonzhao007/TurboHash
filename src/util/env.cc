@@ -280,22 +280,22 @@ void Env::WaitAllJobs(Priority pri) {
 }
 
 void Env::StartThread(void (*function)(void* arg), void* arg) {
-pthread_t t;
-StartThreadState* state = new StartThreadState;
-state->user_function = function;
-state->arg = arg;
-PthreadCall(
-    "start thread", pthread_create(&t, nullptr, &StartThreadWrapper, state));
-PthreadCall("lock", pthread_mutex_lock(&mu_));
-threads_to_join_.push_back(t);
-PthreadCall("unlock", pthread_mutex_unlock(&mu_));
+    pthread_t t;
+    StartThreadState* state = new StartThreadState;
+    state->user_function = function;
+    state->arg = arg;
+    PthreadCall(
+        "start thread", pthread_create(&t, nullptr, &StartThreadWrapper, state));
+    PthreadCall("lock", pthread_mutex_lock(&mu_));
+    threads_to_join_.push_back(t);
+    PthreadCall("unlock", pthread_mutex_unlock(&mu_));
 }
 
 void Env::WaitForJoin() {
-for (const auto tid : threads_to_join_) {
-    pthread_join(tid, nullptr);
-}
-threads_to_join_.clear();
+    for (const auto tid : threads_to_join_) {
+        pthread_join(tid, nullptr);
+    }
+    threads_to_join_.clear();
 }
 
 
@@ -309,7 +309,6 @@ Status Env::NewLogger(const std::string& filename, PosixLogger** result) {
         return Status::OK();
     }
 }
-
 
 // Allow increasing the number of worker threads.
 void Env::IncBackgroundThreadsIfNeeded(int num, Priority pri) {

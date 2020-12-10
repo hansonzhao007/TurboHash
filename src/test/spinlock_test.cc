@@ -35,7 +35,6 @@ std::string print_binary(uint32_t bitmap)
 
 const int kThreadNum = 16;
 int main() {
-    std::atomic<int> aint(0);
     unsigned* lock_value = (unsigned*)malloc(4);
     for (int i = 0; i < 32; ++i) {
         printf("test and set bit: %d\n", i);
@@ -65,7 +64,7 @@ int main() {
         auto start_time = Env::Default()->NowNanos();
         for (int i = 0; i < kThreadNum; i++) {
             // each worker add 10000,
-            workers2.push_back(std::thread([kLoops, &tmp, i]() 
+            workers2.push_back(std::thread([kLoops, &tmp]() 
             {   
                 // util::Env::Default()->PinCore(kThreadIDs[i]);
                 int loop = kLoops;
@@ -89,7 +88,7 @@ int main() {
         auto start_time = Env::Default()->NowNanos();
         for (int i = 0; i < kThreadNum; i++) {
             // each worker add 10000,
-            workers2.push_back(std::thread([&locks, i, kLoops, &sum]() 
+            workers2.push_back(std::thread([&locks, kLoops, &sum]() 
             {   
                 int loop = kLoops;
                 while (loop--) {

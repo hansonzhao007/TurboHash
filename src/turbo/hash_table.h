@@ -79,16 +79,19 @@ public:
         
         BucketMeta* buckets_addr = (BucketMeta*) mmap(ADDR, bucket_meta_space_huge, PROTECTION, FLAGS, -1, 0);
         if (buckets_addr == MAP_FAILED) {
-            buckets_addr = (BucketMeta* ) aligned_alloc(sizeof(BucketMeta), bucket_meta_space);
+            buckets_addr = (BucketMeta* ) aligned_alloc(sizeof(BucketMeta), bucket_meta_space);            
             if (buckets_addr == nullptr) {
                 fprintf(stderr, "malloc %lu space fail.\n", bucket_meta_space);
                 exit(1);
             }
             printf(" Allocated: %lu\n", bucket_meta_space);
+            memset(buckets_addr, 0, bucket_meta_space);
         }
         else {
             printf(" Allocated: %lu\n", bucket_meta_space_huge);
+            memset(buckets_addr, 0, bucket_meta_space_huge);
         }
+        
         buckets_ = buckets_addr;
         buckets_mem_block_ids_ = new int[bucket_count];
         for (size_t i = 0; i < bucket_count; ++i) {
@@ -100,7 +103,7 @@ public:
         
     }
 
-    void DebugInfo() {
+    void DebugInfo() override {
         printf("%s\n", PrintMemAllocator().c_str());
     }
     std::string PrintMemAllocator() {
@@ -257,7 +260,7 @@ public:
 
     }
 
-    bool Put(const util::Slice& key, const util::Slice& value) {
+    bool Put(const util::Slice& key, const util::Slice& value) override {
         // calculate hash value of the key
         size_t hash_value = Hasher::hash(key.data(), key.size());
 
@@ -269,7 +272,7 @@ public:
     }
 
     // Return the entry if key exists
-    bool Get(const std::string& key, std::string* value) {
+    bool Get(const std::string& key, std::string* value) override {
         size_t hash_value = Hasher::hash(key.data(), key.size());
         auto res = findSlot(key, hash_value);
         if (res.second) {
@@ -287,8 +290,7 @@ public:
         return false;
     }
 
-
-    bool Find(const std::string& key, uint64_t& data_offset) {
+    bool Find(const std::string& key, uint64_t& data_offset) override {
         size_t hash_value = Hasher::hash(key.data(), key.size());
         auto res = findSlot(key, hash_value);
         data_offset = res.first.entry;
@@ -300,16 +302,11 @@ public:
         printf("%s\n", key.ToString().c_str());
     }
 
-    double LoadFactor() {
+    double LoadFactor() override {
         return (double) size_.load(std::memory_order_relaxed) / capacity_.load(std::memory_order_relaxed);
     }
 
-    size_t Size() { return size_.load(std::memory_order_relaxed);}
-
-    // Persist entire dram hash to persistent memory
-    void Persist(void* pmemaddr) {
-
-    }
+    size_t Size() override { return size_.load(std::memory_order_relaxed);}
 
     void IterateValidBucket() {
         printf("Iterate Valid Bucket\n");
@@ -362,7 +359,7 @@ public:
         printf("iterato %lu entries. total size: %lu\n", count, size_.load(std::memory_order_relaxed));
     }
 
-    std::string ProbeStrategyName() {
+    std::string ProbeStrategyName() override {
         return ProbeStrategy::name();
     }
 
@@ -513,7 +510,6 @@ private:
         return  Media::ParseKey(reinterpret_cast<void*>(slot.entry));
     }
 
-    
     // Find a valid slot for insertion
     // Return: std::pair
     //      first: the slot info that should insert the key

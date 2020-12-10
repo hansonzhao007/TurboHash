@@ -112,21 +112,21 @@ public:
     std::string print_binary(uint32_t bitmap)
     {
         char buffer[1024];
-        const char *bit_rep[16] = {
-            [ 0] = "0000", [ 1] = "0001", [ 2] = "0010", [ 3] = "0011",
-            [ 4] = "0100", [ 5] = "0101", [ 6] = "0110", [ 7] = "0111",
-            [ 8] = "1000", [ 9] = "1001", [10] = "1010", [11] = "1011",
-            [12] = "1100", [13] = "1101", [14] = "1110", [15] = "1111",
+        static std::string bit_rep[16] = {
+            "0000", "0001", "0010", "0011",
+            "0100", "0101", "0110", "0111",
+            "1000", "1001", "1010", "1011",
+            "1100", "1101", "1110", "1111"
         };
         sprintf(buffer, "%s%s%s%s%s%s%s%s", 
-            bit_rep[(bitmap >> 28) & 0x0F],
-            bit_rep[(bitmap >> 24) & 0x0F],
-            bit_rep[(bitmap >> 20) & 0x0F],
-            bit_rep[(bitmap >> 16) & 0x0F],
-            bit_rep[(bitmap >> 12) & 0x0F],
-            bit_rep[(bitmap >>  8) & 0x0F],
-            bit_rep[(bitmap >>  4) & 0x0F],
-            bit_rep[(bitmap >>  0) & 0x0F]
+            bit_rep[(bitmap >> 28) & 0x0F].c_str(),
+            bit_rep[(bitmap >> 24) & 0x0F].c_str(),
+            bit_rep[(bitmap >> 20) & 0x0F].c_str(),
+            bit_rep[(bitmap >> 16) & 0x0F].c_str(),
+            bit_rep[(bitmap >> 12) & 0x0F].c_str(),
+            bit_rep[(bitmap >>  8) & 0x0F].c_str(),
+            bit_rep[(bitmap >>  4) & 0x0F].c_str(),
+            bit_rep[(bitmap >>  0) & 0x0F].c_str()
         );
         return buffer;
     }
@@ -241,17 +241,17 @@ public:
     std::string print_binary(uint16_t bitmap)
     {
         char buffer[1024];
-        const char *bit_rep[16] = {
-            [ 0] = "0000", [ 1] = "0001", [ 2] = "0010", [ 3] = "0011",
-            [ 4] = "0100", [ 5] = "0101", [ 6] = "0110", [ 7] = "0111",
-            [ 8] = "1000", [ 9] = "1001", [10] = "1010", [11] = "1011",
-            [12] = "1100", [13] = "1101", [14] = "1110", [15] = "1111",
+        static std::string bit_rep[16] = {
+            "0000", "0001", "0010", "0011",
+            "0100", "0101", "0110", "0111",
+            "1000", "1001", "1010", "1011",
+            "1100", "1101", "1110", "1111"
         };
         sprintf(buffer, "%s%s%s%s", 
-            bit_rep[(bitmap >> 12) & 0x0F],
-            bit_rep[(bitmap >>  8) & 0x0F],
-            bit_rep[(bitmap >>  4) & 0x0F],
-            bit_rep[(bitmap >>  0) & 0x0F]
+            bit_rep[(bitmap >> 12) & 0x0F].c_str(),
+            bit_rep[(bitmap >>  8) & 0x0F].c_str(),
+            bit_rep[(bitmap >>  4) & 0x0F].c_str(),
+            bit_rep[(bitmap >>  0) & 0x0F].c_str()
         );
         return buffer;
     }

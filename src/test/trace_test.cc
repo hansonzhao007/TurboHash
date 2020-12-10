@@ -78,7 +78,7 @@ int main() {
         size_t i;
         
         for (i = 0; key_iterator.Valid(); i++) {
-            const std::string& k = key_iterator.Next();
+            key_iterator.Next();
             if ((i & 0xFFFFF) == 0) {
                 fprintf(stderr, "iteration %*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
             }

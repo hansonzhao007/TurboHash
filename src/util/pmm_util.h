@@ -528,8 +528,8 @@ private:
     const std::string file_name_;
     std::vector<IPMInfo> metrics_before_;
     std::vector<IPMInfo> metrics_after_;
-    uint64_t start_time_;
-    uint64_t end_time_;
+    // uint64_t start_time_;
+    // uint64_t end_time_;
 };
 
 class WriteAmplificationWatcher {

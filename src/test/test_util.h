@@ -92,6 +92,13 @@ public:
         return Iterator(&keys_, start_index, range);
     }
     
+    size_t KeySize() {
+        if (keys_.size() == 0) {
+            return 0;
+        }
+        return keys_[0].size();
+    }
+
     size_t count_;
     std::vector<std::string> keys_;
 };
@@ -136,7 +143,7 @@ public:
                 trace_.Reset();
                 cur_index_ = 0;
             }
-            return std::move(res);
+            return res;
         }
 
         inline int fast_mod(const int input, const int ceil) {
