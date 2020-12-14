@@ -17,10 +17,23 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # add Intel PCM library
-add_custom_command(OUTPUT libPCM.a
+add_custom_command( OUTPUT libPCM.a
                     COMMAND make lib
                     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/pcm)
 add_custom_target(pcm DEPENDS libPCM.a)
+link_directories(${PROJECT_SOURCE_DIR}/lib/pcm)
+list(APPEND THIRDPARTY_LIBS PCM)
+
+# add liballoc.a library: https://github.com/urcs-sync/ralloc
+execute_process(  COMMAND make libralloc.a -j8
+                  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/ralloc/test
+                  )
+link_directories(${PROJECT_SOURCE_DIR}/lib/ralloc/test)
+list(APPEND THIRDPARTY_LIBS ralloc)
+include_directories(
+  "${PROJECT_SOURCE_DIR}/lib/ralloc/src"
+)
+add_definitions(-DRALLOC)
 
 # add gflags library
 add_subdirectory(lib/gflags)
@@ -89,9 +102,8 @@ include_directories(
 # add system local lib
 link_directories(/usr/lib)
 link_directories(/usr/local/lib)
-link_directories(${PROJECT_SOURCE_DIR}/lib/pcm)
 
-list(APPEND THIRDPARTY_LIBS pmem vmem PCM pmemobj)
+list(APPEND THIRDPARTY_LIBS pmem vmem pmemobj)
 
 # all the binary will be in the build folder
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -135,7 +147,6 @@ endforeach()
 foreach(tlib ${THIRDPARTY_LIBS})
   message(STATUS "lib name='${tlib}'")
 endforeach()
-
 
 # The add_subdirectory will add CMakeLists.txt under src and tests into your project.
 add_subdirectory(src)

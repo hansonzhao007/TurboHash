@@ -265,7 +265,7 @@ public:
         size_t hash_value = Hasher::hash(key.data(), key.size());
 
         // store the kv pair to media
-        void* media_offset = Media::Store(key, value);
+        void* media_offset = Media::Store(kTypeValue, key, value);
 
         // update DRAM index, thread safe
         return insertSlot(key, hash_value, media_offset);
@@ -277,9 +277,9 @@ public:
         auto res = findSlot(key, hash_value);
         if (res.second) {
             // find a key in hash table
-            auto datanode = Media::ParseData(res.first.entry);
-            if (datanode.first  == kTypeValue) {
-                value->assign(datanode.second.second.data(), datanode.second.second.size());
+            Record record = Media::ParseData(res.first.entry);
+            if (record.type  == kTypeValue) {
+                value->assign(record.value.data(), record.value.size());
                 return true;
             }
             else {
@@ -327,12 +327,12 @@ public:
             SlotInfo& info = res.first;
             info.bucket = i;
             HashSlot& slot = res.second;
-            auto datanode = Media::ParseData(slot.entry);
+            Record record = Media::ParseData(slot.entry);
             printf("%s, addr: %16lx. key: %.8s, value: %s\n", 
                 info.ToString().c_str(),
                 slot.entry, 
-                datanode.second.first.ToString().c_str(),
-                datanode.second.second.ToString().c_str());
+                record.key.ToString().c_str(),
+                record.value.ToString().c_str());
             ++iter;
         }
     }
@@ -346,12 +346,12 @@ public:
                 auto res = (*iter);
                 SlotInfo& info = res.first;
                 HashSlot& slot = res.second;
-                auto datanode = Media::ParseData(slot.entry);
+                Record record = Media::ParseData(slot.entry);
                 printf("%s, addr: %16lx. key: %.8s, value: %s\n", 
                     info.ToString().c_str(),
                     slot.entry, 
-                    datanode.second.first.ToString().c_str(),
-                    datanode.second.second.ToString().c_str());
+                    record.key.ToString().c_str(),
+                    record.value.ToString().c_str());
                 ++iter;
                 count++;
             }
@@ -675,7 +675,6 @@ private:
 
     const int       kCellSize = CellMeta::CellSize();
     const int       kCellSizeLeftShift = CellMeta::CellSizeLeftShift;
-    const size_t    kMaxLogFileSize = 4LU << 30;        // 4 GB
 };
 
 }
