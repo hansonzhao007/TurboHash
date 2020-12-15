@@ -5,14 +5,15 @@
 #include <libcuckoo/cuckoohash_map.hh>
 #endif
 
+#include "turbo/turbo_hash.h"
+
 #include "util/env.h"
-#include "turbo/hash_function.h"
-#include "turbo/hash_table.h"
 #include "util/robin_hood.h"
 #include "util/io_report.h"
 #include "util/trace.h"
 #include "util/perf_util.h"
 #include "util/histogram.h"
+#include "util/port_posix.h"
 
 #include "absl/container/flat_hash_map.h"
 
@@ -55,18 +56,18 @@ DEFINE_string(benchmarks, "fillrandom,readrandom", "");
 namespace {
 
 
-turbo::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate) {
-    if (0 == cell_type && 0 == probe_type)
-        return new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinBucket>(bucket, associate);
-    if (0 == cell_type && 1 == probe_type)
-        return new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinCell>(bucket, associate);
-    if (1 == cell_type && 0 == probe_type)
-        return new turbo::DramHashTable<turbo::CellMeta256, turbo::ProbeWithinBucket>(bucket, associate);
-    if (1 == cell_type && 1 == probe_type)
-        return new turbo::DramHashTable<turbo::CellMeta256, turbo::ProbeWithinCell>(bucket, associate);
-    else
-        return new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinBucket>(bucket, associate);
-}
+// turbo::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate) {
+//     if (0 == cell_type && 0 == probe_type)
+//         return new turbo::detail::TurboHashTable<turbo::detail::CellMeta128, turbo::detail::ProbeWithinBucket>(bucket, associate);
+//     if (0 == cell_type && 1 == probe_type)
+//         return new turbo::detail::TurboHashTable<turbo::detail::CellMeta128, turbo::detail::ProbeWithinCell>(bucket, associate);
+//     if (1 == cell_type && 0 == probe_type)
+//         return new turbo::detail::TurboHashTable<turbo::detail::CellMeta256, turbo::detail::ProbeWithinBucket>(bucket, associate);
+//     if (1 == cell_type && 1 == probe_type)
+//         return new turbo::detail::TurboHashTable<turbo::detail::CellMeta256, turbo::detail::ProbeWithinCell>(bucket, associate);
+//     else
+//         return new turbo::detail::TurboHashTable<turbo::detail::CellMeta128, turbo::detail::ProbeWithinBucket>(bucket, associate);
+// }
 class Random {
 private:
     uint32_t seed_;
@@ -161,13 +162,13 @@ class RandomGenerator {
         pos_ = 0;
     }
 
-  inline Slice Generate(size_t len) {
+  inline turbo::util::Slice Generate(size_t len) {
     if (pos_ + len > data_.size()) {
       pos_ = 0;
       assert(len < data_.size());
     }
     pos_ += len;
-    return Slice(data_.data() + pos_ - len, len);
+    return turbo::util::Slice(data_.data() + pos_ - len, len);
   }
 };
 
@@ -469,7 +470,7 @@ public:
     int value_size_;
     size_t reads_;
     size_t writes_;
-    turbo::HashTable* hashtable_;
+    turbo::unordered_map* hashtable_;
     RandomKeyTrace* key_trace_;
     size_t max_count_;
     size_t max_range_;
@@ -512,7 +513,7 @@ public:
             }
 
             if (fresh_db) {
-                hashtable_ = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);                
+                hashtable_ = new turbo::unordered_map(FLAGS_bucket_size, FLAGS_associate_size);                
             }
             
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);

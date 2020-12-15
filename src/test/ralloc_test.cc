@@ -2,11 +2,11 @@
 #include <functional>
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstring>
 
 // ralloc
 #include "ralloc.hpp"
 #include "pptr.hpp"
-#include "AllocatorMacro.hpp"
 
 #include "gflags/gflags.h"
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
@@ -15,12 +15,29 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 DEFINE_string(op, "write", "write, read, delete");
 
-
 struct Node {
     int32_t key;
     int32_t val;
-    atomic_pptr<Node> next;
+    pptr<Node> next;
+    pptr<char> str;
 };
+
+void SerilizeStr(char* addr, const std::string& str) {
+    // printf("serialize %s\n", str.c_str());
+    *addr = str.size();
+    addr += 1;
+    memcpy(addr, str.data(), str.size());
+    FLUSH(addr);
+    FLUSHFENCE;
+}
+
+const std::string ParseStr(char* addr) {
+    std::string res;
+    int len = *addr;
+    res.assign(addr + 1, len);
+    // printf("Decode len: %d. %s\n", len, res.c_str());
+    return res;
+}
 
 int main(int argc, char *argv[])
 {
@@ -28,53 +45,65 @@ int main(int argc, char *argv[])
 
     printf("Size of Node with pptr pointer: %d\n", sizeof(Node));
 
-    bool res = pm_init();
+    bool res = RP_init("hanson");
 
-    if (FLAGS_op == "write") {
-        if (res) {
-            printf("Dirty restart, prepare to recover\n");
-            pm_recover();
-
+    if (res) {
+        printf("Rmapping, prepare to recover\n");
+        RP_get_root<Node>(0);
+        int recover_res = RP_recover();
+        if (recover_res == 1) {
+            printf("Dirty open, recover\n");
         } else {
-            printf("Clean restart\n");
+            printf("Clean open.\n");
         }
-        void* buf = pm_malloc(sizeof(Node));
+    } else {
+        printf("Clean restart\n");
+    }
+
+    if (FLAGS_op == "write") {        
+        void* buf = RP_malloc(sizeof(Node));
         Node* head = static_cast<Node*>(buf);
         head->key = 666;
         head->val = 6969;
-
-        pm_set_root(buf, 0);
+        char* tmp = (char*) RP_malloc(5);
+        SerilizeStr(tmp, "head");
+        head->str = tmp;
+        FLUSH(head);
+        FLUSHFENCE;
+        RP_set_root(buf, 0);
 
         // add 10 nodes
         Node* cur = head;
         for (int i = 0; i < 10; i++) {
-            Node* node = (Node*)pm_malloc(sizeof(Node));
+            Node* node = (Node*)RP_malloc(sizeof(Node));
             node->key = 100 + i;
             node->val = 1000 + i;
             node->next = nullptr;
-            printf("Write new Node 0x%lx. key: %d, val: %d\n", node, node->key, node->val);
-            cur->next.store(node);
+            char* tmp = (char*) RP_malloc(6);
+            SerilizeStr(tmp, "node" + std::to_string(i)); 
+            node->str = tmp;
+            FLUSH(node);
+            FLUSHFENCE;              
+            cur->next = node;       
+            printf("Write node%d. Dram addr: 0x%lx. Pmem off: 0x%lx, key: %d, val: %d\n", i, node, cur->next.off, node->key, node->val);
             cur = node;
+            FLUSH(node);
+            FLUSHFENCE;
         }
     } else if (FLAGS_op == "read") {
-        res = pm_init();
-        if (res) {
-            printf("Dirty restart, prepare to recover\n");
-            pm_recover();
-
-        } else {
-            printf("Clean restart\n");
-        }
-
-        Node* head = pm_get_root<Node>(0);
-
-        Node* cur = head;
-        for (int i = 0; i < 11; i++) {
-            printf("Read node 0x%lx. key: %d, val: %d\n", cur, cur->key, cur->val);
-            cur = cur->next.load();
+        Node* head = RP_get_root<Node>(0);
+        Node* prev = head;
+        Node* cur  = head->next;
+        
+        while (cur != nullptr) {
+            char *str = cur->str;
+            auto res = ParseStr(str);
+            printf("Read %s. Dram addr: 0x%lx. Pmem off: 0x%lx, key: %d, val: %d.\n", res.c_str(), cur, prev->next.off, cur->key, cur->val);
+            prev = cur;
+            cur = cur->next;
         }
     }
     
-    pm_close();
+    RP_close();
     return 0;
 }

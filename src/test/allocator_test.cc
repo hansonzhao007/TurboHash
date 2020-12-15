@@ -1,6 +1,9 @@
 #include <cstdlib>
 #include "util/env.h"
 #include "turbo/allocator.h"
+#include <thread>
+#include <algorithm>
+#include <unistd.h>
 
 using namespace util;
 using namespace turbo;
@@ -46,6 +49,33 @@ int main() {
             printf("mem block id: %d\n", tmp.first);
         }
 
+    }
+
+    {
+        int block_count = 10;
+        MemAllocator<CellMeta128, 65536> allocater(block_count);
+        int kLoops=512;
+        int kNumThread = 8;
+        std::vector<std::thread> workers2;
+        auto start_time = Env::Default()->NowNanos();
+        for (int i = 0; i < kNumThread; i++) {
+            // each worker add 10000,
+            workers2.push_back(std::thread([kLoops, &allocater, i]() 
+            {   
+                int loop = kLoops;
+                while (loop--) {
+                    auto tmp = allocater.AllocateSafe(128);
+                    // ::usleep(1);
+                    printf("thread %2d: mem block id: %d\n", i, tmp.first);
+                }
+            }));
+        }
+        std::for_each(workers2.begin(), workers2.end(), [](std::thread &t) 
+        {
+            t.join();
+        });
+        auto end_time = Env::Default()->NowNanos();
+        printf("Speed: %f Mops/s.\n", (double)(kLoops * kNumThread)  / (end_time - start_time) * 1000.0);
     }
     return 0;
 }
