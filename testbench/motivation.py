@@ -2,6 +2,7 @@
 import csv
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
@@ -50,12 +51,13 @@ def PlotMiss(data, lines, latency, filename, islog):
         transform = ax.transAxes,
         fontsize=12)
     start, end = ax2.get_ylim()
-    ax2.yaxis.set_major_locator(MultipleLocator(500))
+    ticks_loc = ax2.get_yticks().tolist()
+    ax2.yaxis.set_major_locator(mticker.FixedLocator(ticks_loc))
     ax2.yaxis.set_major_formatter(FormatStrFormatter('%d'))
     # For the minor ticks, use no labels; default NullFormatter.
-    ax2.yaxis.set_minor_locator(MultipleLocator(100))
+    # ax2.yaxis.set_minor_locator(MultipleLocator(100))
     ax2.tick_params(axis="y", direction="inout", pad=-24)
-    ax2.set_yticklabels(["", " ", "500", "1k"])
+    ax2.set_yticklabels(["", "", "", "600", "", "", ""])
     ax2.set_xlim([-0.5, 5.8])
     ax2.set_axisbelow(True)
     

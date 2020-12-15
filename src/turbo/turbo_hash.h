@@ -80,13 +80,9 @@
 #define TURBO_HUGE_FLAGS (MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB)
 #endif
 
- /* Compiler fence. */
 inline void TURBO_COMPILER_FENCE() {
-    asm volatile("" : : : "memory");
+    asm volatile("" : : : "memory"); /* Compiler fence. */
 }
-
-
-
 
 // Linear probing setting
 static const int kTurboMaxProbeLen = 17;
@@ -246,6 +242,7 @@ inline bool operator!=(const Slice& x, const Slice& y) {
     return !(x == y);
 }
 
+
 /** Hasher
  *  @note: provide hash function for string
 */
@@ -399,6 +396,27 @@ public:
 
 }; // end of class AtomicBitOps
 
+
+static inline bool turbo_lockbusy(uint32_t *lock, int bit_pos) {
+    return (*lock) & (1 << bit_pos);
+}
+
+static inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
+{
+    while(1) {
+        // test & set return 0 if success
+        if (AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_SPINLOCK_FREE) {
+            return;
+        }
+        while (turbo_lockbusy(lock, bit_pos)) __builtin_ia32_pause();
+    }
+}
+
+static inline void turbo_bit_spin_unlock(uint32_t *lock, int bit_pos)
+{
+    TURBO_BARRIER();
+    *lock &= ~(1 << bit_pos);
+}
 /** SpinLockScope
  *  @note: a spinlock monitor, lock when initialized, unlock then deconstructed.
 */
@@ -414,35 +432,103 @@ public:
         // release the bit lock
         turbo_bit_spin_unlock(lock_, kBitLockPosition);
     }
-
 private:
-    inline bool turbo_lockbusy(uint32_t *lock, int bit_pos) {
-        return (*lock) & (1 << bit_pos);
-    }
-
-    inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
-    {
-        while(1) {
-            // test & set return 0 if success
-            if (AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_SPINLOCK_FREE) {
-                return;
-            }
-            while (turbo_lockbusy(lock, bit_pos)) __builtin_ia32_pause();
-        }
-    }
-
-    inline void turbo_bit_spin_unlock(uint32_t *lock, int bit_pos)
-    {
-        TURBO_BARRIER();
-        *lock &= ~(1 << bit_pos);
-    }
     uint32_t *lock_;
 }; // end of class SpinLockScope
 
+
+// https://rigtorp.se/spinlock/
+class AtomicSpinLock {
+public:
+    std::atomic<bool> lock_ = {0};
+
+    void lock() noexcept {
+        for (;;) {
+        // Optimistically assume the lock is free on the first try
+        if (!lock_.exchange(true, std::memory_order_acquire)) {
+            return;
+        }
+        // Wait for lock to be released without generating cache misses
+        while (lock_.load(std::memory_order_relaxed)) {
+            // Issue X86 PAUSE or ARM YIELD instruction to reduce contention between
+            // hyper-threads
+            __builtin_ia32_pause();
+        }
+        }
+    }
+
+    bool try_lock() noexcept {
+        // First do a relaxed load to check if lock is free in order to prevent
+        // unnecessary cache misses if someone does while(!try_lock())
+        return !lock_.load(std::memory_order_relaxed) &&
+            !lock_.exchange(true, std::memory_order_acquire);
+    }
+
+    void unlock() noexcept {
+        lock_.store(false, std::memory_order_release);
+    }
+}; // end of class AtomicSpinLock
+
 }; // end of namespace turbo::util
 
-namespace detail {
 
+// A thin wrapper around std::hash, performing an additional simple mixing step of the result.
+// from https://github.com/martinus/robin-hood-hashing
+template <typename T>
+struct hash : public std::hash<T> {
+    size_t operator()(T const& obj) const
+        noexcept(noexcept(std::declval<std::hash<T>>().operator()(std::declval<T const&>()))) {
+        // call base hash
+        auto result = std::hash<T>::operator()(obj);
+        // return mixed of that, to be save against identity has
+        return util::Hasher::hash_int(static_cast<uint64_t>(result));
+    }
+};
+template <>
+struct hash<std::string> {
+    size_t operator()(std::string const& str) const noexcept {
+        return util::Hasher::hash(str.data(), str.size());
+    }
+};
+template <class T>
+struct hash<T*> {
+    size_t operator()(T* ptr) const noexcept {
+        return util::Hasher::hash_int(reinterpret_cast<size_t>(ptr));
+    }
+};
+#define TURBO_HASH_INT(T)                                               \
+    template <>                                                         \
+    struct hash<T> {                                                    \
+        size_t operator()(T obj) const noexcept {                       \
+            return util::Hasher::hash_int(static_cast<uint64_t>(obj));  \
+        }                                                               \
+    }
+
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wuseless-cast"
+#endif
+// see https://en.cppreference.com/w/cpp/utility/hash
+TURBO_HASH_INT(bool);
+TURBO_HASH_INT(char);
+TURBO_HASH_INT(signed char);
+TURBO_HASH_INT(unsigned char);
+TURBO_HASH_INT(char16_t);
+TURBO_HASH_INT(char32_t);
+TURBO_HASH_INT(wchar_t);
+TURBO_HASH_INT(short);
+TURBO_HASH_INT(unsigned short);
+TURBO_HASH_INT(int);
+TURBO_HASH_INT(unsigned int);
+TURBO_HASH_INT(long);
+TURBO_HASH_INT(long long);
+TURBO_HASH_INT(unsigned long);
+TURBO_HASH_INT(unsigned long long);
+#if defined(__GNUC__) && !defined(__clang__)
+#    pragma GCC diagnostic pop
+#endif
+
+namespace detail {
 
 /** CellMeta128
  *  @note:  Hash cell whose size is 128 byte. There are 14 slots in the cell.
@@ -695,80 +781,10 @@ private:
     uint32_t    bitmap_;        // 1: occupied, 0: empty or deleted
 }; // end of class CellMeta256
 
-/** HashSlot
- *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
-*/
-struct HashSlot{
-    uint64_t entry:48;      // pointer to key-value record
-    uint64_t H1:16;         // hash-tag for the key
-};
-
-/** PartialHash
- *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
- *  @format:
- *  | MSB    - - - - - - - - - - - - - - - - - - LSB |
- *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
- *  |    bucket_hash |     H1    |         |    H2   |
-*/
-struct PartialHash {
-    PartialHash(uint64_t hash) :
-        bucket_hash_( hash >> 32 ),
-        H1_( ( hash >> 16 ) & 0xFFFF ),
-        H2_( hash & 0xFF )
-        { };
-
-    // used to locate in the bucket directory
-    uint32_t  bucket_hash_;
-
-    // H1: 2 byte hash tag 
-    uint16_t H1_;
-
-    // H2: 1 byte hash tag in CellMeta for parallel comparison using SIMD cmd
-    uint8_t  H2_;
-
-}; // end of class PartialHash
-
-/** SlotInfo
- *  @note: use to store the target slot location info
-*/
-class SlotInfo {
-public:
-    uint32_t bucket;        // bucket index
-    uint16_t associate;     // associate index
-    uint8_t  slot;          // slot index
-    uint8_t  H2;            // hash-tag in CellMeta
-    uint16_t H1;            // hash-tag in HashSlot
-    bool equal_key;         // If we find a equal key in this slot
-    SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, uint8_t h2, bool euqal):
-        bucket(b),
-        associate(a),
-        slot(s),        
-        H2(h2),
-        H1(h1),
-        equal_key(euqal) {}
-    SlotInfo():
-        bucket(0),
-        associate(0),
-        slot(0),        
-        H2(0),
-        H1(0),
-        equal_key(false) {}
-    std::string ToString() {
-        char buffer[128];
-        sprintf(buffer, "b: %4u, a: %4u, s: %2u, H2: 0x%02x, H1: 0x%04x",
-            bucket,
-            associate,
-            slot,
-            H2,
-            H1);
-        return buffer;
-    }
-}; // end of class SlotInfo
-
 /** MemBlock
  *  @note: a memory block that can allocate at most 'count' Cell (128-byte Cell or 256-byte Cell)
 */
-template <class CellMeta = CellMeta128>
+template <typename CellMeta = CellMeta128>
 class MemBlock { 
 public:
     MemBlock(int block_id, size_t count):
@@ -873,7 +889,7 @@ private:
 /** CellAllocator
  *  @note: used to allocate N Cell space
 */
-template <class CellMeta = CellMeta128, size_t kBucketCellCount = 32768>
+template <typename CellMeta = CellMeta128, size_t kBucketCellCount = 32768>
 class CellAllocator {
 public:
     CellAllocator(int initial_blocks = 1):
@@ -977,23 +993,83 @@ private:
     uint32_t    spin_lock_;
 }; // end of class CellAllocator
 
-
-/** ValueType
- *  @note: for key-value record type
+/** HashSlot
+ *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
 */
-enum ValueType: unsigned char {
-    kTypeDeletion = 0x2A,   // 0b 0_0101010
-    kTypeValue    = 0xAA,   // 0b 1_0101010
-    kTypeMask     = 0x7F    // 0b 0_1111111
+struct HashSlot{
+    uint64_t entry:48;      // pointer to key-value record
+    uint64_t H1:16;         // hash-tag for the key
 };
+
+/** PartialHash
+ *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
+ *  @format:
+ *  | MSB    - - - - - - - - - - - - - - - - - - LSB |
+ *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
+ *  |    bucket_hash |     H1    |         |    H2   |
+*/
+struct PartialHash {
+    PartialHash(uint64_t hash) :
+        bucket_hash_( hash >> 32 ),
+        H1_( ( hash >> 16 ) & 0xFFFF ),
+        H2_( hash & 0xFF )
+        { };
+
+    // used to locate in the bucket directory
+    uint32_t  bucket_hash_;
+
+    // H1: 2 byte hash tag 
+    uint16_t H1_;
+
+    // H2: 1 byte hash tag in CellMeta for parallel comparison using SIMD cmd
+    uint8_t  H2_;
+
+}; // end of class PartialHash
+
+/** SlotInfo
+ *  @note: use to store the target slot location info
+*/
+class SlotInfo {
+public:
+    uint32_t bucket;        // bucket index
+    uint16_t cell;          // cell index
+    uint8_t  slot;          // slot index
+    uint8_t  H2;            // hash-tag in CellMeta
+    uint16_t H1;            // hash-tag in HashSlot
+    bool equal_key;         // If we find a equal key in this slot
+    SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, uint8_t h2, bool euqal):
+        bucket(b),
+        cell(a),
+        slot(s),        
+        H2(h2),
+        H1(h1),
+        equal_key(euqal) {}
+    SlotInfo():
+        bucket(0),
+        cell(0),
+        slot(0),        
+        H2(0),
+        H1(0),
+        equal_key(false) {}
+    std::string ToString() {
+        char buffer[128];
+        sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%02x, H1: 0x%04x",
+            bucket,
+            cell,
+            slot,
+            H2,
+            H1);
+        return buffer;
+    }
+}; // end of class SlotInfo
 
 /** BucketMeta
  *  @note: a 8-byte 
 */
 class BucketMeta {
 public:
-    explicit BucketMeta(char* addr, uint16_t associate_size) {
-        data_ = (((uint64_t) addr) << 16) | ((associate_size - 1) << 1);
+    explicit BucketMeta(char* addr, uint16_t cell_count) {
+        data_ = (((uint64_t) addr) << 16) | ((cell_count - 1) << 1);
     }
 
     BucketMeta():
@@ -1007,11 +1083,11 @@ public:
         return (char*)(data_ >> 16);
     }
 
-    inline uint16_t AssociateMask() {
+    inline uint16_t CellCountMask() {
         // extract bit [1, 15]
         return ((data_ & 0xFFFF) >> 1);
     }
-    inline uint16_t AssociateSize() {
+    inline uint16_t CellCount() {
         return  (1 << __builtin_popcount(data_ & 0xFFFE));
     }
 
@@ -1019,17 +1095,16 @@ public:
         data_ = (data_ & 0xFFFF) | (((uint64_t)addr) << 16);
     }
 
-    inline void SetAssociateSize(uint16_t size) {
+    inline void SetCellCount(uint16_t size) {
         data_ = (data_ & 0xFFFFFFFFFFFF0001) | ((size - 1) << 1);
     }
 
-    inline void Reset(char* addr, uint16_t associate_size) {
-        data_ = (((uint64_t) addr) << 16) | ((associate_size - 1) << 1);
+    inline void Reset(char* addr, uint16_t cell_count) {
+        data_ = (((uint64_t) addr) << 16) | ((cell_count - 1) << 1);
     }
 
     // lowest -> highest
-    // | 1 bit lock | 15 bit associate mask | 48 bit address |
-    // 15 bit max value is 2^15 - 1, so we assume that real associate size is the 15 bit value + 1.
+    // | 1 bit lock | 15 bit cell mask | 48 bit address |
     uint64_t data_;
 };
 
@@ -1041,16 +1116,16 @@ public:
     static const int MAX_PROBE_LEN  = kTurboMaxProbeLen;
     static const int PROBE_STEP     = kTurboProbeStep;
 
-    ProbeWithinCell(uint64_t initial_hash, uint32_t associate_mask, uint32_t bucket_i) {
+    ProbeWithinCell(uint64_t initial_hash, uint32_t cell_count_mask, uint32_t bucket_i) {
         h_               = initial_hash;
-        associate_mask_  = associate_mask;
-        associate_index_ = h_ & associate_mask_;
+        cell_count_mask_  = cell_count_mask;
+        cell_index_ = h_ & cell_count_mask_;
         bucket_i_        = bucket_i;
         probe_count_     = 0;
     }
 
     inline void reset() {
-        associate_index_ = h_ & associate_mask_;
+        cell_index_ = h_ & cell_count_mask_;
         probe_count_     = 0;
     }
     // indicate whether we have already probed all the assocaite cells
@@ -1059,15 +1134,14 @@ public:
     }
 
     inline void next() {
-        associate_index_ += PROBE_STEP;
-        // assocaite_index mod AssociateCount, 
-        // AssociateMask should be like 0b11
-        associate_index_ &= associate_mask_;
+        cell_index_ += PROBE_STEP;
+        // CellCountMask should be like 0b11
+        cell_index_ &= cell_count_mask_;
         probe_count_++;
     }
 
     inline std::pair<uint32_t, uint32_t> offset() {
-        return {bucket_i_, associate_index_};
+        return {bucket_i_, cell_index_};
     }
 
     static std::string name() {
@@ -1075,8 +1149,8 @@ public:
     }
 private:
     uint64_t  h_;
-    uint32_t  associate_mask_;
-    uint32_t  associate_index_;
+    uint32_t  cell_count_mask_;
+    uint32_t  cell_index_;
     uint32_t  bucket_i_;
     uint32_t  probe_count_;
 }; // end of class ProbeWithinCell
@@ -1088,34 +1162,33 @@ class ProbeWithinBucket {
 public:
     static const int MAX_PROBE_LEN  = kTurboMaxProbeLen;
     static const int PROBE_STEP     = kTurboProbeStep;
-    ProbeWithinBucket(uint64_t initial_hash, uint32_t associate_mask, uint32_t bucket_i) {
+    ProbeWithinBucket(uint64_t initial_hash, uint32_t cell_count_mask, uint32_t bucket_i) {
         h_               = initial_hash;
-        associate_mask_  = associate_mask;
-        associate_index_ = h_ & associate_mask_;
+        cell_count_mask_  = cell_count_mask;
+        cell_index_ = h_ & cell_count_mask_;
         bucket_i_        = bucket_i;
         probe_count_     = 0;
     }
 
     inline void reset() {
-        associate_index_ = h_ & associate_mask_;
+        cell_index_ = h_ & cell_count_mask_;
         probe_count_     = 0;
     }
     
     // indicate whether we have already probed all the assocaite cells
     inline operator bool() const {
-        return probe_count_ <= associate_mask_;
+        return probe_count_ <= cell_count_mask_;
     }
 
     inline void next() {
-        associate_index_ += PROBE_STEP;
-        // assocaite_index mod AssociateCount, 
-        // AssociateMask should be like 0b11
-        associate_index_ &= associate_mask_;
+        cell_index_ += PROBE_STEP;
+        // CellCountMask should be like 0b11
+        cell_index_ &= cell_count_mask_;
         probe_count_++;
     }
 
     inline std::pair<uint32_t, uint32_t> offset() {
-        return {bucket_i_, associate_index_};
+        return {bucket_i_, cell_index_};
     }
 
     static std::string name() {
@@ -1123,12 +1196,20 @@ public:
     }
 private:
     uint64_t  h_;
-    uint32_t  associate_mask_;
-    uint32_t  associate_index_;
+    uint32_t  cell_count_mask_;
+    uint32_t  cell_index_;
     uint32_t  bucket_i_;
     uint32_t  probe_count_;
 };
 
+/** ValueType
+ *  @note: for key-value record type
+*/
+enum ValueType: unsigned char {
+    kTypeDeletion = 0x2A,   // 0b 0_0101010
+    kTypeValue    = 0xAA,   // 0b 1_0101010
+    kTypeMask     = 0x7F    // 0b 0_1111111
+};
 
 /** Record
  *  @note: key-value record
@@ -1215,20 +1296,20 @@ public:
 
 
 /** Usage: iterator every slot in the bucket, return the pointer in the slot
- *  BucketIterator<CellMeta> iter(bucket_addr, associate_count_);
+ *  BucketIterator<CellMeta> iter(bucket_addr, cell_count_);
  *  while (iter.valid()) {
  *      ...
  *      ++iter;
  *  }
 */        
-template<class CellMeta>
+template<typename CellMeta>
 class BucketIterator {
 public:
 typedef std::pair<SlotInfo, HashSlot> value_type;
-    BucketIterator(uint32_t bi, char* bucket_addr, size_t associate_size, size_t assocaite_i = 0):
+    BucketIterator(uint32_t bi, char* bucket_addr, size_t cell_count, size_t cell_i = 0):
         bi_(bi),
-        associate_size_(associate_size),
-        associate_i_(assocaite_i),
+        cell_count_(cell_count),
+        cell_i_(cell_i),
         bitmap_(0),
         bucket_addr_(bucket_addr) {
 
@@ -1236,12 +1317,12 @@ typedef std::pair<SlotInfo, HashSlot> value_type;
         CellMeta meta(bucket_addr);
         bitmap_ = meta.OccupyBitSet();
         if(!bitmap_) toNextValidBitMap();
-        // printf("Initial Bucket iter at ai: %u, si: %u\n", associate_i_, *bitmap_);
+        // printf("Initial Bucket iter at ai: %u, si: %u\n", cell_i_, *bitmap_);
     }
 
     explicit operator bool() const {
-        return (associate_i_ < associate_size_) ||
-               (associate_size_ == associate_size_ && bitmap_);
+        return (cell_i_ < cell_count_) ||
+               (cell_count_ == cell_count_ && bitmap_);
     }
 
     // ++iterator
@@ -1254,61 +1335,77 @@ typedef std::pair<SlotInfo, HashSlot> value_type;
     }
 
     inline value_type operator*() const {
-        // return the associate index, slot index and its slot content
+        // return the cell index, slot index and its slot content
         uint8_t slot_index = *bitmap_;
-        char* cell_addr = bucket_addr_ + associate_i_ * CellMeta::CellSize();
+        char* cell_addr = bucket_addr_ + cell_i_ * CellMeta::CellSize();
         HashSlot* slot = (HashSlot*)(cell_addr + (slot_index << 3));
         uint8_t H2 = *(uint8_t*)(cell_addr + slot_index);
-        return  { {bi_ /* ignore bucket index */, associate_i_ /* associate index */, *bitmap_ /* slot index*/, (uint16_t)slot->H1, H2, false}, 
+        return  { {bi_ /* ignore bucket index */, cell_i_ /* cell index */, *bitmap_ /* slot index*/, (uint16_t)slot->H1, H2, false}, 
                 *slot};
     }
 
     inline bool valid() {
-        return associate_i_ < associate_size_ && (bitmap_ ? true : false);
+        return cell_i_ < cell_count_ && (bitmap_ ? true : false);
     }
 
     std::string ToString() {
         char buffer[128];
-        sprintf(buffer, "associate: %8d, slot: %2d", associate_i_, *bitmap_);
+        sprintf(buffer, "cell: %8d, slot: %2d", cell_i_, *bitmap_);
         return buffer;
     }
 
 private:
 
     inline void toNextValidBitMap() {
-        while(!bitmap_ && associate_i_ < associate_size_) {
-            associate_i_++;
-            if (associate_i_ == associate_size_) return;
-            char* cell_addr = bucket_addr_ + ( associate_i_ << CellMeta::CellSizeLeftShift );
-            bitmap_ = BitSet(*(uint32_t*)(cell_addr) & CellMeta::BitMapMask); 
+        while(!bitmap_ && cell_i_ < cell_count_) {
+            cell_i_++;
+            if (cell_i_ == cell_count_) return;
+            char* cell_addr = bucket_addr_ + ( cell_i_ << CellMeta::CellSizeLeftShift );
+            bitmap_ = util::BitSet(*(uint32_t*)(cell_addr) & CellMeta::BitMapMask); 
         }
     }
 
     friend bool operator==(const BucketIterator& a, const BucketIterator& b) {
-        return  a.associate_i_ == b.associate_i_ &&
+        return  a.cell_i_ == b.cell_i_ &&
                 a.bitmap_ == b.bitmap_;
                 
     }
 
     friend bool operator!=(const BucketIterator& a, const BucketIterator& b) {
-        return  a.associate_i_ != b.associate_i_ ||
+        return  a.cell_i_ != b.cell_i_ ||
                 a.bitmap_ != b.bitmap_;
     }
 
     uint32_t        bi_;
-    uint32_t        associate_size_;
-    uint32_t        associate_i_; 
+    uint32_t        cell_count_;
+    uint32_t        cell_i_; 
     util::BitSet    bitmap_;
     char*           bucket_addr_;
 };
 
+// using wrapper classes for hash and key_equal prevents the diamond problem when the same type is
+// used. see https://stackoverflow.com/a/28771920/48181
+// from robinhood hash. https://github.com/martinus/robin-hood-hashing
+template <typename T>
+struct WrapHash : public T {
+    WrapHash() = default;
+    explicit WrapHash(T const& o) noexcept(noexcept(T(std::declval<T const&>())))
+        : T(o) {}
+};
+template <typename T>
+struct WrapKeyEqual : public T {
+    WrapKeyEqual() = default;
+    explicit WrapKeyEqual(T const& o) noexcept(noexcept(T(std::declval<T const&>())))
+        : T(o) {}
+};
+
 /** TurboHashTable
  *  @format:
- *              | bucket 0 | bucket 1 | ... | bucket C |
- *  associate 0 |  cell    |          |     |          |
- *  associate 1 |          |          |     |          |
- *  ....        |          |          |     |          |
- *  associate R |          |          |     |          |
+ *           | bucket 0 | bucket 1 | ... | bucket n |
+ *           |  cell 0  |  cell 0  |     |          |
+ *           |  cell 1  |  cell 1  |     |          |
+ *           |  cell 2  |  cell 2  |     |          |
+ *           |    ...   |    ...   |     |          |
  * 
  *  Cell:
  *  |    meta   |       slots        |
@@ -1316,22 +1413,42 @@ private:
  *  slots: each slot is a 8-byte value, that stores the pointer to kv location.
  *         the higher 2-byte is used as partial hash
  *  Description:
- *  TurboHashTable has bucket_count * associate_count cells
+ *  TurboHashTable has bucket_count * cell_count cells
 */
-template <class CellMeta = CellMeta128, class ProbeStrategy = ProbeWithinBucket, class Media = DramMedia, int kAssociateSizeLimit = 32768>
-class TurboHashTable {
+template <  typename Key, typename T, typename Hash, typename KeyEqual,
+            typename CellMeta = CellMeta128, typename ProbeStrategy = ProbeWithinBucket, typename Media = DramMedia, int kCellCountLimit = 32768>
+class TurboHashTable 
+    : public WrapHash<Hash>, 
+      public WrapKeyEqual<KeyEqual> {
 public:
+    static constexpr bool is_map = !std::is_void<T>::value;
+    static constexpr bool is_set = !is_map;
+
+    using key_type = Key;
+    using mapped_type = T;
+    using value_type = typename std::conditional<is_set, Key, std::pair<Key, T>>::type;
+    using size_type = size_t;
+    using hasher = Hash;
+    using key_equal = KeyEqual;
+    using Self = TurboHashTable<key_type, mapped_type, hasher, key_equal, CellMeta, ProbeStrategy, Media, kCellCountLimit>;
+
     using Hasher = util::Hasher;
     using Slice  = util::Slice;
-    using value_type = std::pair<util::Slice, util::Slice>;
-    explicit TurboHashTable(uint32_t bucket_count = 128 << 10, uint32_t associate_count = 64):
+
+private:
+    static_assert(kCellCountLimit <= 32768, "kCellCountLimit needs to be <= 32768");
+    using WHash = WrapHash<Hash>;
+    using WKeyEqual = WrapKeyEqual<KeyEqual>;
+
+public:
+    explicit TurboHashTable(uint32_t bucket_count = 128 << 10, uint32_t cell_count = 64):
         bucket_count_(bucket_count),
         bucket_mask_(bucket_count - 1),
-        capacity_(bucket_count * associate_count * CellMeta::SlotSize()),
+        capacity_(bucket_count * cell_count * CellMeta::SlotSize()),
         size_(0) {
         if (!isPowerOfTwo(bucket_count) ||
-            !isPowerOfTwo(associate_count)) {
-            printf("the hash table size setting is wrong. bucket: %u, associate: %u\n", bucket_count, associate_count);
+            !isPowerOfTwo(cell_count)) {
+            printf("the hash table size setting is wrong. bucket: %u, cell: %u\n", bucket_count, cell_count);
             exit(1);
         }
 
@@ -1357,9 +1474,9 @@ public:
         buckets_ = buckets_addr;
         buckets_mem_block_ids_ = new int[bucket_count];
         for (size_t i = 0; i < bucket_count; ++i) {
-            auto res = mem_allocator_.AllocateNoSafe(associate_count);
-            memset(res.second, 0, associate_count * kCellSize);
-            buckets_[i].Reset(res.second, associate_count);
+            auto res = mem_allocator_.AllocateNoSafe(cell_count);
+            memset(res.second, 0, cell_count * kCellSize);
+            buckets_[i].Reset(res.second, cell_count);
             buckets_mem_block_ids_[i] = res.first;
         }
         
@@ -1378,13 +1495,13 @@ public:
         char** new_mem_block_addr = (char**)malloc(bucket_count_ * sizeof(char*));
         for (size_t i = 0; i < bucket_count_; ++i) {
             auto& bucket_meta = locateBucket(i);
-            uint32_t new_associate_size = bucket_meta.AssociateSize() << 1;
+            uint32_t new_cell_count = bucket_meta.CellCount() << 1;
             // if current bucket cannot enlarge any more, continue
-            if (TURBO_UNLIKELY(new_associate_size > kAssociateSizeLimit)) {
+            if (TURBO_UNLIKELY(new_cell_count > kCellCountLimit)) {
                 printf("Cannot rehash bucket %lu\n", i);
                 continue;
             }
-            auto res = mem_allocator_.AllocateNoSafe(new_associate_size);
+            auto res = mem_allocator_.AllocateNoSafe(new_cell_count);
             if (res.second == nullptr) {
                 printf("Error\n");
                 exit(1);
@@ -1392,8 +1509,8 @@ public:
             old_mem_block_ids[i] = buckets_mem_block_ids_[i];
             buckets_mem_block_ids_[i] = res.first;
             new_mem_block_addr[i] = res.second;
-            capacity_.fetch_add(bucket_meta.AssociateSize() * CellMeta::SlotSize());
-            // printf("bucket %lu. Allocate address: 0x%lx. size: %lu\n", i, res.second, new_associate_size);
+            capacity_.fetch_add(bucket_meta.CellCount() * CellMeta::SlotSize());
+            // printf("bucket %lu. Allocate address: 0x%lx. size: %lu\n", i, res.second, new_cell_count);
         }
 
         // rehash for all the buckets
@@ -1432,9 +1549,9 @@ public:
         printf("Rehash %lu entries\n", rehash_count.load());
     }
 
-    // return the associate index and slot index
-    inline std::pair<uint16_t, uint8_t> findNextSlotInRehash(uint8_t* slot_vec, uint16_t h1, uint16_t associate_mask) {
-        uint16_t ai = h1 & associate_mask;
+    // return the cell index and slot index
+    inline std::pair<uint16_t, uint8_t> findNextSlotInRehash(uint8_t* slot_vec, uint16_t h1, uint16_t cell_count_mask) {
+        uint16_t ai = h1 & cell_count_mask;
         int loop_count = 0;
 
         // find next cell that is not full yet
@@ -1447,8 +1564,8 @@ public:
                 printf("ERROR!!! Even we rehash this bucket, we cannot find a valid slot within %d probe\n", ProbeStrategy::MAX_PROBE_LEN);
                 exit(1);
             }
-            if (ai > associate_mask) {
-                ai &= associate_mask;
+            if (ai > cell_count_mask) {
+                ai &= cell_count_mask;
             }
         }
         return {ai, slot_vec[ai]++};
@@ -1459,21 +1576,21 @@ public:
         auto& bucket_meta = locateBucket(bi);
 
         // create new bucket and initialize its meta
-        uint32_t old_associate_size = bucket_meta.AssociateSize();
-        uint32_t new_associate_size      = old_associate_size << 1;
-        uint32_t new_associate_size_mask = new_associate_size - 1;
-        if (!isPowerOfTwo(new_associate_size)) {
-            printf("rehash bucket is not power of 2. %u\n", new_associate_size);
+        uint32_t old_cell_count = bucket_meta.CellCount();
+        uint32_t new_cell_count      = old_cell_count << 1;
+        uint32_t new_cell_count_mask = new_cell_count - 1;
+        if (!isPowerOfTwo(new_cell_count)) {
+            printf("rehash bucket is not power of 2. %u\n", new_cell_count);
             exit(1);
         }
         if (new_bucket_addr == nullptr) {
             perror("rehash alloc memory fail\n");
             exit(1);
         }
-        BucketMeta new_bucket_meta(new_bucket_addr, new_associate_size);
+        BucketMeta new_bucket_meta(new_bucket_addr, new_cell_count);
      
         // reset all cell's meta data
-        for (size_t i = 0; i < new_associate_size; ++i) {
+        for (size_t i = 0; i < new_cell_count; ++i) {
             char* des_cell_addr = new_bucket_addr + (i << kCellSizeLeftShift);
             memset(des_cell_addr, 0, CellMeta::size());
         }
@@ -1484,10 +1601,10 @@ public:
         // new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444    |
         
         // record next avaliable slot position of each cell within new bucket for rehash
-        uint8_t* slot_vec = (uint8_t*)malloc(new_associate_size);
-        memset(slot_vec, CellMeta::StartSlotPos(), new_associate_size);
-        // std::vector<uint8_t> slot_vec(new_associate_size, CellMeta::StartSlotPos());   
-        BucketIterator<CellMeta> iter(bi, bucket_meta.Address(), bucket_meta.AssociateSize()); 
+        uint8_t* slot_vec = (uint8_t*)malloc(new_cell_count);
+        memset(slot_vec, CellMeta::StartSlotPos(), new_cell_count);
+        // std::vector<uint8_t> slot_vec(new_cell_count, CellMeta::StartSlotPos());   
+        BucketIterator<CellMeta> iter(bi, bucket_meta.Address(), bucket_meta.CellCount()); 
 
         while (iter.valid()) { // iterator every slot in this bucket
             count++;
@@ -1496,13 +1613,13 @@ public:
 
             // update bitmap, H2, H1 and slot pointer in new bucket
             // 1. find valid slot in new bucket
-            auto valid_slot = findNextSlotInRehash(slot_vec, res.first.H1, new_associate_size_mask);
+            auto valid_slot = findNextSlotInRehash(slot_vec, res.first.H1, new_cell_count_mask);
             
             // 2. move the slot from old bucket to new bucket
             char* des_cell_addr = new_bucket_addr + (valid_slot.first << kCellSizeLeftShift);
             res.first.slot      = valid_slot.second;
-            res.first.associate = valid_slot.first;
-            if (res.first.slot >= CellMeta::SlotMaxRange() || res.first.associate >= new_associate_size) {
+            res.first.cell      = valid_slot.first;
+            if (res.first.slot >= CellMeta::SlotMaxRange() || res.first.cell >= new_cell_count) {
                 printf("rehash fail: %s\n", res.first.ToString().c_str());
                 exit(1);
             }
@@ -1573,7 +1690,7 @@ public:
         printf("Iterate Valid Bucket\n");
         for (size_t i = 0; i < bucket_count_; ++i) {
             auto& bucket_meta = locateBucket(i);
-            BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.info.associate_size);
+            BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.info.cell_count);
             if (iter.valid()) {
                 printf("%s\n", PrintBucketMeta(i).c_str());
             }
@@ -1582,7 +1699,7 @@ public:
 
     void IterateBucket(uint32_t i) {
         auto& bucket_meta = locateBucket(i);
-        BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.AssociateSize());
+        BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.CellCount());
         while (iter.valid()) {
             auto res = (*iter);
             SlotInfo& info = res.first;
@@ -1602,7 +1719,7 @@ public:
         size_t count = 0;
         for (size_t i = 0; i < bucket_count_; ++i) {
             auto& bucket_meta = locateBucket(i);
-            BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.AssociateSize());
+            BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.CellCount());
             while (iter.valid()) {
                 auto res = (*iter);
                 SlotInfo& info = res.first;
@@ -1630,7 +1747,7 @@ public:
         BucketMeta& meta = locateBucket(bucket_i);
         sprintf(buffer, "----- bucket %10u -----\n", bucket_i);
         res += buffer;
-        ProbeStrategy probe(0, meta.AssociateMask(), bucket_i);
+        ProbeStrategy probe(0, meta.CellCountMask(), bucket_i);
         uint32_t i = 0;
         int count_sum = 0;
         while (probe) {
@@ -1642,7 +1759,7 @@ public:
             probe.next();
             count_sum += count;
         }
-        sprintf(buffer, "\tBucket %u: valid slot count: %d. Load factor: %f\n", bucket_i, count_sum, (double)count_sum / (CellMeta::SlotSize() * meta.AssociateSize()));
+        sprintf(buffer, "\tBucket %u: valid slot count: %d. Load factor: %f\n", bucket_i, count_sum, (double)count_sum / (CellMeta::SlotSize() * meta.CellCount()));
         res += buffer;
         return res;
     }
@@ -1669,10 +1786,10 @@ private:
     }
 
     // offset.first: bucket index
-    // offset.second: associate index
+    // offset.second: cell index
     inline char* locateCell(const std::pair<size_t, size_t>& offset) {
         return  buckets_[offset.first].Address() +      // locate the bucket
-                (offset.second << kCellSizeLeftShift);  // locate the associate cell
+                (offset.second << kCellSizeLeftShift);  // locate the cell cell
     }
   
     inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
@@ -1727,7 +1844,7 @@ private:
             auto res = findSlotForInsert(key, partial_hash);
 
             if (res.second) { // find a valid slot
-                char* cell_addr = locateCell({res.first.bucket, res.first.associate});
+                char* cell_addr = locateCell({res.first.bucket, res.first.cell});
                 
                 util::SpinLockScope<0> lock_scope((uint32_t*)cell_addr); // Lock current cell
                 
@@ -1776,7 +1893,7 @@ private:
     inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, const PartialHash& partial_hash) {
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
-        ProbeStrategy probe(partial_hash.H1_, bucket_meta.AssociateMask(), bucket_i);
+        ProbeStrategy probe(partial_hash.H1_, bucket_meta.CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeStrategy::MAX_PROBE_LEN)) {
@@ -1794,7 +1911,7 @@ private:
                 {  // compare if the H1 partial hash is equal (H1 is 16-byte)
                     if (TURBO_LIKELY(slotKeyEqual(slot, key))) {  // compare if the slot key is equal
                         return {{   offset.first,           /* bucket */
-                                    offset.second,          /* associate */
+                                    offset.second,          /* cell */
                                     i,                      /* slot */
                                     partial_hash.H1_,       /* H1 */ 
                                     partial_hash.H2_,       /* H2 */
@@ -1825,7 +1942,7 @@ private:
                 // for (int i : empty_bitset) { // there is empty slot, return its meta
 
                     return {{   offset.first,           /* bucket */
-                                offset.second,          /* associate */
+                                offset.second,          /* cell */
                                 *empty_bitset,          /* pick a slot, empty_bitset.pickOne() */ 
                                 partial_hash.H1_,       /* H1 */
                                 partial_hash.H2_,       /* H2 */
@@ -1860,7 +1977,7 @@ private:
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
-        ProbeStrategy probe(partial_hash.H1_,  bucket_meta.AssociateMask(), bucket_i);
+        ProbeStrategy probe(partial_hash.H1_,  bucket_meta.CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeStrategy::MAX_PROBE_LEN)) {
@@ -1925,7 +2042,7 @@ private:
     }
 
 private:
-    CellAllocator<CellMeta, kAssociateSizeLimit> mem_allocator_;
+    CellAllocator<CellMeta, kCellCountLimit> mem_allocator_;
     BucketMeta*   buckets_;
     int*          buckets_mem_block_ids_;
     const size_t  bucket_count_ = 0;
@@ -1939,7 +2056,10 @@ private:
 
 }; // end of namespace turbo::detail
 
-using unordered_map = detail::TurboHashTable<detail::CellMeta128, detail::ProbeWithinBucket>;
+template <typename Key, typename T, typename Hash = hash<Key>,
+          typename KeyEqual = std::equal_to<Key> >
+using unordered_map = detail::TurboHashTable<Key, T, Hash, KeyEqual,
+                detail::CellMeta128, detail::ProbeWithinBucket>;
 
 }; // end of namespace turbo
 

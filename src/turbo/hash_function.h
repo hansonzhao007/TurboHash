@@ -2,66 +2,6 @@
 #include <stdint.h>
 namespace turbo {
 
-using uint128_t = unsigned __int128;
-class MurMurHash {
-public:
-    static inline size_t hash ( const void * key, int len)
-    {
-        // return (XXH64(key, len, len));
-        return (std::hash<uint64_t>()(MurmurHash64A(key, len)));
-    }
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
-    static inline uint64_t MurmurHash64A ( const void * key, int len)
-    {
-        const uint64_t m = UINT64_C(0xc6a4a7935bd1e995);
-        const uint64_t seed = UINT64_C(0xe17a1465);
-        const int r = 47;
-
-        uint64_t h = seed ^ (len * m);
-
-        const uint64_t * data = (const uint64_t *)key;
-        const uint64_t * end = data + (len/8);
-
-        while(data != end)
-        {
-            uint64_t k = *data++;
-
-            k *= m;
-            k ^= k >> r;
-            k *= m;
-
-            h ^= k;
-            h *= m;
-        }
-
-        const unsigned char * data2 = (const unsigned char*)data;
-
-        switch(len & 7)
-        {
-        case 7: h ^= ((uint64_t)data2[6]) << 48;
-        case 6: h ^= ((uint64_t)data2[5]) << 40;
-        case 5: h ^= ((uint64_t)data2[4]) << 32;
-        case 4: h ^= ((uint64_t)data2[3]) << 24;
-        case 3: h ^= ((uint64_t)data2[2]) << 16;
-        case 2: h ^= ((uint64_t)data2[1]) << 8; 
-        case 1: h ^= ((uint64_t)data2[0]);
-            h *= m;
-        };
-
-        h ^= h >> r;
-        h *= m;
-        h ^= h >> r;
-
-        return h;
-    }
-#pragma GCC diagnostic pop
-};
-
-
-
-
 inline uint64_t lehmer64() {
     static thread_local __uint128_t g_lehmer64_state = random();
     g_lehmer64_state *= 0xda942042e4dd58b5;

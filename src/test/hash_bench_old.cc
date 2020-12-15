@@ -7,8 +7,7 @@
 #endif
 
 #include "util/env.h"
-#include "turbo/hash_function.h"
-#include "turbo/hash_table.h"
+#include "turbo/turbo_hash.h"
 #include "util/robin_hood.h"
 #include "util/io_report.h"
 #include "util/trace.h"
@@ -25,6 +24,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 using namespace util;
 
+// ./hash_bench_old --thread_write=8 --thread_read=8
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
 DEFINE_bool(print_thread_read, false, "");
 DEFINE_int32(thread_read, 1, "");
@@ -69,7 +69,7 @@ public:
     size_t TestRehash() {
         size_t inserted_num = 0;
         util::Stats stats;
-        turbo::HashTable* hashtable = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
+        turbo::unordered_map<std::string, std::string>* hashtable = new turbo::unordered_map<std::string, std::string>(FLAGS_bucket_size, FLAGS_associate_size);
         uint64_t i = 0;
         bool res = true;
         auto key_iterator = key_trace_.trace_at(0, max_count_);
@@ -162,7 +162,7 @@ public:
 
     size_t TurboHashSpeedTest() {
         util::Stats stats;
-        turbo::HashTable* hashtable = HashTableCreate(FLAGS_cell_type, FLAGS_probe_type, FLAGS_bucket_size, FLAGS_associate_size);
+        turbo::unordered_map<std::string, std::string>* hashtable = new turbo::unordered_map<std::string, std::string>(FLAGS_bucket_size, FLAGS_associate_size);
         std::string name = "turbo:" + hashtable->ProbeStrategyName();
         size_t max_range = max_count_ * FLAGS_loadfactor;
         {
@@ -242,20 +242,6 @@ public:
 
         delete hashtable;
         return max_range;
-    }
-
-        
-    turbo::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate) {
-        if (0 == cell_type && 0 == probe_type)
-            return new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinBucket>(bucket, associate);
-        if (0 == cell_type && 1 == probe_type)
-            return new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinCell>(bucket, associate);
-        if (1 == cell_type && 0 == probe_type)
-            return new turbo::DramHashTable<turbo::CellMeta256, turbo::ProbeWithinBucket>(bucket, associate);
-        if (1 == cell_type && 1 == probe_type)
-            return new turbo::DramHashTable<turbo::CellMeta256, turbo::ProbeWithinCell>(bucket, associate);
-        else
-            return new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinBucket>(bucket, associate);
     }
     
     template <class HashMap, class ValueType>

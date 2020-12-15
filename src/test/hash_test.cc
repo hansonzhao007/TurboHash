@@ -1,6 +1,5 @@
-#include <immintrin.h>
-#include <cstdlib>
-#include "turbo/hash_table.h"
+#include "turbo/turbo_hash.h"
+
 
 #include "gflags/gflags.h"
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
@@ -8,51 +7,11 @@ using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
 
 
-void OtherTest() {
-    const size_t count = 100000000;
-    {
-        auto time_start = util::Env::Default()->NowMicros();
-        for (size_t i = 0; i < count; ++i) {
-            turbo::wyhash64();
-        }
-        auto time_end   = util::Env::Default()->NowMicros();
-        printf("wyhash64 speed: %f Mops/s\n", (double)count / (time_end - time_start));
-    }
-    
-    {
-        auto time_start = util::Env::Default()->NowMicros();
-        for (size_t i = 0; i < count; ++i) {
-            turbo::lehmer64();
-        }
-        auto time_end   = util::Env::Default()->NowMicros();
-        printf("lehmer64 speed: %f Mops/s\n", (double)count / (time_end - time_start));
-    }
+int main() {
+    turbo::unordered_map<std::string, std::string> map;
 
-    {
-        auto time_start = util::Env::Default()->NowMicros();
-        for (size_t i = 0; i < count; ++i) {
-            turbo::wyhash32();
-        }
-        auto time_end   = util::Env::Default()->NowMicros();
-        printf("wyhash32 speed: %f Mops/s\n", (double)count / (time_end - time_start));
-    }
-
-    {
-        auto time_start = util::Env::Default()->NowMicros();
-        for (size_t i = 0; i < count; ++i) {
-            turbo::MurMurHash::hash("12345678", 8);
-        }
-        auto time_end   = util::Env::Default()->NowMicros();
-        printf("murmur speed: %f Mops/s\n", (double)count / (time_end - time_start));
-    }
-
-}
-
-const size_t COUNT = 100000;
-int main(int argc, char *argv[]) {
-    ParseCommandLineFlags(&argc, &argv, true);
-    OtherTest();
-    auto* hashtable = new turbo::DramHashTable<turbo::CellMeta128, turbo::ProbeWithinBucket>(8, 8192);
+    const size_t COUNT = 100000;
+    auto* hashtable = new turbo::unordered_map<std::string, std::string> (8, 8192);
     printf("------- Iterate empty hash table ------\n");
     hashtable->IterateAll();
 
@@ -60,7 +19,7 @@ int main(int argc, char *argv[]) {
     size_t find = 0;
     for (size_t i = 0 ; i < COUNT && succ; i++) {
         succ = hashtable->Put("key" + std::to_string(i), "value" + std::to_string(i));
-        if (likely(succ)) find++;
+        if ((succ)) find++;
     }
     printf("inserted %lu kv, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());
 
@@ -70,7 +29,7 @@ int main(int argc, char *argv[]) {
         size_t find = 0;
         for (size_t i = 0; i < COUNT && succ; i++) {
             succ = hashtable->Get("key" + std::to_string(i), &value);
-            if (likely(succ)) find++;
+            if ((succ)) find++;
         }
         printf("find %lu key, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());
     };
@@ -84,7 +43,7 @@ int main(int argc, char *argv[]) {
     printf("------- rehash all bucket and repeat search ------\n");
     hashtable->MinorReHashAll();
     // hashtable->IterateValidBucket();
-    // hashtable->IterateBucket(1);
+    hashtable->IterateBucket(1);
     // hashtable->PrintAllMeta();
     // hashtable->IterateAll();
     read_fun();
@@ -94,5 +53,7 @@ int main(int argc, char *argv[]) {
     read_fun();
 
     printf("size of atomic bool: %lu\n", sizeof(std::atomic<bool>));
+    
+
     return 0;
 }

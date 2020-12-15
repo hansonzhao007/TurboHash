@@ -1,6 +1,6 @@
 #include <immintrin.h>
 #include <cstdlib>
-#include "turbo/hash_table.h"
+#include "turbo/hash_function.h"
 
 #include "util/env.h"
 #include "util/perf_util.h"

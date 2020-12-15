@@ -1,4 +1,4 @@
-#include "turbo/spinlock.h"
+#include "turbo/turbo_hash.h"
 #include <stdio.h>
 #include <cstdlib>
 #include <vector>
@@ -39,21 +39,21 @@ int main() {
     for (int i = 0; i < 32; ++i) {
         printf("test and set bit: %d\n", i);
         printf("\tlock_value before: %09x\n", *lock_value);
-        char test_set_res = turbo_atomic_bittestandset_x86(lock_value, i);    
+        char test_set_res = turbo::util::AtomicBitOps::BitTestAndSet(lock_value, i);    
         printf("\tlock_value  after: %09x. test&set result: %d\n", *lock_value, test_set_res);
-        test_set_res = turbo_atomic_bittestandset_x86(lock_value, i);    
+        test_set_res = turbo::util::AtomicBitOps::BitTestAndSet(lock_value, i);    
         printf("\tlock_value  after: %09x. test&set result: %d (retry)\n", *lock_value, test_set_res);
-        char test_reset_res = turbo_atomic_bittestandreset_x86(lock_value, i);
+        char test_reset_res = turbo::util::AtomicBitOps::BitTestAndReset(lock_value, i);
         printf("\tlock_value  after: %09x. test&reset result: %d (reset)\n", *lock_value, test_reset_res);
-        test_reset_res = turbo_atomic_bittestandreset_x86(lock_value, i);
+        test_reset_res = turbo::util::AtomicBitOps::BitTestAndReset(lock_value, i);
         printf("\tlock_value  after: %09x. test&reset result: %d (retry)\n", *lock_value, test_reset_res);
     }
 
     *lock_value = 0xFCFCDAC8;
-    turbo_bit_spin_lock(lock_value, 0);
+    turbo::util::turbo_bit_spin_lock(lock_value, 0);
     printf("succ lock. lock value: %08x\n", *lock_value);
 
-    turbo_bit_spin_unlock(lock_value, 0);
+    turbo::util::turbo_bit_spin_unlock(lock_value, 0);
     printf("succ unlock. lock value: %08x\n", *lock_value);
 
     int kLoops = 100000;
@@ -84,7 +84,7 @@ int main() {
     {
         int sum = 0;
         std::vector<std::thread> workers2;        
-        AtomicSpinLock locks;
+        turbo::util::AtomicSpinLock locks;
         auto start_time = Env::Default()->NowNanos();
         for (int i = 0; i < kThreadNum; i++) {
             // each worker add 10000,
@@ -119,7 +119,7 @@ int main() {
                 // util::Env::Default()->PinCore(kThreadIDs[i]);
                 size_t loop = kLoops;
                 while (loop--) {
-                    SpinLockScope<0> lock_scope((turbo_bitspinlock*)lock_value);
+                    turbo::util::SpinLockScope<0> lock_scope((uint32_t*)lock_value);
                     sum++;
                 }
             }));

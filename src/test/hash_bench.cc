@@ -470,7 +470,7 @@ public:
     int value_size_;
     size_t reads_;
     size_t writes_;
-    turbo::unordered_map* hashtable_;
+    turbo::unordered_map<std::string, std::string>* hashtable_;
     RandomKeyTrace* key_trace_;
     size_t max_count_;
     size_t max_range_;
@@ -513,7 +513,7 @@ public:
             }
 
             if (fresh_db) {
-                hashtable_ = new turbo::unordered_map(FLAGS_bucket_size, FLAGS_associate_size);                
+                hashtable_ = new turbo::unordered_map<std::string, std::string>(FLAGS_bucket_size, FLAGS_associate_size);                
             }
             
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
