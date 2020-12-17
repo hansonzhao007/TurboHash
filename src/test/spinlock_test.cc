@@ -114,7 +114,7 @@ int main() {
         
         for (int i = 0; i < kThreadNum; i++) {
             // each worker add 10000,
-            workers.push_back(std::thread([kLoops, &lock_value, i, &sum]() 
+            workers.push_back(std::thread([kLoops, &lock_value, &sum]() 
             {   
                 // util::Env::Default()->PinCore(kThreadIDs[i]);
                 size_t loop = kLoops;

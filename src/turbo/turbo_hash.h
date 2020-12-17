@@ -48,6 +48,7 @@
 #include <functional>
 #include <stdexcept>
 #include <type_traits>
+#include <utility>
 
 #include <error.h>
 #include <stdio.h>
@@ -58,6 +59,13 @@
 #include <sys/time.h>
 
 #include <jemalloc/jemalloc.h>
+
+// un-comment this to disable logging, log is saved at robin_hood.log
+#define TURBO_ENABLE_LOGGING
+
+// Linear probing setting
+static const int kTurboMaxProbeLen = 17;
+static const int kTurboProbeStep   = 1;    
 
 #define TURBO_LIKELY(x)     (__builtin_expect(false || (x), true))
 #define TURBO_UNLIKELY(x)   (__builtin_expect(x, 0))
@@ -84,9 +92,73 @@ inline void TURBO_COMPILER_FENCE() {
     asm volatile("" : : : "memory"); /* Compiler fence. */
 }
 
-// Linear probing setting
-static const int kTurboMaxProbeLen = 17;
-static const int kTurboProbeStep   = 1;        
+// turbo_hash logging
+namespace {
+static inline std::string TURBO_LOG(const std::string& content) {
+    std::array<char, 128> buffer;
+    std::string result;
+    auto cmd = "printf '" + content + "' >> robin_hood.log";
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    return result;
+}
+
+#define __FILENAME__ ((strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__))
+
+#if defined TURBO_ENABLE_LOGGING
+#define TURBO_INFO(M, ...)\
+do {\
+    char buffer[1024] = "[ INFO] ";\
+    sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
+    sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
+    TURBO_LOG(buffer);\
+} while(0);
+#else
+#define TURBO_INFO(M, ...)\
+  do {\
+  } while(0);
+#endif
+
+#if !defined NDEBUG && defined TURBO_ENABLE_LOGGING
+#define TURBO_DEBUG(M, ...)\
+do {\
+    char buffer[1024] = "[DEBUG] ";\
+    sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
+    sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
+    TURBO_LOG(buffer);\
+} while(0);
+#else
+#define TURBO_DEBUG(M, ...)\
+  do {\
+  } while(0);
+#endif
+
+#if defined TURBO_ENABLE_LOGGING
+#define TURBO_ERROR(M, ...)\
+do {\
+    char buffer[1024] = "[ERROR] ";\
+    sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
+    sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
+    TURBO_LOG(buffer);\
+} while(0);
+#endif 
+
+#if defined TURBO_ENABLE_LOGGING
+#define TURBO_WARNING(M, ...)\
+do {\
+    char buffer[1024] = "[ WARN] ";\
+    sprintf(buffer + strlen(buffer), "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
+    sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
+    TURBO_LOG(buffer);\
+} while(0);
+#endif
+
+}; // end of namespace for logging
 
 namespace turbo {
 
@@ -471,7 +543,6 @@ public:
 
 }; // end of namespace turbo::util
 
-
 // A thin wrapper around std::hash, performing an additional simple mixing step of the result.
 // from https://github.com/martinus/robin-hood-hashing
 template <typename T>
@@ -527,6 +598,14 @@ TURBO_HASH_INT(unsigned long long);
 #if defined(__GNUC__) && !defined(__clang__)
 #    pragma GCC diagnostic pop
 #endif
+
+// dummy hash, unsed as mixer when turbo::hash is already used
+template <typename T>
+struct identity_hash {
+    constexpr size_t operator()(T const& obj) const noexcept {
+        return static_cast<size_t>(obj);
+    }
+};
 
 namespace detail {
 
@@ -993,121 +1072,6 @@ private:
     uint32_t    spin_lock_;
 }; // end of class CellAllocator
 
-/** HashSlot
- *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
-*/
-struct HashSlot{
-    uint64_t entry:48;      // pointer to key-value record
-    uint64_t H1:16;         // hash-tag for the key
-};
-
-/** PartialHash
- *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
- *  @format:
- *  | MSB    - - - - - - - - - - - - - - - - - - LSB |
- *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
- *  |    bucket_hash |     H1    |         |    H2   |
-*/
-struct PartialHash {
-    PartialHash(uint64_t hash) :
-        bucket_hash_( hash >> 32 ),
-        H1_( ( hash >> 16 ) & 0xFFFF ),
-        H2_( hash & 0xFF )
-        { };
-
-    // used to locate in the bucket directory
-    uint32_t  bucket_hash_;
-
-    // H1: 2 byte hash tag 
-    uint16_t H1_;
-
-    // H2: 1 byte hash tag in CellMeta for parallel comparison using SIMD cmd
-    uint8_t  H2_;
-
-}; // end of class PartialHash
-
-/** SlotInfo
- *  @note: use to store the target slot location info
-*/
-class SlotInfo {
-public:
-    uint32_t bucket;        // bucket index
-    uint16_t cell;          // cell index
-    uint8_t  slot;          // slot index
-    uint8_t  H2;            // hash-tag in CellMeta
-    uint16_t H1;            // hash-tag in HashSlot
-    bool equal_key;         // If we find a equal key in this slot
-    SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, uint8_t h2, bool euqal):
-        bucket(b),
-        cell(a),
-        slot(s),        
-        H2(h2),
-        H1(h1),
-        equal_key(euqal) {}
-    SlotInfo():
-        bucket(0),
-        cell(0),
-        slot(0),        
-        H2(0),
-        H1(0),
-        equal_key(false) {}
-    std::string ToString() {
-        char buffer[128];
-        sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%02x, H1: 0x%04x",
-            bucket,
-            cell,
-            slot,
-            H2,
-            H1);
-        return buffer;
-    }
-}; // end of class SlotInfo
-
-/** BucketMeta
- *  @note: a 8-byte 
-*/
-class BucketMeta {
-public:
-    explicit BucketMeta(char* addr, uint16_t cell_count) {
-        data_ = (((uint64_t) addr) << 16) | ((cell_count - 1) << 1);
-    }
-
-    BucketMeta():
-        data_(0) {}
-    
-    BucketMeta(const BucketMeta& a) {
-        data_ = a.data_;
-    }
-
-    inline char* Address() {
-        return (char*)(data_ >> 16);
-    }
-
-    inline uint16_t CellCountMask() {
-        // extract bit [1, 15]
-        return ((data_ & 0xFFFF) >> 1);
-    }
-    inline uint16_t CellCount() {
-        return  (1 << __builtin_popcount(data_ & 0xFFFE));
-    }
-
-    inline void SetAddress(char* addr) {
-        data_ = (data_ & 0xFFFF) | (((uint64_t)addr) << 16);
-    }
-
-    inline void SetCellCount(uint16_t size) {
-        data_ = (data_ & 0xFFFFFFFFFFFF0001) | ((size - 1) << 1);
-    }
-
-    inline void Reset(char* addr, uint16_t cell_count) {
-        data_ = (((uint64_t) addr) << 16) | ((cell_count - 1) << 1);
-    }
-
-    // lowest -> highest
-    // | 1 bit lock | 15 bit cell mask | 48 bit address |
-    uint64_t data_;
-};
-
 /** ProbeWithinCell
  *  @note: probe within each cell
 */
@@ -1202,187 +1166,6 @@ private:
     uint32_t  probe_count_;
 };
 
-/** ValueType
- *  @note: for key-value record type
-*/
-enum ValueType: unsigned char {
-    kTypeDeletion = 0x2A,   // 0b 0_0101010
-    kTypeValue    = 0xAA,   // 0b 1_0101010
-    kTypeMask     = 0x7F    // 0b 0_1111111
-};
-
-/** Record
- *  @note: key-value record
-*/
-struct Record {
-    ValueType type;
-    util::Slice key;
-    util::Slice value;
-};
-
-/** DramMedia
- *  Dram Record Format: 
- *  | ValueType | key size | key | value size |  value  |
- *  |    1B     |   4B     | ... |    4B      |   ...
-*/
-class DramMedia {
-public:
-
-    static inline void* Store(ValueType type, const util::Slice& key, const util::Slice& value) {
-        size_t key_len = key.size();
-        size_t value_len = value.size();
-        size_t encode_len = key_len + value_len;
-        if (type == kTypeValue) {
-            // has both key and value
-            encode_len += 9;
-        } else if (type == kTypeDeletion) {
-            encode_len += 5;
-        }
-
-        char* buffer = (char*)malloc(encode_len);
-        
-        // store value type
-        memcpy(buffer, &type, 1);
-        // store key len
-        memcpy(buffer + 1, &key_len, 4);
-        // store key
-        memcpy(buffer + 5, key.data(), key_len);
-
-        if (type == kTypeDeletion) {
-            return buffer;
-        }
-
-         // store value len
-        memcpy(buffer + 5 + key_len, &value_len, 4);
-        // store value
-        memcpy(buffer + 9 + key_len, value.data(), value_len);
-        return buffer;
-    }
-
-
-    static inline util::Slice ParseKey(const void* _addr) {
-        char* addr = (char*) _addr;
-        uint32_t key_len = 0;
-        memcpy(&key_len, addr + 1, 4);
-        return util::Slice(addr + 5, key_len);
-    }
-
-
-    static inline Record ParseData(uint64_t offset) {
-        char* addr = (char*) offset;
-        ValueType type = kTypeValue;
-        uint32_t key_len = 0;
-        uint32_t value_len = 0;
-        memcpy(&type, addr, 1);
-        memcpy(&key_len, addr + 1, 4);
-        if (type == kTypeValue) {
-            memcpy(&value_len, addr + 5 + key_len, 4);
-            return {
-                type, 
-                util::Slice(addr + 5, key_len), 
-                util::Slice(addr + 9 + key_len, value_len)};
-        } else if (type == kTypeDeletion) {
-            return {
-                type, 
-                util::Slice(addr + 5, key_len), 
-                "" };
-        } else {
-            printf("Prase type incorrect: %d\n", type);
-            exit(1);
-        }
-    }
-
-};
-
-
-/** Usage: iterator every slot in the bucket, return the pointer in the slot
- *  BucketIterator<CellMeta> iter(bucket_addr, cell_count_);
- *  while (iter.valid()) {
- *      ...
- *      ++iter;
- *  }
-*/        
-template<typename CellMeta>
-class BucketIterator {
-public:
-typedef std::pair<SlotInfo, HashSlot> value_type;
-    BucketIterator(uint32_t bi, char* bucket_addr, size_t cell_count, size_t cell_i = 0):
-        bi_(bi),
-        cell_count_(cell_count),
-        cell_i_(cell_i),
-        bitmap_(0),
-        bucket_addr_(bucket_addr) {
-
-        assert(bucket_addr != 0);
-        CellMeta meta(bucket_addr);
-        bitmap_ = meta.OccupyBitSet();
-        if(!bitmap_) toNextValidBitMap();
-        // printf("Initial Bucket iter at ai: %u, si: %u\n", cell_i_, *bitmap_);
-    }
-
-    explicit operator bool() const {
-        return (cell_i_ < cell_count_) ||
-               (cell_count_ == cell_count_ && bitmap_);
-    }
-
-    // ++iterator
-    inline BucketIterator& operator++() {
-        ++bitmap_;
-        if (!bitmap_) {
-            toNextValidBitMap();
-        }
-        return *this;
-    }
-
-    inline value_type operator*() const {
-        // return the cell index, slot index and its slot content
-        uint8_t slot_index = *bitmap_;
-        char* cell_addr = bucket_addr_ + cell_i_ * CellMeta::CellSize();
-        HashSlot* slot = (HashSlot*)(cell_addr + (slot_index << 3));
-        uint8_t H2 = *(uint8_t*)(cell_addr + slot_index);
-        return  { {bi_ /* ignore bucket index */, cell_i_ /* cell index */, *bitmap_ /* slot index*/, (uint16_t)slot->H1, H2, false}, 
-                *slot};
-    }
-
-    inline bool valid() {
-        return cell_i_ < cell_count_ && (bitmap_ ? true : false);
-    }
-
-    std::string ToString() {
-        char buffer[128];
-        sprintf(buffer, "cell: %8d, slot: %2d", cell_i_, *bitmap_);
-        return buffer;
-    }
-
-private:
-
-    inline void toNextValidBitMap() {
-        while(!bitmap_ && cell_i_ < cell_count_) {
-            cell_i_++;
-            if (cell_i_ == cell_count_) return;
-            char* cell_addr = bucket_addr_ + ( cell_i_ << CellMeta::CellSizeLeftShift );
-            bitmap_ = util::BitSet(*(uint32_t*)(cell_addr) & CellMeta::BitMapMask); 
-        }
-    }
-
-    friend bool operator==(const BucketIterator& a, const BucketIterator& b) {
-        return  a.cell_i_ == b.cell_i_ &&
-                a.bitmap_ == b.bitmap_;
-                
-    }
-
-    friend bool operator!=(const BucketIterator& a, const BucketIterator& b) {
-        return  a.cell_i_ != b.cell_i_ ||
-                a.bitmap_ != b.bitmap_;
-    }
-
-    uint32_t        bi_;
-    uint32_t        cell_count_;
-    uint32_t        cell_i_; 
-    util::BitSet    bitmap_;
-    char*           bucket_addr_;
-};
-
 // using wrapper classes for hash and key_equal prevents the diamond problem when the same type is
 // used. see https://stackoverflow.com/a/28771920/48181
 // from robinhood hash. https://github.com/martinus/robin-hood-hashing
@@ -1416,7 +1199,7 @@ struct WrapKeyEqual : public T {
  *  TurboHashTable has bucket_count * cell_count cells
 */
 template <  typename Key, typename T, typename Hash, typename KeyEqual,
-            typename CellMeta = CellMeta128, typename ProbeStrategy = ProbeWithinBucket, typename Media = DramMedia, int kCellCountLimit = 32768>
+            typename CellMeta = CellMeta128, typename ProbeStrategy = ProbeWithinBucket, int kCellCountLimit = 32768>
 class TurboHashTable 
     : public WrapHash<Hash>, 
       public WrapKeyEqual<KeyEqual> {
@@ -1426,21 +1209,627 @@ public:
 
     using key_type = Key;
     using mapped_type = T;
-    using value_type = typename std::conditional<is_set, Key, std::pair<Key, T>>::type;
+    
     using size_type = size_t;
     using hasher = Hash;
     using key_equal = KeyEqual;
-    using Self = TurboHashTable<key_type, mapped_type, hasher, key_equal, CellMeta, ProbeStrategy, Media, kCellCountLimit>;
-
+    using Self = TurboHashTable<key_type, mapped_type, hasher, key_equal, CellMeta, ProbeStrategy, kCellCountLimit>;
     using Hasher = util::Hasher;
     using Slice  = util::Slice;
 
-private:
+// private:
     static_assert(kCellCountLimit <= 32768, "kCellCountLimit needs to be <= 32768");
     using WHash = WrapHash<Hash>;
     using WKeyEqual = WrapKeyEqual<KeyEqual>;
 
+    /** PartialHash
+     *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
+     *  @format:
+     *  | MSB    - - - - - - - - - - - - - - - - - - LSB |
+     *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
+     *  |    bucket_hash |     H1    |         |    H2   |
+    */
+    struct PartialHash {
+        PartialHash(uint64_t hash) :
+            bucket_hash_( hash >> 32 ),
+            H1_( ( hash >> 16 ) & 0xFFFF ),
+            H2_( hash & 0xFF )
+            { };        
+        uint32_t  bucket_hash_; // used to locate in the bucket directory
+        uint16_t H1_; // H1: 2 byte hash tag         
+        uint8_t  H2_; // H2: 1 byte hash tag in CellMeta for parallel comparison using SIMD cmd
+    }; // end of class PartialHash
+
+
+    /** SlotInfo
+     *  @note: use to store the target slot location info
+    */
+    class SlotInfo {
+    public:
+        uint32_t bucket;        // bucket index
+        uint16_t cell;          // cell index
+        uint8_t  slot;          // slot index
+        uint8_t  H2;            // hash-tag in CellMeta
+        uint16_t H1;            // hash-tag in HashSlot
+        bool equal_key;         // If we find a equal key in this slot
+        SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, uint8_t h2, bool euqal):
+            bucket(b),
+            cell(a),
+            slot(s),        
+            H2(h2),
+            H1(h1),
+            equal_key(euqal) {}
+        SlotInfo():
+            bucket(0),
+            cell(0),
+            slot(0),        
+            H2(0),
+            H1(0),
+            equal_key(false) {}
+        std::string ToString() {
+            char buffer[128];
+            sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%02x, H1: 0x%04x",
+                bucket,
+                cell,
+                slot,
+                H2,
+                H1);
+            return buffer;
+        }
+    }; // end of class SlotInfo
+
+
+    /** ValueType
+     *  @note: for key-value record type
+     *  @format:
+     *  |  
+     *  
+    */
+    enum ValueType: unsigned char {
+        kTypeDeletion = 0x2A,   // 0b 0_0101010
+        kTypeValue    = 0xAA,   // 0b 1_0101010
+        kTypeMask     = 0x7F    // 0b 0_1111111
+    };
+
+    /** Record
+     *  @note: key-value record
+    */
+    struct Record {
+        ValueType type;
+        util::Slice key;
+        util::Slice value;
+    };
+
+    template<bool IsT1Numeric, typename T1>
+    struct EncodeToRecord1 {};
+
+    /** Case 1: T1 is numeric
+     *  * record memory layout:
+     *  | type |   T1  |
+     *  |  1B  |
+     *         |
+     *     addr start here
+    */
+    template<typename T1>
+    struct EncodeToRecord1<true, T1> {
+        static inline void Encode(const T1& t1, char* addr) {
+            *reinterpret_cast<T1*>(addr) = t1;
+        }
+    };
+
+    /** Case 2: T1 is std::string
+     *  * record memory layout:
+     *  | type |  len1  | buffer1
+     *  |  1B  | size_t | 
+     *         |
+     *     addr start here
+    */
+    template<typename T1>
+    struct EncodeToRecord1<false, T1> {
+        static inline void Encode(const T1& t1, char* addr) {
+            *reinterpret_cast<size_t*>(addr) = t1.size();
+            memcpy(addr + sizeof(size_t), t1.data(), t1.size());
+        }
+    };
+
+    template<bool IsT1Numeric, typename T1>
+    struct DecodeInRecord1 {};
+
+    /** Case 1: T1 is numeric
+     *  * record memory layout:
+     *  | type |   T1  |
+     *  |  1B  |
+     *         |
+     *     addr start here
+    */
+    template<typename T1>
+    struct DecodeInRecord1<true, T1> {
+        static inline T1 Decode(char* addr) {
+            return *reinterpret_cast<T1*>(addr);
+        }
+    };
+
+    /** Case 2: T1 is std::string
+     *  * record memory layout:
+     *  | type |  len1  | buffer1
+     *  |  1B  | size_t | 
+     *         |
+     *     addr start here
+    */
+    template<typename T1>
+    struct DecodeInRecord1<false, T1> {
+        static inline T1 Decode(char* addr) {
+            size_t len1 = *reinterpret_cast<size_t*>(addr);
+            return T1(addr + sizeof(size_t), len1);
+        }
+    };
+
+    /** Record1
+     *  @note record with only one type, used in set
+    */
+    template<typename T1>
+    struct Record1 {
+        ValueType type;
+        inline T1 first() {
+            return DecodeInRecord1< 
+                            std::is_same<T1, std::string>::value == false /* is numeric */,
+                            T1>::Decode(reinterpret_cast<char*>(this) + 1);
+        }
+
+        inline void Encode(const T1& t1) {
+            EncodeToRecord1<std::is_same<T1, std::string>::value == false /* is numeric */, 
+                            T1>::Encode(t1, reinterpret_cast<char*>(this) + 1);
+        }
+    };  // end of class Record1
+
+
+    /** EncodeToRecord2
+     *  @note: encode T1 and T2 to addr.
+     *  ! The memory space should be allocated in advance
+    */
+    template<bool IsT1Numeric, bool IsT2Numeric, typename T1, typename T2>
+    struct EncodeToRecord2 {};
+
+    /** Case 1: T1 and T2 are numeric
+     *  * record memory layout:
+     *  | type |   T1  |   T2  |
+     *  |  1B  |
+     *         |
+     *     addr start here
+    */
+    template<typename T1, typename T2> 
+    struct EncodeToRecord2<true, true, T1, T2> {
+        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
+            *reinterpret_cast<T1*>(addr) = t1;
+            *reinterpret_cast<T2*>(addr + sizeof(T1)) = t2;
+        }
+    };
+
+    /** Case 2: T1 is numeric, T2 is std::string
+     *  * record memory layout:
+     *  | type |   T1  |   len2  |   buffer2
+     *  |  1B  |       |  size_t |
+     *         |
+     *     addr start here
+    */
+    template<typename T1, typename T2> 
+    struct EncodeToRecord2<true, false, T1, T2> {
+        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
+            static constexpr size_t offset = sizeof(T1) + sizeof(size_t);
+            memcpy(addr, &t1, sizeof(T1));
+            *reinterpret_cast<size_t*>(addr + sizeof(T1)) = t2.size();
+            memcpy(addr + offset, t2.data(), t2.size());
+        }
+    };
+
+    /** Case 3: T1 is std::string, T2 is numeric
+     *  * record memory layout:
+     *  | type |  len1  |   T2  |   buffer1
+     *  |  1B  | size_t |       |
+     *         |
+     *     addr start here
+    */
+    template<typename T1, typename T2> 
+    struct EncodeToRecord2<false, true, T1, T2> {
+        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
+            static constexpr size_t offset = sizeof(size_t) + sizeof(T2);
+            *reinterpret_cast<size_t*>(addr) = t1.size();
+            memcpy(addr + sizeof(size_t), &t2, sizeof(T2));
+            memcpy(addr + offset, t1.data(), t1.size());
+        }
+    };
+
+    /** Case 4: T1 is std::string, T2 is std::string
+     *  * record memory layout:
+     *  | type |  len1  |  len2  | buffer1 | bufer2 |
+     *  |  1B  | size_t | size_t |         |
+     *         |                 |
+     *     addr start here     offset
+    */
+    template<typename T1, typename T2> 
+    struct EncodeToRecord2<false, false, T1, T2> {
+        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
+            static constexpr size_t offset = sizeof(size_t) + sizeof(size_t);
+            *reinterpret_cast<size_t*>(addr) = t1.size();
+            *reinterpret_cast<size_t*>(addr + sizeof(size_t)) = t2.size();
+            memcpy(addr + offset, t1.data(), t1.size());
+            memcpy(addr + offset + t1.size(), t2.data(), t2.size());
+        }
+    };
+
+    template<bool IsT1Numeric, bool IsT2Numeric, bool IsFirst, typename T1, typename T2>
+    struct DecodeInRecord2 {};
+
+    /** Case 1: T1 and T2 are numeric
+     *  * record memory layout:
+     *  | type |   T1  |   T2  |
+     *  |  1B  |
+     *         |
+     *     addr start here
+    */
+    template<typename T1, typename T2>
+    struct DecodeInRecord2<true, true, true /* IsFirst */, T1, T2> {
+        static inline T1 Decode(char* addr) {
+            return *reinterpret_cast<T1*>(addr);
+        }
+    };
+    template<typename T1, typename T2>
+    struct DecodeInRecord2<true, true, false /* IsFirst*/, T1, T2> {
+        static inline T2 Decode(char* addr) {
+            return *reinterpret_cast<T2*>(addr + sizeof(T1));
+        }
+    };
+
+    /** Case 2: T1 is numeric, T2 is std::string
+     *  * record memory layout:
+     *  | type |   T1  |   len2  |   buffer2
+     *  |  1B  |       |  size_t |
+     *         |
+     *     addr start here
+    */
+    template<typename T1, typename T2>
+    struct DecodeInRecord2<true, false, true /* IsFirst*/, T1, T2> {
+        static inline T1 Decode(char* addr) {
+            return *reinterpret_cast<T1*>(addr);
+        }
+    };
+    template<typename T1, typename T2>
+    struct DecodeInRecord2<true, false, false /* IsFirst*/, T1, T2> {
+        static inline T2 Decode(char* addr) {
+            size_t len2 = *reinterpret_cast<size_t*>(addr + sizeof(T1));
+            return T2(addr + sizeof(T1) + sizeof(size_t), len2);
+        }
+    };
+
+    /** Case 3: T1 is std::string, T2 is numeric
+     *  * record memory layout:
+     *  | type |  len1  |   T2  |   buffer1
+     *  |  1B  | size_t |       |
+     *         |
+     *     addr start here
+    */
+    template<typename T1, typename T2>
+    struct DecodeInRecord2<false, true, true /* IsFirst*/, T1, T2> {
+        static inline T1 Decode(char* addr) {
+            size_t len1 = *reinterpret_cast<size_t*>(addr);
+            return T1(addr + sizeof(size_t) + sizeof(T2), len1);
+            
+        }
+    };
+    template<typename T1, typename T2>
+    struct DecodeInRecord2<false, true, false /* IsFirst*/, T1, T2> {
+        static inline T2 Decode(char* addr) {
+            return *reinterpret_cast<T2*>(addr + sizeof(size_t));
+        }
+    };
+
+    /** Case 4: T1 is std::string, T2 is std::string
+     *  * record memory layout:
+     *  | type |  len1  |  len2  | buffer1 | bufer2 |
+     *  |  1B  | size_t | size_t |         |
+     *         |
+     *     addr start here
+    */
+    template<typename T1, typename T2>
+    struct DecodeInRecord2<false, false, true /* IsFirst*/, T1, T2> {
+        static inline T1 Decode(char* addr) {
+            size_t len1 = *reinterpret_cast<size_t*>(addr);
+            return T1(addr + sizeof(size_t) + sizeof(size_t), len1);
+        }
+    };
+    template<typename T1, typename T2>
+    struct DecodeInRecord2<false, false, false /* IsFirst*/, T1, T2> {
+        static inline T2 Decode(char* addr) {
+            size_t len1 = *reinterpret_cast<size_t*>(addr);
+            size_t len2 = *reinterpret_cast<size_t*>(addr + sizeof(size_t));
+            return T2(addr + sizeof(size_t) + sizeof(size_t) + len1, len2);
+        }
+    };
+
+    /** Record2
+     *  @note record with two type, used in map
+    */
+    template<typename T1, typename T2>
+    struct Record2 {
+        ValueType type;
+        inline T1 first() {
+            return DecodeInRecord2<
+                    std::is_same<T1, std::string>::value == false  /* is numeric */, 
+                    std::is_same<T2, std::string>::value == false  /* is numeric */, 
+                    true, T1, T2>::Decode(reinterpret_cast<char*>(this) + 1);
+        }
+
+        inline T2 second() {
+            return DecodeInRecord2<
+                    std::is_same<T1, std::string>::value == false  /* is numeric */, 
+                    std::is_same<T2, std::string>::value == false  /* is numeric */, 
+                    false, T1, T2>::Decode(reinterpret_cast<char*>(this) + 1);
+            
+        }
+
+        inline void Encode(const T1& t1, const T2& t2) {
+            EncodeToRecord2<
+                    std::is_same<T1, std::string>::value == false  /* is numeric */, 
+                    std::is_same<T2, std::string>::value == false  /* is numeric */,
+                    T1, T2>::Encode(t1, t2, reinterpret_cast<char*>(this) + 1);
+        }
+    }; // end of class Record2
+
+    using value_type = typename std::conditional<is_set, Record1<Key>*, Record2<Key, T>* >::type;
+
+
+    /** DramMedia
+     *  Dram Record Format: 
+     *  | ValueType | key size | key | value size |  value  |
+     *  |    1B     |   4B     | ... |    4B      |   ...
+    */
+    class DramMedia {
+    public:
+
+        static inline void* Store(ValueType type, const util::Slice& key, const util::Slice& value) {
+            size_t key_len = key.size();
+            size_t value_len = value.size();
+            size_t encode_len = key_len + value_len;
+            if (type == kTypeValue) {
+                // has both key and value
+                encode_len += 9;
+            } else if (type == kTypeDeletion) {
+                encode_len += 5;
+            }
+
+            char* buffer = (char*)malloc(encode_len);
+            
+            // store value type
+            memcpy(buffer, &type, 1);
+            // store key len
+            memcpy(buffer + 1, &key_len, 4);
+            // store key
+            memcpy(buffer + 5, key.data(), key_len);
+
+            if (type == kTypeDeletion) {
+                return buffer;
+            }
+
+            // store value len
+            memcpy(buffer + 5 + key_len, &value_len, 4);
+            // store value
+            memcpy(buffer + 9 + key_len, value.data(), value_len);
+            return buffer;
+        }
+
+
+        static inline util::Slice ParseKey(const void* _addr) {
+            char* addr = (char*) _addr;
+            uint32_t key_len = 0;
+            memcpy(&key_len, addr + 1, 4);
+            return util::Slice(addr + 5, key_len);
+        }
+
+
+        static inline Record ParseData(uint64_t offset) {
+            char* addr = (char*) offset;
+            ValueType type = kTypeValue;
+            uint32_t key_len = 0;
+            uint32_t value_len = 0;
+            memcpy(&type, addr, 1);
+            memcpy(&key_len, addr + 1, 4);
+            if (type == kTypeValue) {
+                memcpy(&value_len, addr + 5 + key_len, 4);
+                return {
+                    type, 
+                    util::Slice(addr + 5, key_len), 
+                    util::Slice(addr + 9 + key_len, value_len)};
+            } else if (type == kTypeDeletion) {
+                return {
+                    type, 
+                    util::Slice(addr + 5, key_len), 
+                    "" };
+            } else {
+                printf("Prase type incorrect: %d\n", type);
+                exit(1);
+            }
+        }
+
+    };
+
+    class DataNodeAllocator {
+    public:
+        static inline char* Allocate(size_t size) {
+            return reinterpret_cast<char*>(malloc(size));
+        }
+
+        static inline void Release(char* addr) {
+            free(addr);
+        }
+    };
+
+    /**
+     *  @note: 
+    */
+    class DataNode { 
+    public:
+        explicit DataNode(char* addr):
+            data_(addr) {
+        }
+
+        const value_type& operator*() const noexcept {
+            return *data_;
+        }
+
+        value_type const* operator->() const noexcept {
+            return data_;
+        }
+
+        value_type* operator->() noexcept {
+            return data_;
+        }
+
+        private:
+            value_type* data_;
+    };
+
+    /** HashSlot
+     *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
+    */
+    struct HashSlot{
+        uint64_t entry:48;      // pointer to key-value record
+        uint64_t H1:16;         // hash-tag for the key
+    };
+
+
+    /** BucketMeta
+     *  @note: a 8-byte 
+    */
+    class BucketMeta {
+    public:
+        explicit BucketMeta(char* addr, uint16_t cell_count) {
+            data_ = (((uint64_t) addr) << 16) | ((cell_count - 1) << 1);
+        }
+
+        BucketMeta():
+            data_(0) {}
+        
+        BucketMeta(const BucketMeta& a) {
+            data_ = a.data_;
+        }
+
+        inline char* Address() {
+            return (char*)(data_ >> 16);
+        }
+
+        inline uint16_t CellCountMask() {
+            // extract bit [1, 15]
+            return ((data_ & 0xFFFF) >> 1);
+        }
+        inline uint16_t CellCount() {
+            return  (1 << __builtin_popcount(data_ & 0xFFFE));
+        }
+
+        inline void SetAddress(char* addr) {
+            data_ = (data_ & 0xFFFF) | (((uint64_t)addr) << 16);
+        }
+
+        inline void SetCellCount(uint16_t size) {
+            data_ = (data_ & 0xFFFFFFFFFFFF0001) | ((size - 1) << 1);
+        }
+
+        inline void Reset(char* addr, uint16_t cell_count) {
+            data_ = (((uint64_t) addr) << 16) | ((cell_count - 1) << 1);
+        }
+
+        // lowest -> highest
+        // | 1 bit lock | 15 bit cell mask | 48 bit address |
+        uint64_t data_;
+    };
 public:
+
+    /** Usage: iterator every slot in the bucket, return the pointer in the slot
+     *  BucketIterator<CellMeta> iter(bucket_addr, cell_count_);
+     *  while (iter.valid()) {
+     *      ...
+     *      ++iter;
+     *  }
+    */        
+    class BucketIterator {
+    public:
+    typedef std::pair<SlotInfo, HashSlot> value_type;
+        BucketIterator(uint32_t bi, char* bucket_addr, size_t cell_count, size_t cell_i = 0):
+            bi_(bi),
+            cell_count_(cell_count),
+            cell_i_(cell_i),
+            bitmap_(0),
+            bucket_addr_(bucket_addr) {
+
+            assert(bucket_addr != 0);
+            CellMeta meta(bucket_addr);
+            bitmap_ = meta.OccupyBitSet();
+            if(!bitmap_) toNextValidBitMap();
+            // printf("Initial Bucket iter at ai: %u, si: %u\n", cell_i_, *bitmap_);
+        }
+
+        explicit operator bool() const {
+            return (cell_i_ < cell_count_) ||
+                (cell_count_ == cell_count_ && bitmap_);
+        }
+
+        // ++iterator
+        inline BucketIterator& operator++() {
+            ++bitmap_;
+            if (!bitmap_) {
+                toNextValidBitMap();
+            }
+            return *this;
+        }
+
+        inline value_type operator*() const {
+            // return the cell index, slot index and its slot content
+            uint8_t slot_index = *bitmap_;
+            char* cell_addr = bucket_addr_ + cell_i_ * CellMeta::CellSize();
+            HashSlot* slot = (HashSlot*)(cell_addr + (slot_index << 3));
+            uint8_t H2 = *(uint8_t*)(cell_addr + slot_index);
+            return  { {bi_ /* ignore bucket index */, cell_i_ /* cell index */, *bitmap_ /* slot index*/, (uint16_t)slot->H1, H2, false}, 
+                    *slot};
+        }
+
+        inline bool valid() {
+            return cell_i_ < cell_count_ && (bitmap_ ? true : false);
+        }
+
+        std::string ToString() {
+            char buffer[128];
+            sprintf(buffer, "cell: %8d, slot: %2d", cell_i_, *bitmap_);
+            return buffer;
+        }
+
+    private:
+
+        inline void toNextValidBitMap() {
+            while(!bitmap_ && cell_i_ < cell_count_) {
+                cell_i_++;
+                if (cell_i_ == cell_count_) return;
+                char* cell_addr = bucket_addr_ + ( cell_i_ << CellMeta::CellSizeLeftShift );
+                bitmap_ = util::BitSet(*(uint32_t*)(cell_addr) & CellMeta::BitMapMask); 
+            }
+        }
+
+        friend bool operator==(const BucketIterator& a, const BucketIterator& b) {
+            return  a.cell_i_ == b.cell_i_ &&
+                    a.bitmap_ == b.bitmap_;
+                    
+        }
+
+        friend bool operator!=(const BucketIterator& a, const BucketIterator& b) {
+            return  a.cell_i_ != b.cell_i_ ||
+                    a.bitmap_ != b.bitmap_;
+        }
+
+        uint32_t        bi_;
+        uint32_t        cell_count_;
+        uint32_t        cell_i_; 
+        util::BitSet    bitmap_;
+        char*           bucket_addr_;
+    };
+
     explicit TurboHashTable(uint32_t bucket_count = 128 << 10, uint32_t cell_count = 64):
         bucket_count_(bucket_count),
         bucket_mask_(bucket_count - 1),
@@ -1604,7 +1993,7 @@ public:
         uint8_t* slot_vec = (uint8_t*)malloc(new_cell_count);
         memset(slot_vec, CellMeta::StartSlotPos(), new_cell_count);
         // std::vector<uint8_t> slot_vec(new_cell_count, CellMeta::StartSlotPos());   
-        BucketIterator<CellMeta> iter(bi, bucket_meta.Address(), bucket_meta.CellCount()); 
+        BucketIterator iter(bi, bucket_meta.Address(), bucket_meta.CellCount()); 
 
         while (iter.valid()) { // iterator every slot in this bucket
             count++;
@@ -1638,12 +2027,17 @@ public:
 
     }
 
-    bool Put(const util::Slice& key, const util::Slice& value)  {
+    template<typename HashKey>
+    inline size_t KeyToHash(HashKey& key) {
+        return hash<HashKey>(key);
+    }
+
+    bool Put(const Slice& key, const Slice& value)  {
         // calculate hash value of the key
         size_t hash_value = Hasher::hash(key.data(), key.size());
 
         // store the kv pair to media
-        void* media_offset = Media::Store(kTypeValue, key, value);
+        void* media_offset = DramMedia::Store(kTypeValue, key, value);
 
         // update DRAM index, thread safe
         return insertSlot(key, hash_value, media_offset);
@@ -1655,7 +2049,7 @@ public:
         auto res = findSlot(key, hash_value);
         if (res.second) {
             // find a key in hash table
-            Record record = Media::ParseData(res.first.entry);
+            Record record = DramMedia::ParseData(res.first.entry);
             if (record.type  == kTypeValue) {
                 value->assign(record.value.data(), record.value.size());
                 return true;
@@ -1690,7 +2084,7 @@ public:
         printf("Iterate Valid Bucket\n");
         for (size_t i = 0; i < bucket_count_; ++i) {
             auto& bucket_meta = locateBucket(i);
-            BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.info.cell_count);
+            BucketIterator iter(i, bucket_meta.Address(), bucket_meta.info.cell_count);
             if (iter.valid()) {
                 printf("%s\n", PrintBucketMeta(i).c_str());
             }
@@ -1699,13 +2093,13 @@ public:
 
     void IterateBucket(uint32_t i) {
         auto& bucket_meta = locateBucket(i);
-        BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.CellCount());
+        BucketIterator iter(i, bucket_meta.Address(), bucket_meta.CellCount());
         while (iter.valid()) {
             auto res = (*iter);
             SlotInfo& info = res.first;
             info.bucket = i;
             HashSlot& slot = res.second;
-            Record record = Media::ParseData(slot.entry);
+            Record record = DramMedia::ParseData(slot.entry);
             printf("%s, addr: %16lx. key: %.8s, value: %s\n", 
                 info.ToString().c_str(),
                 slot.entry, 
@@ -1719,12 +2113,12 @@ public:
         size_t count = 0;
         for (size_t i = 0; i < bucket_count_; ++i) {
             auto& bucket_meta = locateBucket(i);
-            BucketIterator<CellMeta> iter(i, bucket_meta.Address(), bucket_meta.CellCount());
+            BucketIterator iter(i, bucket_meta.Address(), bucket_meta.CellCount());
             while (iter.valid()) {
                 auto res = (*iter);
                 SlotInfo& info = res.first;
                 HashSlot& slot = res.second;
-                Record record = Media::ParseData(slot.entry);
+                Record record = DramMedia::ParseData(slot.entry);
                 printf("%s, addr: %16lx. key: %.8s, value: %s\n", 
                     info.ToString().c_str(),
                     slot.entry, 
@@ -1860,7 +2254,7 @@ private:
                 }
                 else { // current slot has been occupied by another concurrent thread, retry.
                     // #ifdef LTHASH_DEBUG_OUT
-                    // INFO("retry find slot. %s\n", key.ToString().c_str());
+                    TURBO_INFO("retry find slot. %s\n", key.ToString().c_str());
                     // #endif
                     retry_find = true;
                 }
@@ -1877,12 +2271,12 @@ private:
     }
 
     inline bool slotKeyEqual(const HashSlot& slot, const Slice& key) {
-        Slice res = Media::ParseKey(reinterpret_cast<void*>(slot.entry));
+        Slice res = DramMedia::ParseKey(reinterpret_cast<void*>(slot.entry));
         return res == key;
     }
 
     inline const Slice extractSlice(const HashSlot& slot) {
-        return  Media::ParseKey(reinterpret_cast<void*>(slot.entry));
+        return  DramMedia::ParseKey(reinterpret_cast<void*>(slot.entry));
     }
 
     // Find a valid slot for insertion
@@ -2059,7 +2453,7 @@ private:
 template <typename Key, typename T, typename Hash = hash<Key>,
           typename KeyEqual = std::equal_to<Key> >
 using unordered_map = detail::TurboHashTable<Key, T, Hash, KeyEqual,
-                detail::CellMeta128, detail::ProbeWithinBucket>;
+                                             detail::CellMeta128, detail::ProbeWithinBucket>;
 
 }; // end of namespace turbo
 
