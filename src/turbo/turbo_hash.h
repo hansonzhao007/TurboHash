@@ -239,6 +239,7 @@ private:
 */
 class Slice {
 public:
+    using type = Slice;
     // operator <
     bool operator < (const Slice& b) const {
         return compare(b) < 0 ;
@@ -1207,14 +1208,19 @@ public:
     static constexpr bool is_map = !std::is_void<T>::value;
     static constexpr bool is_set = !is_map;
 
+    // Internal transformation for std::string
     using key_type    = Key;
     using mapped_type = T;
-    
+
+    // using key_type    = typename std::conditional<  std::is_same<Key, std::string>::value == false  /* is numeric */,
+    //                                                 Key, util::Slice >::type;
+    // using mapped_type = typename std::conditional<  std::is_same<  T, std::string>::value == false  /* is numeric */,
+    //                                                 Key, util::Slice >::type;
+
     using size_type = size_t;
     using hasher    = Hash;
     using key_equal = KeyEqual;
-    using Self      = TurboHashTable<key_type, mapped_type, hasher, key_equal, CellMeta, ProbeStrategy, kCellCountLimit>;
-    using Hasher    = util::Hasher;
+
     using Slice     = util::Slice;
 
 // private:
@@ -1695,7 +1701,7 @@ public:
         }
     };
 
-    using value_type = typename std::conditional<is_set, Record1<Key>, Record2<Key, T> >::type;
+    using value_type = typename std::conditional<is_set, Record1<key_type>, Record2<key_type, mapped_type> >::type;
     /**
      *  @note: 
     */
@@ -2063,7 +2069,7 @@ public:
     template<typename HashKey>
     inline size_t KeyToHash(HashKey& key) {
         using Mix =
-            typename std::conditional<std::is_same<::turbo::hash<key_type>, hasher>::value,
+            typename std::conditional<std::is_same<::turbo::hash<Key>, hasher>::value,
                                       ::turbo::identity_hash<size_t>,
                                       ::turbo::hash<size_t>>::type;
         return Mix{}(WHash::operator()(key));
@@ -2109,7 +2115,9 @@ public:
     }
 
     bool Find(const std::string& key, uint64_t& data_offset)  {
+        // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
+
         auto res = findSlot(key, hash_value);
         data_offset = res.first.entry;
         return res.second;
