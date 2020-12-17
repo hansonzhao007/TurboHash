@@ -62,7 +62,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {
@@ -71,7 +71,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {
@@ -80,7 +80,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {
@@ -89,7 +89,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {
@@ -98,7 +98,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {
@@ -107,7 +107,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {
@@ -116,7 +116,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {
@@ -125,7 +125,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {
@@ -134,7 +134,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {
@@ -143,7 +143,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {
@@ -152,7 +152,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {
@@ -161,7 +161,7 @@ void Record2Test() {
         typedef HashTable::Record2<decltype(key), decltype(val)> Record;
         Record* record_ptr = reinterpret_cast<Record*>(buf);        
         record_ptr->Encode(key, val);
-        std::cout << "Record first: " << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
+        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() << std::endl;
     }
 
     {

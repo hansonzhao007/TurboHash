@@ -1207,19 +1207,19 @@ public:
     static constexpr bool is_map = !std::is_void<T>::value;
     static constexpr bool is_set = !is_map;
 
-    using key_type = Key;
+    using key_type    = Key;
     using mapped_type = T;
     
     using size_type = size_t;
-    using hasher = Hash;
+    using hasher    = Hash;
     using key_equal = KeyEqual;
-    using Self = TurboHashTable<key_type, mapped_type, hasher, key_equal, CellMeta, ProbeStrategy, kCellCountLimit>;
-    using Hasher = util::Hasher;
-    using Slice  = util::Slice;
+    using Self      = TurboHashTable<key_type, mapped_type, hasher, key_equal, CellMeta, ProbeStrategy, kCellCountLimit>;
+    using Hasher    = util::Hasher;
+    using Slice     = util::Slice;
 
 // private:
     static_assert(kCellCountLimit <= 32768, "kCellCountLimit needs to be <= 32768");
-    using WHash = WrapHash<Hash>;
+    using WHash     = WrapHash<Hash>;
     using WKeyEqual = WrapKeyEqual<KeyEqual>;
 
     /** PartialHash
@@ -1300,38 +1300,23 @@ public:
         util::Slice value;
     };
 
+
+    /**
+     *  @note: the Record Lenght
+    */
+    template<bool IsT1Numeric, typename T1>
+    struct Record1Format {};
+
+    /**
+     *  @note: encode T1 to memory
+     *  ! allocate memory space in advance
+    */
     template<bool IsT1Numeric, typename T1>
     struct EncodeToRecord1 {};
 
-    /** Case 1: T1 is numeric
-     *  * record memory layout:
-     *  | type |   T1  |
-     *  |  1B  |
-     *         |
-     *     addr start here
+    /** DecodeInRecord1
+     *  @note: decode T1
     */
-    template<typename T1>
-    struct EncodeToRecord1<true, T1> {
-        static inline void Encode(const T1& t1, char* addr) {
-            *reinterpret_cast<T1*>(addr) = t1;
-        }
-    };
-
-    /** Case 2: T1 is std::string
-     *  * record memory layout:
-     *  | type |  len1  | buffer1
-     *  |  1B  | size_t | 
-     *         |
-     *     addr start here
-    */
-    template<typename T1>
-    struct EncodeToRecord1<false, T1> {
-        static inline void Encode(const T1& t1, char* addr) {
-            *reinterpret_cast<size_t*>(addr) = t1.size();
-            memcpy(addr + sizeof(size_t), t1.data(), t1.size());
-        }
-    };
-
     template<bool IsT1Numeric, typename T1>
     struct DecodeInRecord1 {};
 
@@ -1342,6 +1327,18 @@ public:
      *         |
      *     addr start here
     */
+    template<typename T1>
+    struct Record1Format<true, T1> {
+        static inline constexpr size_t Length(const T1& t1) {
+            return 1 + sizeof(t1);
+        }
+    };
+    template<typename T1>
+    struct EncodeToRecord1<true, T1> {
+        static inline void Encode(const T1& t1, char* addr) {
+            *reinterpret_cast<T1*>(addr) = t1;
+        }
+    };
     template<typename T1>
     struct DecodeInRecord1<true, T1> {
         static inline T1 Decode(char* addr) {
@@ -1357,6 +1354,19 @@ public:
      *     addr start here
     */
     template<typename T1>
+    struct Record1Format<false, T1> {
+        static inline size_t Length(const T1& t1) {
+            return 1 + sizeof(size_t) + t1.size();
+        }
+    };
+    template<typename T1>
+    struct EncodeToRecord1<false, T1> {
+        static inline void Encode(const T1& t1, char* addr) {
+            *reinterpret_cast<size_t*>(addr) = t1.size();
+            memcpy(addr + sizeof(size_t), t1.data(), t1.size());
+        }
+    };
+    template<typename T1>
     struct DecodeInRecord1<false, T1> {
         static inline T1 Decode(char* addr) {
             size_t len1 = *reinterpret_cast<size_t*>(addr);
@@ -1370,6 +1380,12 @@ public:
     template<typename T1>
     struct Record1 {
         ValueType type;
+        static inline size_t FormatLength(const T1& t1) {
+            return Record1Format<
+                            std::is_same<T1, std::string>::value == false /* is numeric */,
+                            T1>::Length(t1);
+        }
+
         inline T1 first() {
             return DecodeInRecord1< 
                             std::is_same<T1, std::string>::value == false /* is numeric */,
@@ -1383,6 +1399,12 @@ public:
     };  // end of class Record1
 
 
+    /**
+     *  @note: the Record Lenght
+    */
+    template<bool IsT1Numeric, bool IsT2Numeric, typename T1, typename T2>
+    struct Record2Format {};
+
     /** EncodeToRecord2
      *  @note: encode T1 and T2 to addr.
      *  ! The memory space should be allocated in advance
@@ -1390,73 +1412,9 @@ public:
     template<bool IsT1Numeric, bool IsT2Numeric, typename T1, typename T2>
     struct EncodeToRecord2 {};
 
-    /** Case 1: T1 and T2 are numeric
-     *  * record memory layout:
-     *  | type |   T1  |   T2  |
-     *  |  1B  |
-     *         |
-     *     addr start here
+    /** DecodeInRecord2
+     *  @note: decode T1 and T2
     */
-    template<typename T1, typename T2> 
-    struct EncodeToRecord2<true, true, T1, T2> {
-        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
-            *reinterpret_cast<T1*>(addr) = t1;
-            *reinterpret_cast<T2*>(addr + sizeof(T1)) = t2;
-        }
-    };
-
-    /** Case 2: T1 is numeric, T2 is std::string
-     *  * record memory layout:
-     *  | type |   T1  |   len2  |   buffer2
-     *  |  1B  |       |  size_t |
-     *         |
-     *     addr start here
-    */
-    template<typename T1, typename T2> 
-    struct EncodeToRecord2<true, false, T1, T2> {
-        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
-            static constexpr size_t offset = sizeof(T1) + sizeof(size_t);
-            memcpy(addr, &t1, sizeof(T1));
-            *reinterpret_cast<size_t*>(addr + sizeof(T1)) = t2.size();
-            memcpy(addr + offset, t2.data(), t2.size());
-        }
-    };
-
-    /** Case 3: T1 is std::string, T2 is numeric
-     *  * record memory layout:
-     *  | type |  len1  |   T2  |   buffer1
-     *  |  1B  | size_t |       |
-     *         |
-     *     addr start here
-    */
-    template<typename T1, typename T2> 
-    struct EncodeToRecord2<false, true, T1, T2> {
-        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
-            static constexpr size_t offset = sizeof(size_t) + sizeof(T2);
-            *reinterpret_cast<size_t*>(addr) = t1.size();
-            memcpy(addr + sizeof(size_t), &t2, sizeof(T2));
-            memcpy(addr + offset, t1.data(), t1.size());
-        }
-    };
-
-    /** Case 4: T1 is std::string, T2 is std::string
-     *  * record memory layout:
-     *  | type |  len1  |  len2  | buffer1 | bufer2 |
-     *  |  1B  | size_t | size_t |         |
-     *         |                 |
-     *     addr start here     offset
-    */
-    template<typename T1, typename T2> 
-    struct EncodeToRecord2<false, false, T1, T2> {
-        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
-            static constexpr size_t offset = sizeof(size_t) + sizeof(size_t);
-            *reinterpret_cast<size_t*>(addr) = t1.size();
-            *reinterpret_cast<size_t*>(addr + sizeof(size_t)) = t2.size();
-            memcpy(addr + offset, t1.data(), t1.size());
-            memcpy(addr + offset + t1.size(), t2.data(), t2.size());
-        }
-    };
-
     template<bool IsT1Numeric, bool IsT2Numeric, bool IsFirst, typename T1, typename T2>
     struct DecodeInRecord2 {};
 
@@ -1467,6 +1425,19 @@ public:
      *         |
      *     addr start here
     */
+    template<typename T1, typename T2>
+    struct Record2Format<true, true, T1, T2> {
+        static inline constexpr size_t Length(const T1& t1, const T2& t2) {
+            return 1 + sizeof(t1) + sizeof(t2);
+        }
+    };
+    template<typename T1, typename T2> 
+    struct EncodeToRecord2<true, true, T1, T2> {
+        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
+            *reinterpret_cast<T1*>(addr) = t1;
+            *reinterpret_cast<T2*>(addr + sizeof(T1)) = t2;
+        }
+    };
     template<typename T1, typename T2>
     struct DecodeInRecord2<true, true, true /* IsFirst */, T1, T2> {
         static inline T1 Decode(char* addr) {
@@ -1487,6 +1458,21 @@ public:
      *         |
      *     addr start here
     */
+    template<typename T1, typename T2>
+    struct Record2Format<true, false, T1, T2> {
+        static inline size_t Length(const T1& t1, const T2& t2) {
+            return 1 + sizeof(t1) + sizeof(size_t) + t2.size();
+        }
+    };
+    template<typename T1, typename T2> 
+    struct EncodeToRecord2<true, false, T1, T2> {
+        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
+            static constexpr size_t offset = sizeof(T1) + sizeof(size_t);
+            memcpy(addr, &t1, sizeof(T1));
+            *reinterpret_cast<size_t*>(addr + sizeof(T1)) = t2.size();
+            memcpy(addr + offset, t2.data(), t2.size());
+        }
+    };
     template<typename T1, typename T2>
     struct DecodeInRecord2<true, false, true /* IsFirst*/, T1, T2> {
         static inline T1 Decode(char* addr) {
@@ -1509,6 +1495,21 @@ public:
      *     addr start here
     */
     template<typename T1, typename T2>
+    struct Record2Format<false, true, T1, T2> {
+        static inline size_t Length(const T1& t1, const T2& t2) {
+            return 1 + sizeof(size_t) + sizeof(t2) + t1.size();
+        }
+    };
+    template<typename T1, typename T2> 
+    struct EncodeToRecord2<false, true, T1, T2> {
+        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
+            static constexpr size_t offset = sizeof(size_t) + sizeof(T2);
+            *reinterpret_cast<size_t*>(addr) = t1.size();
+            memcpy(addr + sizeof(size_t), &t2, sizeof(T2));
+            memcpy(addr + offset, t1.data(), t1.size());
+        }
+    };
+    template<typename T1, typename T2>
     struct DecodeInRecord2<false, true, true /* IsFirst*/, T1, T2> {
         static inline T1 Decode(char* addr) {
             size_t len1 = *reinterpret_cast<size_t*>(addr);
@@ -1527,9 +1528,25 @@ public:
      *  * record memory layout:
      *  | type |  len1  |  len2  | buffer1 | bufer2 |
      *  |  1B  | size_t | size_t |         |
-     *         |
-     *     addr start here
+     *         |                 |
+     *     addr start here     offset
     */
+    template<typename T1, typename T2>
+    struct Record2Format<false, false, T1, T2> {
+        static inline size_t Length(const T1& t1, const T2& t2) {
+            return 1 + sizeof(size_t) + sizeof(size_t) + t1.size() + t2.size();
+        }
+    };
+    template<typename T1, typename T2> 
+    struct EncodeToRecord2<false, false, T1, T2> {
+        static inline void Encode(const T1& t1, const T2& t2, char* addr) {
+            static constexpr size_t offset = sizeof(size_t) + sizeof(size_t);
+            *reinterpret_cast<size_t*>(addr) = t1.size();
+            *reinterpret_cast<size_t*>(addr + sizeof(size_t)) = t2.size();
+            memcpy(addr + offset, t1.data(), t1.size());
+            memcpy(addr + offset + t1.size(), t2.data(), t2.size());
+        }
+    };
     template<typename T1, typename T2>
     struct DecodeInRecord2<false, false, true /* IsFirst*/, T1, T2> {
         static inline T1 Decode(char* addr) {
@@ -1552,6 +1569,13 @@ public:
     template<typename T1, typename T2>
     struct Record2 {
         ValueType type;
+        static inline size_t FormatLength(const T1& t1, const T2& t2) {
+            return Record2Format<
+                    std::is_same<T1, std::string>::value == false  /* is numeric */, 
+                    std::is_same<T2, std::string>::value == false  /* is numeric */,
+                    T1, T2>::Length(t1, t2);
+        }           
+
         inline T1 first() {
             return DecodeInRecord2<
                     std::is_same<T1, std::string>::value == false  /* is numeric */, 
@@ -1575,8 +1599,16 @@ public:
         }
     }; // end of class Record2
 
-    using value_type = typename std::conditional<is_set, Record1<Key>*, Record2<Key, T>* >::type;
+    class RecordAllocator {
+        public:
+            inline char* Allocate(size_t size) {
+                return reinterpret_cast<char*>(malloc(size));
+            }
 
+            inline void Release(char* addr) {
+                free(addr);
+            }
+    };
 
     /** DramMedia
      *  Dram Record Format: 
@@ -1663,6 +1695,7 @@ public:
         }
     };
 
+    using value_type = typename std::conditional<is_set, Record1<Key>, Record2<Key, T> >::type;
     /**
      *  @note: 
     */
@@ -1752,7 +1785,7 @@ public:
     */        
     class BucketIterator {
     public:
-    typedef std::pair<SlotInfo, HashSlot> value_type;
+    typedef std::pair<SlotInfo, HashSlot> InfoPair;
         BucketIterator(uint32_t bi, char* bucket_addr, size_t cell_count, size_t cell_i = 0):
             bi_(bi),
             cell_count_(cell_count),
@@ -1781,7 +1814,7 @@ public:
             return *this;
         }
 
-        inline value_type operator*() const {
+        inline InfoPair operator*() const {
             // return the cell index, slot index and its slot content
             uint8_t slot_index = *bitmap_;
             char* cell_addr = bucket_addr_ + cell_i_ * CellMeta::CellSize();
@@ -1863,7 +1896,7 @@ public:
         buckets_ = buckets_addr;
         buckets_mem_block_ids_ = new int[bucket_count];
         for (size_t i = 0; i < bucket_count; ++i) {
-            auto res = mem_allocator_.AllocateNoSafe(cell_count);
+            auto res = cell_allocator_.AllocateNoSafe(cell_count);
             memset(res.second, 0, cell_count * kCellSize);
             buckets_[i].Reset(res.second, cell_count);
             buckets_mem_block_ids_[i] = res.first;
@@ -1875,7 +1908,7 @@ public:
         printf("%s\n", PrintMemAllocator().c_str());
     }
     std::string PrintMemAllocator() {
-        return mem_allocator_.ToString();
+        return cell_allocator_.ToString();
     }
 
     void MinorReHashAll()  {
@@ -1890,7 +1923,7 @@ public:
                 printf("Cannot rehash bucket %lu\n", i);
                 continue;
             }
-            auto res = mem_allocator_.AllocateNoSafe(new_cell_count);
+            auto res = cell_allocator_.AllocateNoSafe(new_cell_count);
             if (res.second == nullptr) {
                 printf("Error\n");
                 exit(1);
@@ -1930,7 +1963,7 @@ public:
         printf("Real rehash speed: %f Mops/s\n", (double)rehash_count / (rehash_end - rehash_start));
         // release the old mem block space
         for (size_t i = 0; i < bucket_count_; ++i) {
-            mem_allocator_.ReleaseNoSafe(old_mem_block_ids[i]);
+            cell_allocator_.ReleaseNoSafe(old_mem_block_ids[i]);
         }
 
         free(old_mem_block_ids);
@@ -2029,12 +2062,23 @@ public:
 
     template<typename HashKey>
     inline size_t KeyToHash(HashKey& key) {
-        return hash<HashKey>(key);
+        using Mix =
+            typename std::conditional<std::is_same<::turbo::hash<key_type>, hasher>::value,
+                                      ::turbo::identity_hash<size_t>,
+                                      ::turbo::hash<size_t>>::type;
+        return Mix{}(WHash::operator()(key));
     }
 
-    bool Put(const Slice& key, const Slice& value)  {
+    bool Put(const std::string& key, const Slice& value)  {
         // calculate hash value of the key
-        size_t hash_value = Hasher::hash(key.data(), key.size());
+        size_t hash_value = KeyToHash(key);
+        
+        // allocate space to store record
+        // size_t buf_len = value_type::FormatLength(key, value);
+        // void* buffer = record_allocator_.Allocate(buf_len);
+        // value_type* record = reinterpret_cast<value_type*>(buffer);
+        // record->type = kTypeValue;
+        // record->Encode(key, value);
 
         // store the kv pair to media
         void* media_offset = DramMedia::Store(kTypeValue, key, value);
@@ -2045,7 +2089,9 @@ public:
 
     // Return the entry if key exists
     bool Get(const std::string& key, std::string* value)  {
-        size_t hash_value = Hasher::hash(key.data(), key.size());
+        // calculate hash value of the key
+        size_t hash_value = KeyToHash(key);
+
         auto res = findSlot(key, hash_value);
         if (res.second) {
             // find a key in hash table
@@ -2063,7 +2109,7 @@ public:
     }
 
     bool Find(const std::string& key, uint64_t& data_offset)  {
-        size_t hash_value = Hasher::hash(key.data(), key.size());
+        size_t hash_value = KeyToHash(key);
         auto res = findSlot(key, hash_value);
         data_offset = res.first.entry;
         return res.second;
@@ -2323,7 +2369,7 @@ private:
                             key.ToString().c_str(),
                             hash_value,
                             slot_key.ToString().c_str(),
-                            Hasher::hash(slot_key.data(), slot_key.size())
+                            KeyToHash(key)
                             );
                         #endif
                     }
@@ -2412,7 +2458,7 @@ private:
                             key.ToString().c_str(),
                             hash_value,
                             slot_key.ToString().c_str(),
-                            Hasher::hash(slot_key.data(), slot_key.size())
+                            KeyToHash(key)
                             );
                         #endif
                     }
@@ -2436,7 +2482,8 @@ private:
     }
 
 private:
-    CellAllocator<CellMeta, kCellCountLimit> mem_allocator_;
+    CellAllocator<CellMeta, kCellCountLimit> cell_allocator_;
+    RecordAllocator                          record_allocator_;
     BucketMeta*   buckets_;
     int*          buckets_mem_block_ids_;
     const size_t  bucket_count_ = 0;
