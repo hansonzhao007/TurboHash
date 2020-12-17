@@ -43,6 +43,8 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
+#include <iomanip>
+#include <iostream>
 #include <utility>
 #include <algorithm>
 #include <functional>
@@ -302,6 +304,12 @@ public:
         }
         return r;
     }
+
+    friend std::ostream& operator<<(std::ostream& os, const Slice& str) {
+        os <<  str.ToString();
+        return os;
+    }
+
     const char* data_;
     size_t size_;
 }; // end of class Slice
@@ -314,7 +322,6 @@ inline bool operator==(const Slice& x, const Slice& y) {
 inline bool operator!=(const Slice& x, const Slice& y) {
     return !(x == y);
 }
-
 
 /** Hasher
  *  @note: provide hash function for string
@@ -490,6 +497,7 @@ static inline void turbo_bit_spin_unlock(uint32_t *lock, int bit_pos)
     TURBO_BARRIER();
     *lock &= ~(1 << bit_pos);
 }
+
 /** SpinLockScope
  *  @note: a spinlock monitor, lock when initialized, unlock then deconstructed.
 */
@@ -508,7 +516,6 @@ public:
 private:
     uint32_t *lock_;
 }; // end of class SpinLockScope
-
 
 // https://rigtorp.se/spinlock/
 class AtomicSpinLock {
@@ -575,7 +582,6 @@ struct hash<T*> {
             return util::Hasher::hash_int(static_cast<uint64_t>(obj));  \
         }                                                               \
     }
-
 #if defined(__GNUC__) && !defined(__clang__)
 #    pragma GCC diagnostic push
 #    pragma GCC diagnostic ignored "-Wuseless-cast"
@@ -599,7 +605,6 @@ TURBO_HASH_INT(unsigned long long);
 #if defined(__GNUC__) && !defined(__clang__)
 #    pragma GCC diagnostic pop
 #endif
-
 // dummy hash, unsed as mixer when turbo::hash is already used
 template <typename T>
 struct identity_hash {
@@ -630,8 +635,9 @@ namespace detail {
 */ 
 class CellMeta128 {
 public:
-    static const uint16_t BitMapMask    = 0xFFFC;
-    static const int CellSizeLeftShift  = 7;
+    using bitmap_type = uint16_t;
+    static constexpr uint16_t BitMapMask    = 0xFFFC;
+    static constexpr int CellSizeLeftShift  = 7;
 
     explicit CellMeta128(char* rep) {
         meta_   = _mm_loadu_si128(reinterpret_cast<const __m128i*>(rep));
@@ -670,29 +676,25 @@ public:
         return __builtin_popcount(bitmap_);
     }
 
-    inline static uint8_t StartSlotPos() {
+    inline static constexpr uint8_t StartSlotPos() {
         return 2;
     }
 
-    inline static uint32_t CellSize() {
+    inline static constexpr uint32_t CellSize() {
         // cell size (include meta) in byte
         return 128;
     }
 
-    inline static uint32_t SlotMaxRange() {
+    inline static constexpr uint32_t SlotMaxRange() {
         return 16;
     }
 
-    inline static uint32_t SlotSize() {
+    inline static constexpr uint32_t SlotSize() {
         // slot count
         return 14;
     }
 
-    inline static uint16_t BitMapType() {
-        return 0;
-    }
-
-    inline static size_t size() {
+    inline static constexpr size_t size() {
         // the meta size in byte in current cell
         return 16;
     }
@@ -728,8 +730,6 @@ public:
         return buffer;
     }
 
-
-private:
     __m128i     meta_;          // 16 byte integer vector
     uint16_t    bitmap_;        // 1: occupied, 0: empty or deleted
 }; // end of class CellMeta128
@@ -754,8 +754,9 @@ private:
 */ 
 class CellMeta256 {
 public:
-    static const uint32_t BitMapMask = 0x0FFFFFFF0;
-    static const int CellSizeLeftShift = 8;
+    using bitmap_type = uint32_t;
+    static constexpr uint32_t BitMapMask = 0x0FFFFFFF0;
+    static constexpr int CellSizeLeftShift = 8;
 
     explicit CellMeta256(char* rep) {
         meta_   = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
@@ -794,29 +795,25 @@ public:
         return __builtin_popcount(bitmap_);
     }
 
-    inline static uint8_t StartSlotPos() {
+    inline static constexpr uint8_t StartSlotPos() {
         return 4;
     }
 
-    inline static uint32_t CellSize() {
+    inline static constexpr uint32_t CellSize() {
         // cell size (include meta) in byte
         return 256;
     }
 
-    inline static uint32_t SlotMaxRange() {
+    inline static constexpr uint32_t SlotMaxRange() {
         return 32;
     }
     
-    inline static uint32_t SlotSize() {
+    inline static constexpr uint32_t SlotSize() {
         // slot count
         return 28;
     }
 
-    inline static uint32_t BitMapType() {
-        return 0;
-    }
-
-    inline static size_t size() {
+    inline static constexpr size_t size() {
         // the meta size in byte in current cell
         return 32;
     }
@@ -855,8 +852,7 @@ public:
         );
         return buffer;
     }
-    
-private:
+
     __m256i     meta_;          // 32 byte integer vector
     uint32_t    bitmap_;        // 1: occupied, 0: empty or deleted
 }; // end of class CellMeta256
@@ -1211,15 +1207,11 @@ public:
     // Internal transformation for std::string
     using key_type    = Key;
     using mapped_type = T;
-
-    // using key_type    = typename std::conditional<  std::is_same<Key, std::string>::value == false  /* is numeric */,
-    //                                                 Key, util::Slice >::type;
-    // using mapped_type = typename std::conditional<  std::is_same<  T, std::string>::value == false  /* is numeric */,
-    //                                                 Key, util::Slice >::type;
-
     using size_type = size_t;
     using hasher    = Hash;
-    using key_equal = KeyEqual;
+    // using key_equal = KeyEqual;
+    using key_equal = typename std::conditional<  std::is_same<Key, std::string>::value == false  /* is numeric */,
+                                                    KeyEqual, std::equal_to<util::Slice> >::type;
 
     using Slice     = util::Slice;
 
@@ -1297,16 +1289,6 @@ public:
         kTypeMask     = 0x7F    // 0b 0_1111111
     };
 
-    /** Record
-     *  @note: key-value record
-    */
-    struct Record {
-        ValueType type;
-        util::Slice key;
-        util::Slice value;
-    };
-
-
     /**
      *  @note: the Record Lenght
     */
@@ -1372,11 +1354,12 @@ public:
             memcpy(addr + sizeof(size_t), t1.data(), t1.size());
         }
     };
+    // When T1 is std::string, 'Decode' return util::Slice, which is the reference of real value.
     template<typename T1>
     struct DecodeInRecord1<false, T1> {
-        static inline T1 Decode(char* addr) {
+        static inline util::Slice Decode(char* addr) {
             size_t len1 = *reinterpret_cast<size_t*>(addr);
-            return T1(addr + sizeof(size_t), len1);
+            return util::Slice(addr + sizeof(size_t), len1);
         }
     };
 
@@ -1386,13 +1369,15 @@ public:
     template<typename T1>
     struct Record1 {
         ValueType type;
+        using T1_type = typename std::conditional<  std::is_same<T1, std::string>::value == false  /* is numeric */,
+                                                    T1, util::Slice>::type;
         static inline size_t FormatLength(const T1& t1) {
             return Record1Format<
                             std::is_same<T1, std::string>::value == false /* is numeric */,
                             T1>::Length(t1);
         }
 
-        inline T1 first() {
+        inline T1_type first() {
             return DecodeInRecord1< 
                             std::is_same<T1, std::string>::value == false /* is numeric */,
                             T1>::Decode(reinterpret_cast<char*>(this) + 1);
@@ -1487,9 +1472,9 @@ public:
     };
     template<typename T1, typename T2>
     struct DecodeInRecord2<true, false, false /* IsFirst*/, T1, T2> {
-        static inline T2 Decode(char* addr) {
+        static inline util::Slice Decode(char* addr) {
             size_t len2 = *reinterpret_cast<size_t*>(addr + sizeof(T1));
-            return T2(addr + sizeof(T1) + sizeof(size_t), len2);
+            return util::Slice(addr + sizeof(T1) + sizeof(size_t), len2);
         }
     };
 
@@ -1517,9 +1502,9 @@ public:
     };
     template<typename T1, typename T2>
     struct DecodeInRecord2<false, true, true /* IsFirst*/, T1, T2> {
-        static inline T1 Decode(char* addr) {
+        static inline util::Slice Decode(char* addr) {
             size_t len1 = *reinterpret_cast<size_t*>(addr);
-            return T1(addr + sizeof(size_t) + sizeof(T2), len1);
+            return util::Slice(addr + sizeof(size_t) + sizeof(T2), len1);
             
         }
     };
@@ -1555,17 +1540,17 @@ public:
     };
     template<typename T1, typename T2>
     struct DecodeInRecord2<false, false, true /* IsFirst*/, T1, T2> {
-        static inline T1 Decode(char* addr) {
+        static inline util::Slice Decode(char* addr) {
             size_t len1 = *reinterpret_cast<size_t*>(addr);
-            return T1(addr + sizeof(size_t) + sizeof(size_t), len1);
+            return util::Slice(addr + sizeof(size_t) + sizeof(size_t), len1);
         }
     };
     template<typename T1, typename T2>
     struct DecodeInRecord2<false, false, false /* IsFirst*/, T1, T2> {
-        static inline T2 Decode(char* addr) {
+        static inline util::Slice Decode(char* addr) {
             size_t len1 = *reinterpret_cast<size_t*>(addr);
             size_t len2 = *reinterpret_cast<size_t*>(addr + sizeof(size_t));
-            return T2(addr + sizeof(size_t) + sizeof(size_t) + len1, len2);
+            return util::Slice(addr + sizeof(size_t) + sizeof(size_t) + len1, len2);
         }
     };
 
@@ -1575,6 +1560,11 @@ public:
     template<typename T1, typename T2>
     struct Record2 {
         ValueType type;
+        using T1_type = typename std::conditional<  std::is_same<T1, std::string>::value == false  /* is numeric */,
+                                                    T1, util::Slice>::type;
+        using T2_type = typename std::conditional<  std::is_same<T2, std::string>::value == false  /* is numeric */,
+                                                    T2, util::Slice>::type;
+
         static inline size_t FormatLength(const T1& t1, const T2& t2) {
             return Record2Format<
                     std::is_same<T1, std::string>::value == false  /* is numeric */, 
@@ -1582,14 +1572,14 @@ public:
                     T1, T2>::Length(t1, t2);
         }           
 
-        inline T1 first() {
+        inline T1_type first() {
             return DecodeInRecord2<
                     std::is_same<T1, std::string>::value == false  /* is numeric */, 
                     std::is_same<T2, std::string>::value == false  /* is numeric */, 
                     true, T1, T2>::Decode(reinterpret_cast<char*>(this) + 1);
         }
 
-        inline T2 second() {
+        inline T2_type second() {
             return DecodeInRecord2<
                     std::is_same<T1, std::string>::value == false  /* is numeric */, 
                     std::is_same<T2, std::string>::value == false  /* is numeric */, 
@@ -1605,6 +1595,17 @@ public:
         }
     }; // end of class Record2
 
+    /** HashSlot
+     *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
+    */
+    struct HashSlot{
+        uint64_t entry:48;      // pointer to key-value record
+        uint64_t H1:16;         // hash-tag for the key
+    };
+
+    /** RecordAllocator
+     *  @note: allocate memory space for new record
+    */
     class RecordAllocator {
         public:
             inline char* Allocate(size_t size) {
@@ -1614,80 +1615,6 @@ public:
             inline void Release(char* addr) {
                 free(addr);
             }
-    };
-
-    /** DramMedia
-     *  Dram Record Format: 
-     *  | ValueType | key size | key | value size |  value  |
-     *  |    1B     |   4B     | ... |    4B      |   ...
-    */
-    class DramMedia {
-    public:
-
-        static inline void* Store(ValueType type, const util::Slice& key, const util::Slice& value) {
-            size_t key_len = key.size();
-            size_t value_len = value.size();
-            size_t encode_len = key_len + value_len;
-            if (type == kTypeValue) {
-                // has both key and value
-                encode_len += 9;
-            } else if (type == kTypeDeletion) {
-                encode_len += 5;
-            }
-
-            char* buffer = (char*)malloc(encode_len);
-            
-            // store value type
-            memcpy(buffer, &type, 1);
-            // store key len
-            memcpy(buffer + 1, &key_len, 4);
-            // store key
-            memcpy(buffer + 5, key.data(), key_len);
-
-            if (type == kTypeDeletion) {
-                return buffer;
-            }
-
-            // store value len
-            memcpy(buffer + 5 + key_len, &value_len, 4);
-            // store value
-            memcpy(buffer + 9 + key_len, value.data(), value_len);
-            return buffer;
-        }
-
-
-        static inline util::Slice ParseKey(const void* _addr) {
-            char* addr = (char*) _addr;
-            uint32_t key_len = 0;
-            memcpy(&key_len, addr + 1, 4);
-            return util::Slice(addr + 5, key_len);
-        }
-
-
-        static inline Record ParseData(uint64_t offset) {
-            char* addr = (char*) offset;
-            ValueType type = kTypeValue;
-            uint32_t key_len = 0;
-            uint32_t value_len = 0;
-            memcpy(&type, addr, 1);
-            memcpy(&key_len, addr + 1, 4);
-            if (type == kTypeValue) {
-                memcpy(&value_len, addr + 5 + key_len, 4);
-                return {
-                    type, 
-                    util::Slice(addr + 5, key_len), 
-                    util::Slice(addr + 9 + key_len, value_len)};
-            } else if (type == kTypeDeletion) {
-                return {
-                    type, 
-                    util::Slice(addr + 5, key_len), 
-                    "" };
-            } else {
-                printf("Prase type incorrect: %d\n", type);
-                exit(1);
-            }
-        }
-
     };
 
     class DataNodeAllocator {
@@ -1702,13 +1629,14 @@ public:
     };
 
     using value_type = typename std::conditional<is_set, Record1<key_type>, Record2<key_type, mapped_type> >::type;
-    /**
-     *  @note: 
+
+    /** DataNode
+     *  @note: store the data pointer 
     */
     class DataNode { 
     public:
         explicit DataNode(char* addr):
-            data_(addr) {
+            data_(reinterpret_cast<value_type*>(addr)) {
         }
 
         const value_type& operator*() const noexcept {
@@ -1726,15 +1654,6 @@ public:
         private:
             value_type* data_;
     };
-
-    /** HashSlot
-     *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
-    */
-    struct HashSlot{
-        uint64_t entry:48;      // pointer to key-value record
-        uint64_t H1:16;         // hash-tag for the key
-    };
-
 
     /** BucketMeta
      *  @note: a 8-byte 
@@ -1780,6 +1699,7 @@ public:
         // | 1 bit lock | 15 bit cell mask | 48 bit address |
         uint64_t data_;
     };
+
 public:
 
     /** Usage: iterator every slot in the bucket, return the pointer in the slot
@@ -2075,35 +1995,52 @@ public:
         return Mix{}(WHash::operator()(key));
     }
 
-    bool Put(const std::string& key, const Slice& value)  {
+    bool Put(const Key& key, const T& value)  {
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
         
         // allocate space to store record
-        // size_t buf_len = value_type::FormatLength(key, value);
-        // void* buffer = record_allocator_.Allocate(buf_len);
-        // value_type* record = reinterpret_cast<value_type*>(buffer);
-        // record->type = kTypeValue;
-        // record->Encode(key, value);
-
-        // store the kv pair to media
-        void* media_offset = DramMedia::Store(kTypeValue, key, value);
+        size_t buf_len = value_type::FormatLength(key, value);
+        void* buffer = record_allocator_.Allocate(buf_len);
+        value_type* record = reinterpret_cast<value_type*>(buffer);
+        record->type = kTypeValue;
+        record->Encode(key, value);
 
         // update DRAM index, thread safe
-        return insertSlot(key, hash_value, media_offset);
+        return insertSlot(key, hash_value, buffer);
     }
 
+    /** GetAssign
+     *  @note: For numeric value, copy directly. For std::string, using assign
+    */
+    template<bool IsNumeric, typename T2>
+    struct GetAssign {};
+    template<typename T2>
+    struct GetAssign<true, T2> {
+        static inline void Assign(const typename Record2<key_type, mapped_type>::T2_type& a, T2* b) {
+            *b = a;
+        }
+    };
+    template<typename T2>
+    struct GetAssign<false, T2> {
+        static inline void Assign(const typename Record2<key_type, mapped_type>::T2_type& a, T2* b) {
+            b->assign(a.data(), a.size());
+        }
+    };
+    
     // Return the entry if key exists
-    bool Get(const std::string& key, std::string* value)  {
+    bool Get(const Key& key, T* value)  {
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
 
         auto res = findSlot(key, hash_value);
         if (res.second) {
             // find a key in hash table
-            Record record = DramMedia::ParseData(res.first.entry);
-            if (record.type  == kTypeValue) {
-                value->assign(record.value.data(), record.value.size());
+            DataNode record((char*)res.first.entry);
+            if (record->type  == kTypeValue) {
+                GetAssign<std::is_same<Key, std::string>::value == false,
+                        T>::Assign(record->second(), value);
+                
                 return true;
             }
             else {
@@ -2114,7 +2051,7 @@ public:
         return false;
     }
 
-    bool Find(const std::string& key, uint64_t& data_offset)  {
+    bool Find(const Key& key, uint64_t& data_offset)  {
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
 
@@ -2153,12 +2090,8 @@ public:
             SlotInfo& info = res.first;
             info.bucket = i;
             HashSlot& slot = res.second;
-            Record record = DramMedia::ParseData(slot.entry);
-            printf("%s, addr: %16lx. key: %.8s, value: %s\n", 
-                info.ToString().c_str(),
-                slot.entry, 
-                record.key.ToString().c_str(),
-                record.value.ToString().c_str());
+            DataNode record((char*) slot.entry);
+            std::cout << info.ToString() << ", addr: " << slot.entry << ". key: " << record->first() << ", value: " << record->second() << std::endl;
             ++iter;
         }
     }
@@ -2172,12 +2105,8 @@ public:
                 auto res = (*iter);
                 SlotInfo& info = res.first;
                 HashSlot& slot = res.second;
-                Record record = DramMedia::ParseData(slot.entry);
-                printf("%s, addr: %16lx. key: %.8s, value: %s\n", 
-                    info.ToString().c_str(),
-                    slot.entry, 
-                    record.key.ToString().c_str(),
-                    record.value.ToString().c_str());
+                DataNode record((char*) slot.entry);
+                std::cout << info.ToString() << ", addr: " << slot.entry << ". key: " << record->first() << ", value: " << record->second() << std::endl;
                 ++iter;
                 count++;
             }
@@ -2250,7 +2179,7 @@ private:
         HashSlot* des_slot = locateSlot(des_cell_addr, des_info.slot);
         *des_slot = src_slot;
         // obtain bitmap
-        decltype(CellMeta::BitMapType())* bitmap = (decltype(CellMeta::BitMapType())*)des_cell_addr;
+        decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)des_cell_addr;
         // set H2
         des_cell_addr += des_info.slot; // move to H2 address
         *des_cell_addr = des_info.H2;   // update  H2
@@ -2267,7 +2196,7 @@ private:
         slot_pos->H1 = info.H1;
        
         // obtain bitmap
-        decltype(CellMeta::BitMapType())* bitmap = (decltype(CellMeta::BitMapType())*)cell_addr;
+        decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)cell_addr;
 
         // set H2
         cell_addr += info.slot; // move cell_addr one byte hash position
@@ -2284,7 +2213,7 @@ private:
     }
 
 
-    inline bool insertSlot(const Slice& key, size_t hash_value, void* media_offset) {
+    inline bool insertSlot(const Key& key, size_t hash_value, void* media_offset) {
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
             PartialHash partial_hash(hash_value);            
@@ -2308,7 +2237,7 @@ private:
                 }
                 else { // current slot has been occupied by another concurrent thread, retry.
                     // #ifdef LTHASH_DEBUG_OUT
-                    TURBO_INFO("retry find slot. %s\n", key.ToString().c_str());
+                    // TURBO_INFO("retry find slot. %s\n", key.ToString().c_str());
                     // #endif
                     retry_find = true;
                 }
@@ -2324,21 +2253,12 @@ private:
         return false;
     }
 
-    inline bool slotKeyEqual(const HashSlot& slot, const Slice& key) {
-        Slice res = DramMedia::ParseKey(reinterpret_cast<void*>(slot.entry));
-        return res == key;
-    }
-
-    inline const Slice extractSlice(const HashSlot& slot) {
-        return  DramMedia::ParseKey(reinterpret_cast<void*>(slot.entry));
-    }
-
     // Find a valid slot for insertion
     // Return: std::pair
     //      first: the slot info that should insert the key
     //      second: whether we can find a valid(empty or belong to the same key) slot to insert
     // Node: Only when the second value is true, can we insert this key
-    inline std::pair<SlotInfo, bool> findSlotForInsert(const Slice& key, const PartialHash& partial_hash) {
+    inline std::pair<SlotInfo, bool> findSlotForInsert(const Key& key, const PartialHash& partial_hash) {
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
         ProbeStrategy probe(partial_hash.H1_, bucket_meta.CellCountMask(), bucket_i);
@@ -2357,7 +2277,9 @@ private:
 
                 if (TURBO_LIKELY(slot.H1 == partial_hash.H1_)) 
                 {  // compare if the H1 partial hash is equal (H1 is 16-byte)
-                    if (TURBO_LIKELY(slotKeyEqual(slot, key))) {  // compare if the slot key is equal
+                    DataNode record((char*)slot.entry);
+                    if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first())))
+                    {  // compare if the slot key is equal
                         return {{   offset.first,           /* bucket */
                                     offset.second,          /* cell */
                                     i,                      /* slot */
@@ -2421,7 +2343,7 @@ private:
                 false};
     }
     
-    inline std::pair<HashSlot, bool> findSlot(const Slice& key, size_t hash_value) {
+    inline std::pair<HashSlot, bool> findSlot(const Key& key, size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
@@ -2440,7 +2362,9 @@ private:
 
                 if (TURBO_LIKELY(slot.H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
                 {
-                    if (TURBO_LIKELY(slotKeyEqual(slot, key))) {      // If the slot key is equal to search key. SlotKeyEqual is very expensive 
+                    DataNode record((char*)slot.entry);                    
+                    if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first())))
+                    {      // If the slot key is equal to search key. SlotKeyEqual is very expensive 
                         return {slot, true};
                     }
                     else {
@@ -2505,9 +2429,13 @@ private:
 
 }; // end of namespace turbo::detail
 
+// When using std::string for Key, the KeyEqual uses std::equal_to<util::Slice>
 template <typename Key, typename T, typename Hash = hash<Key>,
           typename KeyEqual = std::equal_to<Key> >
-using unordered_map = detail::TurboHashTable<Key, T, Hash, KeyEqual,
+using unordered_map = detail::TurboHashTable<Key, T, Hash, typename std::conditional<
+                                                                                    std::is_same<Key, std::string>::value == false /* is numeric */, 
+                                                                                    KeyEqual, 
+                                                                                    std::equal_to<util::Slice> >::type,
                                              detail::CellMeta128, detail::ProbeWithinBucket>;
 
 }; // end of namespace turbo

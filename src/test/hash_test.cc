@@ -28,7 +28,9 @@ int main() {
         std::string value;
         size_t find = 0;
         for (size_t i = 0; i < COUNT && succ; i++) {
-            succ = hashtable->Get("key" + std::to_string(i), &value);
+            std::string key = "key" + std::to_string(i);
+            succ = hashtable->Get(key, &value);
+            // printf("Get key: %s. value: %s\n", key.c_str(), value.c_str());
             if ((succ)) find++;
         }
         printf("find %lu key, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());

@@ -52,6 +52,7 @@ void TestPair() {
     
 }
 
+
 void Record2Test() {
     char* buf = (char*)malloc(1024);
     typedef turbo::unordered_map<int, int> HashTable;
@@ -223,8 +224,6 @@ int main() {
     TestPair<float,    float>();
     TestPair<double,   double>();
     TestPair<std::string, std::string>();
-    
-    
     Record2Test();
     return 0;
 }

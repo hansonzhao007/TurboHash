@@ -559,9 +559,10 @@ public:
         size_t start_offset = random() % max_range_;
         auto key_iterator = key_trace_->trace_at(start_offset, max_range_);
         thread->stats.Start();
+        std::string val(value_size_, 'v');
         for (uint64_t i = 0; i < num_; i += batch ) {
             for (uint64_t j = 0; j < batch; j++) {                
-                bool res = hashtable_->Put(key_iterator.Next(), gen.Generate(value_size_));
+                bool res = hashtable_->Put(key_iterator.Next(), val);
                 if (!res) {
                     printf("Hash Table Full!!!\n");
                     goto write_end;
