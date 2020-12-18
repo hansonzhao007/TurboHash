@@ -233,8 +233,17 @@ public:
         int64_t usecs_since_last = now - last_report_finish_;
 
         std::string cur_time = TimeToString(now/1000000);
-        fprintf(stdout,
-                "%s ... thread %d: (%lu,%lu) ops and "
+        printf( "%s ... thread %d: (%lu,%lu) ops and "
+                "( %.1f,%.1f ) ops/second in (%.6f,%.6f) seconds\n",
+                cur_time.c_str(), 
+                tid_,
+                done_ - last_report_done_, done_,
+                (done_ - last_report_done_) /
+                (usecs_since_last / 1000000.0),
+                done_ / ((now - start_) / 1000000.0),
+                (now - last_report_finish_) / 1000000.0,
+                (now - start_) / 1000000.0);
+        INFO( "%s ... thread %d: (%lu,%lu) ops and "
                 "( %.1f,%.1f ) ops/second in (%.6f,%.6f) seconds\n",
                 cur_time.c_str(), 
                 tid_,
@@ -354,13 +363,19 @@ public:
         double elapsed = (finish_ - start_) * 1e-6;
 
         double throughput = (double)done_/elapsed;
-        fprintf(stdout, "%-12s : %11.3f micros/op %lf Mops/s;%s%s\n",
+        
+        printf( "%-12s : %11.3f micros/op %lf Mops/s;%s%s\n",
                 name.ToString().c_str(),
                 elapsed * 1e6 / done_,
                 throughput/1024/1024,
                 (extra.empty() ? "" : " "),
                 extra.c_str());
-        
+        INFO(   "%-12s : %11.3f micros/op %lf Mops/s;%s%s\n",
+                name.ToString().c_str(),
+                elapsed * 1e6 / done_,
+                throughput/1024/1024,
+                (extra.empty() ? "" : " "),
+                extra.c_str());
         if (print_hist) {
             fprintf(stdout, "Nanoseconds per op:\n%s\n", hist_.ToString().c_str());
         }
@@ -564,6 +579,7 @@ public:
             for (uint64_t j = 0; j < batch; j++) {                
                 bool res = hashtable_->Put(key_iterator.Next(), val);
                 if (!res) {
+                    INFO("Hash Table Full!!!\n");
                     printf("Hash Table Full!!!\n");
                     goto write_end;
                     

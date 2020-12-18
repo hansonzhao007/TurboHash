@@ -11,7 +11,7 @@ int main() {
     turbo::unordered_map<std::string, std::string> map;
 
     const size_t COUNT = 100000;
-    auto* hashtable = new turbo::unordered_map<std::string, std::string> (8, 8192);
+    auto* hashtable = new turbo::unordered_map<std::string, std::string> (8, 2048);
     printf("------- Iterate empty hash table ------\n");
     hashtable->IterateAll();
 
@@ -45,7 +45,7 @@ int main() {
     printf("------- rehash all bucket and repeat search ------\n");
     hashtable->MinorReHashAll();
     // hashtable->IterateValidBucket();
-    hashtable->IterateBucket(1);
+    // hashtable->IterateBucket(1);
     // hashtable->PrintAllMeta();
     // hashtable->IterateAll();
     read_fun();
@@ -54,8 +54,13 @@ int main() {
     hashtable->DebugInfo();
     read_fun();
 
-    printf("size of atomic bool: %lu\n", sizeof(std::atomic<bool>));
-    
+    hashtable->MinorReHashAll();
+    hashtable->DebugInfo();
+    read_fun();
+
+    hashtable->MinorReHashAll();
+    hashtable->DebugInfo();
+    read_fun();
 
     return 0;
 }

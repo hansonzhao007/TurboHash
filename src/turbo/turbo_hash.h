@@ -44,6 +44,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <iomanip>
+#include <sstream>
 #include <iostream>
 #include <utility>
 #include <algorithm>
@@ -64,6 +65,8 @@
 
 // un-comment this to disable logging, log is saved at robin_hood.log
 #define TURBO_ENABLE_LOGGING
+
+// #define LTHASH_DEBUG_OUT
 
 // Linear probing setting
 static const int kTurboMaxProbeLen = 17;
@@ -96,10 +99,11 @@ inline void TURBO_COMPILER_FENCE() {
 
 // turbo_hash logging
 namespace {
-static inline std::string TURBO_LOG(const std::string& content) {
+
+static inline std::string TURBO_CMD(const std::string& content) {
     std::array<char, 128> buffer;
     std::string result;
-    auto cmd = "printf '" + content + "' >> robin_hood.log";
+    auto cmd = "echo '" + content + "' >> robin_hood.log";
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
     if (!pipe) {
         throw std::runtime_error("popen() failed!");
@@ -110,53 +114,56 @@ static inline std::string TURBO_LOG(const std::string& content) {
     return result;
 }
 
+#define TURBO_LOG(M, x)\
+do {\
+    std::ostringstream ss;\
+    ss << M << x;\
+    TURBO_CMD(ss.str());\
+} while(0);
+
 #define __FILENAME__ ((strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__))
 
 #if defined TURBO_ENABLE_LOGGING
-#define TURBO_INFO(M, ...)\
+#define TURBO_INFO(x)\
 do {\
     char buffer[1024] = "[ INFO] ";\
     sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
-    sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
-    TURBO_LOG(buffer);\
+    TURBO_LOG(buffer, x);\
 } while(0);
 #else
-#define TURBO_INFO(M, ...)\
+#define TURBO_INFO(x)\
   do {\
   } while(0);
 #endif
 
 #if !defined NDEBUG && defined TURBO_ENABLE_LOGGING
-#define TURBO_DEBUG(M, ...)\
+#define TURBO_DEBUG(x)\
 do {\
     char buffer[1024] = "[DEBUG] ";\
     sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
-    sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
-    TURBO_LOG(buffer);\
+    TURBO_LOG(buffer, x);\
 } while(0);
 #else
-#define TURBO_DEBUG(M, ...)\
+#define TURBO_DEBUG(x)\
   do {\
   } while(0);
 #endif
 
 #if defined TURBO_ENABLE_LOGGING
-#define TURBO_ERROR(M, ...)\
+#define TURBO_ERROR(x)\
 do {\
     char buffer[1024] = "[ERROR] ";\
     sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
-    sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
-    TURBO_LOG(buffer);\
+    TURBO_LOG(buffer, x);\
 } while(0);
 #endif 
 
 #if defined TURBO_ENABLE_LOGGING
-#define TURBO_WARNING(M, ...)\
+#define TURBO_WARNING(x)\
 do {\
     char buffer[1024] = "[ WARN] ";\
     sprintf(buffer + strlen(buffer), "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
-    sprintf(buffer + strlen(buffer), M, ##__VA_ARGS__);\
-    TURBO_LOG(buffer);\
+    TURBO_LOG(buffer, x);\
 } while(0);
 #endif
 
@@ -627,7 +634,7 @@ namespace detail {
  *      2  - 15 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
  * 
  *  |- one byte hash:
- *      8 bit hash for the slot
+ *      8 bit tag for the slot
  * 
  *  |- slot:
  *      0  -  5 byte: the pointer used to point to DIMM where store the actual kv value
@@ -635,9 +642,18 @@ namespace detail {
 */ 
 class CellMeta128 {
 public:
-    using bitmap_type = uint16_t;
     static constexpr uint16_t BitMapMask    = 0xFFFC;
     static constexpr int CellSizeLeftShift  = 7;
+    static constexpr int SlotSizeLeftShift  = 3;
+    using H2Tag = uint8_t;
+
+    /** HashSlot
+     *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
+    */
+    struct HashSlot{
+        uint64_t entry:48;      // pointer to key-value record
+        uint64_t H1:16;         // hash-tag for the key
+    };
 
     explicit CellMeta128(char* rep) {
         meta_   = _mm_loadu_si128(reinterpret_cast<const __m128i*>(rep));
@@ -746,7 +762,7 @@ public:
  *      4  - 31 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
  * 
  *  |- one byte hash:
- *      8 bit hash for the slot
+ *      8 bit tag for the slot
  * 
  *  |- slot:
  *      0  -  5 byte: the pointer used to point to DIMM where store the actual kv value
@@ -754,9 +770,18 @@ public:
 */ 
 class CellMeta256 {
 public:
-    using bitmap_type = uint32_t;
     static constexpr uint32_t BitMapMask = 0x0FFFFFFF0;
     static constexpr int CellSizeLeftShift = 8;
+    static constexpr int SlotSizeLeftShift = 3;
+    using H2Tag = uint8_t;
+        
+    /** HashSlot
+     *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
+    */
+    struct HashSlot{
+        uint64_t entry:48;      // pointer to key-value record
+        uint64_t H1:16;         // hash-tag for the key
+    };
 
     explicit CellMeta256(char* rep) {
         meta_   = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
@@ -856,6 +881,135 @@ public:
     __m256i     meta_;          // 32 byte integer vector
     uint32_t    bitmap_;        // 1: occupied, 0: empty or deleted
 }; // end of class CellMeta256
+
+/** CellMeta256V2
+ *  @note: Hash cell whose size is 256 byte. There are 14 slots in the cell.
+ *  @format:
+ *  | ----------------------- meta ------------------------| ----- slots ----- |
+ *  | 4 byte bitmap | 28 byte: two byte hash for each slot | 16 byte * 14 slot |
+ * 
+ *  |- bitmap: 
+ *            0 bit: used as a bitlock
+ *            1 bit: not in use
+ *      2  - 15 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
+ *      16 - 31 bit: not in use
+ * 
+ *  |- two byte hash:
+ *      16 bit tag for the slot
+ * 
+ *  |- slot:
+ *      0  -  7 byte: 8-byte hash value
+ *      8  - 15 byte: the pointer to record
+*/ 
+class CellMeta256V2 {
+public:
+    static constexpr uint16_t BitMapMask   = 0xFFFC;
+    static constexpr int CellSizeLeftShift = 8;
+    static constexpr int SlotSizeLeftShift = 4;
+    using H2Tag = uint16_t;
+
+    /** HashSlot
+     *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
+    */
+    struct HashSlot{
+        uint64_t entry;      // pointer to key-value record
+        uint64_t H1;         // hash-tag for the key
+    };
+
+    explicit CellMeta256V2(char* rep) {
+        meta_   = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
+        bitmap_ = *(uint32_t*)(rep);             // the lowest 32bit is used as bitmap
+        bitmap_ &= BitMapMask;                   // hidden the 0 - 1 bit in bitmap
+    }
+
+    ~CellMeta256V2() {
+    }
+
+    // return a bitset, the slot that matches the hash is set to 1
+    inline util::BitSet MatchBitSet(uint16_t hash) {
+        auto bitset = _mm256_set1_epi16(hash);
+        uint16_t mask = _mm256_cmpeq_epi16_mask(bitset, meta_);
+        return util::BitSet(mask & bitmap_);
+    }
+
+    // return a bitset, indicating the availabe slot
+    inline util::BitSet EmptyBitSet() {
+        return util::BitSet((~bitmap_) & BitMapMask);
+    }
+
+    inline util::BitSet OccupyBitSet() {
+        return util::BitSet(bitmap_ & BitMapMask);
+    }
+
+    inline bool Full() {
+        return (bitmap_ & BitMapMask) == BitMapMask;
+    }
+
+    inline bool Occupy(int slot_index) {
+        return bitmap_ & (1 << slot_index);
+    }
+
+    inline int OccupyCount() {
+        return __builtin_popcount(bitmap_);
+    }
+
+    inline static constexpr uint8_t StartSlotPos() {
+        return 2;
+    }
+
+    inline static constexpr uint32_t CellSize() {
+        // cell size (include meta) in byte
+        return 256;
+    }
+
+    inline static constexpr uint32_t SlotMaxRange() {
+        return 16;
+    }
+    
+    inline static constexpr uint32_t SlotSize() {
+        // slot count
+        return 14;
+    }
+
+    inline static constexpr size_t size() {
+        // the meta size in byte in current cell
+        return 32;
+    }
+
+    inline uint16_t bitmap() {
+        return bitmap_;
+    }
+
+    std::string BitMapToString() {
+        std::string res;
+        char buffer[1024];
+        uint64_t H2s[4];
+        memcpy(H2s, &meta_, 32);
+        sprintf(buffer, "bitmap: 0b%s - H2: 0x%016lx%016lx%016lx%016lx", print_binary(bitmap_).c_str(), H2s[3], H2s[2], H2s[1], H2s[0]);
+        return buffer;
+    }
+
+    std::string print_binary(uint16_t bitmap)
+    {
+        char buffer[1024];
+        static std::string bit_rep[16] = {
+            "0000", "0001", "0010", "0011",
+            "0100", "0101", "0110", "0111",
+            "1000", "1001", "1010", "1011",
+            "1100", "1101", "1110", "1111"
+        };
+        sprintf(buffer, "%s%s%s%s", 
+            bit_rep[(bitmap >> 12) & 0x0F].c_str(),
+            bit_rep[(bitmap >>  8) & 0x0F].c_str(),
+            bit_rep[(bitmap >>  4) & 0x0F].c_str(),
+            bit_rep[(bitmap >>  0) & 0x0F].c_str()
+        );
+        return buffer;
+    }
+
+    __m256i     meta_;          // 32 byte integer vector
+    uint16_t    bitmap_;        // 1: occupied, 0: empty or deleted
+}; // end of class CellMeta256V2
 
 /** MemBlock
  *  @note: a memory block that can allocate at most 'count' Cell (128-byte Cell or 256-byte Cell)
@@ -1209,33 +1363,35 @@ public:
     using mapped_type = T;
     using size_type = size_t;
     using hasher    = Hash;
-    // using key_equal = KeyEqual;
     using key_equal = typename std::conditional<  std::is_same<Key, std::string>::value == false  /* is numeric */,
                                                     KeyEqual, std::equal_to<util::Slice> >::type;
-
-    using Slice     = util::Slice;
+    using Self = TurboHashTable<key_type, mapped_type, hasher, key_equal, CellMeta, ProbeStrategy, kCellCountLimit>;
 
 // private:
+
     static_assert(kCellCountLimit <= 32768, "kCellCountLimit needs to be <= 32768");
     using WHash     = WrapHash<Hash>;
     using WKeyEqual = WrapKeyEqual<KeyEqual>;
-
+    using HashSlot  = typename CellMeta::HashSlot;
+    using H2Tag     = typename CellMeta::H2Tag;
+    
     /** PartialHash
      *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
      *  @format:
      *  | MSB    - - - - - - - - - - - - - - - - - - LSB |
      *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
-     *  |    bucket_hash |     H1    |         |    H2   |
+     *  |    bucket_hash |     H1    |         H2        |
+     *  ! some CellMeta may only use the lowest 8 bit of H2
     */
     struct PartialHash {
         PartialHash(uint64_t hash) :
             bucket_hash_( hash >> 32 ),
             H1_( ( hash >> 16 ) & 0xFFFF ),
-            H2_( hash & 0xFF )
+            H2_( hash & 0xFFFF )
             { };        
         uint32_t  bucket_hash_; // used to locate in the bucket directory
-        uint16_t H1_; // H1: 2 byte hash tag         
-        uint8_t  H2_; // H2: 1 byte hash tag in CellMeta for parallel comparison using SIMD cmd
+        uint16_t  H1_; // H1: 2 byte hash tag         
+        H2Tag     H2_; // H2: 2 byte hash tag in CellMeta for parallel comparison using SIMD cmd
     }; // end of class PartialHash
 
 
@@ -1246,27 +1402,27 @@ public:
     public:
         uint32_t bucket;        // bucket index
         uint16_t cell;          // cell index
-        uint8_t  slot;          // slot index
-        uint8_t  H2;            // hash-tag in CellMeta
+        uint8_t  slot;          // slot index        
         uint16_t H1;            // hash-tag in HashSlot
+        H2Tag    H2;            // hash-tag in CellMeta
         bool equal_key;         // If we find a equal key in this slot
-        SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, uint8_t h2, bool euqal):
+        SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, H2Tag h2, bool euqal):
             bucket(b),
             cell(a),
-            slot(s),        
-            H2(h2),
+            slot(s),                    
             H1(h1),
+            H2(h2),
             equal_key(euqal) {}
         SlotInfo():
             bucket(0),
             cell(0),
-            slot(0),        
-            H2(0),
+            slot(0),                    
             H1(0),
+            H2(0),
             equal_key(false) {}
         std::string ToString() {
             char buffer[128];
-            sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%02x, H1: 0x%04x",
+            sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%04x, H1: 0x%04x",
                 bucket,
                 cell,
                 slot,
@@ -1595,14 +1751,6 @@ public:
         }
     }; // end of class Record2
 
-    /** HashSlot
-     *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
-    */
-    struct HashSlot{
-        uint64_t entry:48;      // pointer to key-value record
-        uint64_t H1:16;         // hash-tag for the key
-    };
-
     /** RecordAllocator
      *  @note: allocate memory space for new record
     */
@@ -1700,7 +1848,7 @@ public:
         uint64_t data_;
     };
 
-public:
+
 
     /** Usage: iterator every slot in the bucket, return the pointer in the slot
      *  BucketIterator<CellMeta> iter(bucket_addr, cell_count_);
@@ -1742,11 +1890,16 @@ public:
 
         inline InfoPair operator*() const {
             // return the cell index, slot index and its slot content
-            uint8_t slot_index = *bitmap_;
-            char* cell_addr = bucket_addr_ + cell_i_ * CellMeta::CellSize();
-            HashSlot* slot = (HashSlot*)(cell_addr + (slot_index << 3));
-            uint8_t H2 = *(uint8_t*)(cell_addr + slot_index);
-            return  { {bi_ /* ignore bucket index */, cell_i_ /* cell index */, *bitmap_ /* slot index*/, (uint16_t)slot->H1, H2, false}, 
+            uint8_t slot_index  = *bitmap_;
+            char* cell_addr     = bucket_addr_ + cell_i_ * CellMeta::CellSize();
+            HashSlot* slot      = locateSlot(cell_addr, slot_index);
+            H2Tag H2            = *locateH2Tag(cell_addr, slot_index);
+            return  { { bi_ /* ignore bucket index */, 
+                        cell_i_ /* cell index */, 
+                        *bitmap_ /* slot index*/, 
+                        (uint16_t)slot->H1, 
+                        H2, 
+                        false}, 
                     *slot};
         }
 
@@ -1789,11 +1942,34 @@ public:
         char*           bucket_addr_;
     };
 
-    explicit TurboHashTable(uint32_t bucket_count = 128 << 10, uint32_t cell_count = 64):
+    // only provide const Iter
+    // TODO:
+    class Iter {
+        private:
+            using NodePtr = DataNode;
+        
+        public:
+            using difference_type = std::ptrdiff_t;
+            using value_type = typename Self::value_type;
+            using reference  = typename std::conditional<true, value_type const&, value_type&>::type;
+            using pointer    = typename std::conditional<true, value_type const*, value_type*>::type;
+            using iterator_category = std::forward_iterator_tag;
+
+            Iter(Iter const& other) noexcept :
+                bi_(other.bi_),
+                bucket_iter_(other.bucket_iter_) {}
+
+        private:
+            uint32_t        bi_;
+            BucketIterator  bucket_iter_;
+    }; // end of class Iter
+
+public:
+    static constexpr int kSizeVecCount = 1 << 4;
+    explicit TurboHashTable(uint32_t bucket_count = 128 << 10, uint32_t cell_count = 32):
         bucket_count_(bucket_count),
         bucket_mask_(bucket_count - 1),
-        capacity_(bucket_count * cell_count * CellMeta::SlotSize()),
-        size_(0) {
+        capacity_(bucket_count * cell_count * CellMeta::SlotSize()) {
         if (!isPowerOfTwo(bucket_count) ||
             !isPowerOfTwo(cell_count)) {
             printf("the hash table size setting is wrong. bucket: %u, cell: %u\n", bucket_count, cell_count);
@@ -1831,9 +2007,10 @@ public:
     }
 
     void DebugInfo()  {
-        printf("%s\n", PrintMemAllocator().c_str());
+        printf("%s\n", PrintCellAllocator().c_str());
     }
-    std::string PrintMemAllocator() {
+
+    std::string PrintCellAllocator() {
         return cell_allocator_.ToString();
     }
 
@@ -1947,31 +2124,35 @@ public:
         // old: |11111111|22222222|33333333|44444444|   
         //       ========>
         // new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444    |
-        
+
         // record next avaliable slot position of each cell within new bucket for rehash
         uint8_t* slot_vec = (uint8_t*)malloc(new_cell_count);
-        memset(slot_vec, CellMeta::StartSlotPos(), new_cell_count);
-        // std::vector<uint8_t> slot_vec(new_cell_count, CellMeta::StartSlotPos());   
+        memset(slot_vec, CellMeta::StartSlotPos(), new_cell_count);   
         BucketIterator iter(bi, bucket_meta.Address(), bucket_meta.CellCount()); 
 
         while (iter.valid()) { // iterator every slot in this bucket
             count++;
-            // obtain old slot info and slot content
-            auto res = *iter;
+            // Step 1. obtain old slot info and slot content
+            std::pair<SlotInfo, HashSlot> res = *iter;
 
-            // update bitmap, H2, H1 and slot pointer in new bucket
-            // 1. find valid slot in new bucket
-            auto valid_slot = findNextSlotInRehash(slot_vec, res.first.H1, new_cell_count_mask);
-            
-            // 2. move the slot from old bucket to new bucket
+            // Step 2. update bitmap, H2, H1 and slot pointer in new bucket
+            //      a) find valid slot in new bucket
+            std::pair<uint16_t /* cell index */, uint8_t /* slot index */> valid_slot = 
+            findNextSlotInRehash(slot_vec, res.first.H1, new_cell_count_mask);
+            //      b) obtain des cell addr
             char* des_cell_addr = new_bucket_addr + (valid_slot.first << kCellSizeLeftShift);
-            res.first.slot      = valid_slot.second;
+            //      c) update the old slot info, update the des cell index and slot index to old slot
             res.first.cell      = valid_slot.first;
+            res.first.slot      = valid_slot.second;
+            
             if (res.first.slot >= CellMeta::SlotMaxRange() || res.first.cell >= new_cell_count) {
                 printf("rehash fail: %s\n", res.first.ToString().c_str());
                 exit(1);
             }
-            moveSlot(des_cell_addr, res.first, res.second);            
+            //      d) move the slot meta to new bucket
+            moveSlot(des_cell_addr, res.first, res.second);         
+
+            // Step 3. to next slot   
             ++iter;
         }
 
@@ -2060,7 +2241,7 @@ public:
         return res.second;
     }
 
-    void Delete(const Slice& key) {
+    void Delete(const Key& key) {
         assert(key.size() != 0);
         printf("%s\n", key.ToString().c_str());
     }
@@ -2111,7 +2292,7 @@ public:
                 count++;
             }
         }
-        printf("iterato %lu entries. total size: %lu\n", count, size_.load(std::memory_order_relaxed));
+        printf("iterato %lu entries. total size: %lu\n", count, Size());
     }
 
     std::string ProbeStrategyName()  {
@@ -2169,38 +2350,41 @@ private:
                 (offset.second << kCellSizeLeftShift);  // locate the cell cell
     }
   
-    inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
-        return (HashSlot*)(cell_addr + (slot_i << 3));
+    static inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
+        return (HashSlot*)(cell_addr + (slot_i << CellMeta::SlotSizeLeftShift));
+    }
+
+    static inline H2Tag* locateH2Tag(const char* cell_addr, int slot_i) {
+        return (H2Tag*)(cell_addr) + slot_i;
     }
 
     // used in rehash function, move slot to new cell_addr
     inline void moveSlot(char* des_cell_addr, const SlotInfo& des_info, const HashSlot& src_slot) {
         // move slot content, including H1 and pointer
-        HashSlot* des_slot = locateSlot(des_cell_addr, des_info.slot);
-        *des_slot = src_slot;
-        // obtain bitmap
+        HashSlot* des_slot  = locateSlot(des_cell_addr, des_info.slot);
+        des_slot->entry     = src_slot.entry;
+        des_slot->H1        = des_info.H1;
+        
+        // locate H2 and set H2
+        H2Tag* h2_tag_ptr   = locateH2Tag(des_cell_addr, des_info.slot);
+        *h2_tag_ptr         = des_info.H2;
+
+        // obtain and set bitmap
         decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)des_cell_addr;
-        // set H2
-        des_cell_addr += des_info.slot; // move to H2 address
-        *des_cell_addr = des_info.H2;   // update  H2
-        // set bitmap
         *bitmap = (*bitmap) | (1 << des_info.slot);
     }
     
     inline void updateSlotAndMeta(char* cell_addr, const SlotInfo& info, void* media_offset) {
-        // set bitmap, 1 byte H2, 2 byte H1, 6 byte pointer
+        // set bitmap, 1 byte (or 2 byte) H2, 2 byte H1, 6 byte pointer
 
-        // set 2 byte H1 and 6 byte pointer
-        HashSlot* slot_pos = locateSlot(cell_addr, info.slot);
-        slot_pos->entry = (uint64_t)media_offset;
-        slot_pos->H1 = info.H1;
+        // set H1 and pointer
+        HashSlot* slot_pos  = locateSlot(cell_addr, info.slot);
+        slot_pos->entry     = (uint64_t)media_offset;
+        slot_pos->H1        = info.H1;
        
-        // obtain bitmap
-        decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)cell_addr;
-
         // set H2
-        cell_addr += info.slot; // move cell_addr one byte hash position
-        *cell_addr = info.H2;   // update the one byte hash
+        H2Tag* h2_tag_ptr   = locateH2Tag(cell_addr, info.slot);
+        *h2_tag_ptr         = info.H2;
 
         // add a fence here. 
         // Make sure the bitmap is updated after H2
@@ -2208,7 +2392,8 @@ private:
         // https://preshing.com/20130922/acquire-and-release-fences/
         TURBO_COMPILER_FENCE();
 
-        // set bitmap
+        // obtain bitmap and set bitmap
+        decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)cell_addr;
         *bitmap = (*bitmap) | (1 << info.slot);
     }
 
@@ -2216,9 +2401,8 @@ private:
     inline bool insertSlot(const Key& key, size_t hash_value, void* media_offset) {
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
-            PartialHash partial_hash(hash_value);            
 
-            auto res = findSlotForInsert(key, partial_hash);
+            std::pair<SlotInfo, bool /* find a slot or not */> res = findSlotForInsert(key, hash_value);
 
             if (res.second) { // find a valid slot
                 char* cell_addr = locateCell({res.first.bucket, res.first.cell});
@@ -2227,25 +2411,34 @@ private:
                 
                 CellMeta meta(cell_addr);   // obtain the meta part
                 
-                if (TURBO_LIKELY(!meta.Occupy(res.first.slot) ||  // if the slot is not occupied or
-                    res.first.equal_key)) {                 // the slot has same key, update the slot
+                if (TURBO_LIKELY(   !meta.Occupy(res.first.slot) || // if the slot is not occupied or
+                                    res.first.equal_key)) {         // the slot has same key, update the slot
+                    
+                    updateSlotAndMeta(cell_addr, res.first, media_offset); // update slot content (including pointer and H1), H2 and bitmap
 
-                    // update slot content (including pointer and H1), H2 and bitmap
-                    updateSlotAndMeta(cell_addr, res.first, media_offset);
-                    if (!res.first.equal_key) size_.fetch_add(1, std::memory_order_relaxed);
+                    // TODO: use thread_local variable to improve write performance
+                    if (!res.first.equal_key) {
+                        size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                    }
+
                     return true;
                 }
                 else { // current slot has been occupied by another concurrent thread, retry.
-                    // #ifdef LTHASH_DEBUG_OUT
-                    // TURBO_INFO("retry find slot. %s\n", key.ToString().c_str());
-                    // #endif
+                    #ifdef TURBO_ENABLE_LOGGING
+                    TURBO_INFO("retry find slot in Bucket " << res.first.bucket <<
+                               ". Cell " << res.first.cell <<
+                               ". Slot " << res.first.slot <<
+                               ". Key: " << key );
+                    #endif
                     retry_find = true;
                 }
             }
             else { // cannot find a valid slot for insertion, rehash current bucket then retry
-                printf("=========== Need Rehash ==========\n");
-                printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
-                
+                #ifdef TURBO_ENABLE_LOGGING
+                TURBO_INFO("=========== Need Rehash Bucket " << res.first.bucket << " ==========");   
+                TURBO_INFO(PrintBucketMeta(res.first.bucket));              
+                #endif
+
                 break;
             }
         } while (retry_find);
@@ -2253,31 +2446,34 @@ private:
         return false;
     }
 
-    // Find a valid slot for insertion
-    // Return: std::pair
-    //      first: the slot info that should insert the key
-    //      second: whether we can find a valid(empty or belong to the same key) slot to insert
-    // Node: Only when the second value is true, can we insert this key
-    inline std::pair<SlotInfo, bool> findSlotForInsert(const Key& key, const PartialHash& partial_hash) {
+    /** findSlotForInsert
+     *  @note:  Find a valid slot for insertion.
+     *  @out:   first: the slot info that should insert the key
+     *          second:  whether we can find a valid (empty or belong to the same key) slot for insertion
+     *  ! We cannot insert if the second is false.
+    */
+    inline std::pair<SlotInfo, bool> findSlotForInsert(const Key& key, size_t hash_value) {
+        PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
         ProbeStrategy probe(partial_hash.H1_, bucket_meta.CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeStrategy::MAX_PROBE_LEN)) {
+            // Go to target cell
             auto offset = probe.offset();
             char* cell_addr = locateCell(offset);
             CellMeta meta(cell_addr);
 
-            // if this is a update request, we overwrite existing slot
-            for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // if there is any H2 match in this cell (H2 is 8-byte)
-                                                                // i is the slot index in current cell, each slot occupies 8-byte
+            for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // if there is any H2 match in this cell (SIMD)
+                                                                // i is the slot index in current cell
                 // locate the slot reference
                 const HashSlot& slot = *locateSlot(cell_addr, i);
 
-                if (TURBO_LIKELY(slot.H1 == partial_hash.H1_)) 
-                {  // compare if the H1 partial hash is equal (H1 is 16-byte)
+                if (TURBO_LIKELY(slot.H1 == partial_hash.H1_)) // compare if the H1 partial hash is equal (H1 is 16-byte)
+                {  
                     DataNode record((char*)slot.entry);
+
                     if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first())))
                     {  // compare if the slot key is equal
                         return {{   offset.first,           /* bucket */
@@ -2290,17 +2486,13 @@ private:
                     }
                     else {                                  // two key is not equal, go to next slot
                         #ifdef LTHASH_DEBUG_OUT
-                        Slice slot_key =  extractSlice(slot);
-                        printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Insert key: %15s, 0x%016lx, Slot key: %15s, 0x%016lx\n", 
-                            offset.first, 
-                            offset.second, 
-                            i, 
-                            meta.BitMapToString().c_str(),
-                            key.ToString().c_str(),
-                            hash_value,
-                            slot_key.ToString().c_str(),
-                            KeyToHash(key)
-                            );
+                        std::cout << "H1 conflict. Slot (" << offset.first 
+                                    << " - " << offset.second 
+                                    << " - " << i
+                                    << ") bitmap: " << meta.BitMapToString() 
+                                    << ". Insert key: " << key 
+                                    <<  ". Hash: 0x" << std::hex << hash_value << std::dec
+                                    << " , Slot key: " << record->first() << std::endl;
                         #endif
                     }
                 }
@@ -2308,29 +2500,25 @@ private:
 
             // return an empty slot for new insertion
             auto empty_bitset = meta.EmptyBitSet(); 
-            if (TURBO_LIKELY(empty_bitset)) {
-                // for (int i : empty_bitset) { // there is empty slot, return its meta
-
+            if (empty_bitset) {                
                     return {{   offset.first,           /* bucket */
                                 offset.second,          /* cell */
                                 *empty_bitset,          /* pick a slot, empty_bitset.pickOne() */ 
                                 partial_hash.H1_,       /* H1 */
                                 partial_hash.H2_,       /* H2 */
                                 false /* a new slot */}, 
-                            true};
-                // }
+                            true};                
             }
             
             // probe the next cell in the same bucket
             probe.next(); 
         }
 
-        #if 0
         #ifdef LTHASH_DEBUG_OUT
-        printf("Fail to find one empty slot\n");
-        printf("%s\n", PrintBucketMeta(bucket_i).c_str());
+        TURBO_INFO("Fail to find one empty slot");
+        TURBO_INFO(PrintBucketMeta(bucket_i));
         #endif
-        #endif
+
         // only when all the probes fail and there is no empty slot
         // exists in this bucket. 
         return {{
@@ -2369,29 +2557,13 @@ private:
                     }
                     else {
                         #ifdef LTHASH_DEBUG_OUT
-                        // printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Search key: %15s, H2: 0x%2x, H1: 0x%4x, Slot key: %15s, H1: 0x%4x\n", 
-                        //     probe.offset().first, 
-                        //     probe.offset().second, 
-                        //     i, 
-                        //     meta.BitMapToString().c_str(),
-                        //     key.ToString().c_str(),
-                        //     partial_hash.H2_,
-                        //     partial_hash.H1_,
-                        //     extraceSlice(slot, key.size()).ToString().c_str(),
-                        //     slot.H1
-                        //     );
-                        
-                        Slice slot_key =  extractSlice(slot);
-                        printf("H1 conflict. Slot (%8u, %3u, %2d) bitmap: %s. Search key: %15s, 0x%016lx, Slot key: %15s, 0x%016lx\n", 
-                            offset.first, 
-                            offset.second, 
-                            i, 
-                            meta.BitMapToString().c_str(),
-                            key.ToString().c_str(),
-                            hash_value,
-                            slot_key.ToString().c_str(),
-                            KeyToHash(key)
-                            );
+                        std::cout << "H1 conflict. Slot (" << offset.first 
+                                    << " - " << offset.second 
+                                    << " - " << i
+                                    << ") bitmap: " << meta.BitMapToString() 
+                                    << ". Insert key: " << key 
+                                    <<  ". Hash: 0x" << std::hex << hash_value << std::dec
+                                    << " , Slot key: " << record->first() << std::endl;                        
                         #endif
                     }
                     
@@ -2423,8 +2595,8 @@ private:
     std::atomic<size_t> capacity_;
     std::atomic<size_t> size_;
 
-    const int       kCellSize = CellMeta::CellSize();
-    const int       kCellSizeLeftShift = CellMeta::CellSizeLeftShift;
+    static constexpr int       kCellSize           = CellMeta::CellSize();
+    static constexpr int       kCellSizeLeftShift  = CellMeta::CellSizeLeftShift;
 };
 
 }; // end of namespace turbo::detail
@@ -2436,7 +2608,7 @@ using unordered_map = detail::TurboHashTable<Key, T, Hash, typename std::conditi
                                                                                     std::is_same<Key, std::string>::value == false /* is numeric */, 
                                                                                     KeyEqual, 
                                                                                     std::equal_to<util::Slice> >::type,
-                                             detail::CellMeta128, detail::ProbeWithinBucket>;
+                                             detail::CellMeta256V2, detail::ProbeWithinBucket>;
 
 }; // end of namespace turbo
 
