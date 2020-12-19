@@ -257,6 +257,12 @@ public:
     bool operator > (const Slice& b) const {
         return compare(b) > 0 ;
     }
+
+    // explicit conversion
+    inline operator std::string() const {
+        return std::move(std::string(data_, size_));
+    }
+
     // Create an empty slice.
     Slice() : data_(""), size_(0) { }
 
@@ -2190,24 +2196,6 @@ public:
         // update DRAM index, thread safe
         return insertSlot(key, hash_value, buffer);
     }
-
-    /** GetAssign
-     *  @note: For numeric value, copy directly. For std::string, using assign
-    */
-    template<bool IsNumeric, typename T2>
-    struct GetAssign {};
-    template<typename T2>
-    struct GetAssign<true, T2> {
-        static inline void Assign(const typename Record2<key_type, mapped_type>::T2_type& a, T2* b) {
-            *b = a;
-        }
-    };
-    template<typename T2>
-    struct GetAssign<false, T2> {
-        static inline void Assign(const typename Record2<key_type, mapped_type>::T2_type& a, T2* b) {
-            b->assign(a.data(), a.size());
-        }
-    };
     
     // Return the entry if key exists
     bool Get(const Key& key, T* value)  {
@@ -2219,12 +2207,10 @@ public:
             // find a key in hash table
             DataNode record((char*)res.first.entry);
             if (record->type  == kTypeValue) {
-                GetAssign<std::is_same<Key, std::string>::value == false,
-                        T>::Assign(record->second(), value);
-                
+                *value = record->second();                
                 return true;
             }
-            else {
+            else if (record->type == kTypeDeletion) {
                 // this key has been deleted
                 return false;
             }
@@ -2417,9 +2403,9 @@ private:
                     updateSlotAndMeta(cell_addr, res.first, media_offset); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
-                    if (!res.first.equal_key) {
-                        size_.fetch_add(1, std::memory_order_relaxed); // size + 1
-                    }
+                    // if (!res.first.equal_key) {
+                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                    // }
 
                     return true;
                 }
@@ -2608,7 +2594,7 @@ using unordered_map = detail::TurboHashTable<Key, T, Hash, typename std::conditi
                                                                                     std::is_same<Key, std::string>::value == false /* is numeric */, 
                                                                                     KeyEqual, 
                                                                                     std::equal_to<util::Slice> >::type,
-                                             detail::CellMeta256V2, detail::ProbeWithinBucket>;
+                                             detail::CellMeta128, detail::ProbeWithinBucket>;
 
 }; // end of namespace turbo
 
