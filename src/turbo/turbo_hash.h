@@ -1041,17 +1041,17 @@ public:
         size_t space = size_ * CellMeta::CellSize();
         if ((space & 0xfff) != 0) {
             // space is not several times of 4KB
-            printf("MemBlock size is not 4KB aligned. %lu", space);
+            TURBO_ERROR("MemBlock size is not 4KB aligned. Space size: " << space);
             exit(1);
         }
         // printf("Add %.2f MB MemBlock\n", space/1024.0/1024.0 );
         start_addr_ = (char*) mmap(TURBO_HUGE_ADDR, space, TURBO_HUGE_PROTECTION, TURBO_HUGE_FLAGS, -1, 0);
         if (start_addr_ == MAP_FAILED) {
-            fprintf(stderr, "mmap %lu hugepage fail.\n", space);
+            TURBO_WARNING("mmap hugepage fail. space: " << space);
             is_hugepage_ = false;
             start_addr_ = (char* ) aligned_alloc(CellMeta::CellSize(), space);
             if (start_addr_ == nullptr) {
-                fprintf(stderr, "malloc %lu space fail.\n", space);
+                TURBO_ERROR("malloc space fail. Space size: " << space);
                 exit(1);
             }
         }
@@ -1061,9 +1061,13 @@ public:
     ~MemBlock() {
         /* munmap() size_ of MAP_HUGETLB memory must be hugepage aligned */
         size_t space = size_ * CellMeta::CellSize();
-        if (munmap(start_addr_, space)) {
-            fprintf(stderr, "munmap %lu hugepage fail.\n", space);
-            exit(1);
+        if (is_hugepage_) {
+            if (munmap(start_addr_, space)) {
+                TURBO_ERROR("munmap hugepage fail. munmap size: " << space);
+                exit(1);
+            }
+        } else {
+            free(start_addr_);
         }
     }
     
@@ -2154,19 +2158,16 @@ public:
             std::pair<uint16_t /* cell index */, uint8_t /* slot index */> valid_slot = 
             findNextSlotInRehash(slot_vec, res.first.H1, new_cell_count_mask);
             //      b) obtain des cell addr
-            char* des_cell_addr = new_bucket_addr + (valid_slot.first << kCellSizeLeftShift);
-            //      c) update the old slot info, update the des cell index and slot index to old slot
-            res.first.cell      = valid_slot.first;
-            res.first.slot      = valid_slot.second;
-            
+            char* des_cell_addr = new_bucket_addr + (valid_slot.first << kCellSizeLeftShift);            
             if (res.first.slot >= CellMeta::SlotMaxRange() || res.first.cell >= new_cell_count) {
                 printf("rehash fail: %s\n", res.first.ToString().c_str());
+                TURBO_ERROR("Rehash fail: " << res.first.ToString());
                 exit(1);
             }
-            //      d) move the slot meta to new bucket
-            moveSlot(des_cell_addr, res.first, res.second);         
+            //      c) move the slot meta to new bucket
+            moveSlot(des_cell_addr, valid_slot.second /* des_slot_i */, res.first, res.second);
 
-            // Step 3. to next slot   
+            // Step 3. to next old slot
             ++iter;
         }
 
@@ -2353,19 +2354,19 @@ private:
     }
 
     // used in rehash function, move slot to new cell_addr
-    inline void moveSlot(char* des_cell_addr, const SlotInfo& des_info, const HashSlot& src_slot) {
+    inline void moveSlot(char* des_cell_addr, uint8_t des_slot_i,const SlotInfo& old_info, const HashSlot& old_slot) {
         // move slot content, including H1 and pointer
-        HashSlot* des_slot  = locateSlot(des_cell_addr, des_info.slot);
-        des_slot->entry     = src_slot.entry;
-        des_slot->H1        = des_info.H1;
+        HashSlot* des_slot  = locateSlot(des_cell_addr, des_slot_i);
+        des_slot->entry     = old_slot.entry;
+        des_slot->H1        = old_info.H1;
         
         // locate H2 and set H2
-        H2Tag* h2_tag_ptr   = locateH2Tag(des_cell_addr, des_info.slot);
-        *h2_tag_ptr         = des_info.H2;
+        H2Tag* h2_tag_ptr   = locateH2Tag(des_cell_addr, des_slot_i);
+        *h2_tag_ptr         = old_info.H2;
 
         // obtain and set bitmap
         decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)des_cell_addr;
-        *bitmap = (*bitmap) | (1 << des_info.slot);
+        *bitmap = (*bitmap) | (1 << des_slot_i);
     }
     
     // set bitmap, 1 byte (or 2 byte) H2, 2 byte H1, 6 byte pointer
@@ -2410,9 +2411,9 @@ private:
                     updateSlotAndMeta(cell_addr, res.first, record_addr); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
-                    // if (!res.first.equal_key) {
-                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
-                    // }
+                    if (!res.first.equal_key) {
+                        size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                    }
 
                     return true;
                 }
