@@ -260,7 +260,7 @@ public:
 
     // explicit conversion
     inline operator std::string() const {
-        return std::move(std::string(data_, size_));
+        return std::string(data_, size_);
     }
 
     // Create an empty slice.
@@ -517,10 +517,16 @@ static inline void turbo_bit_spin_unlock(uint32_t *lock, int bit_pos)
 template<int kBitLockPosition>
 class SpinLockScope {
 public:
+    SpinLockScope(char* addr):
+        lock_(reinterpret_cast<uint32_t*>(addr)) {
+        // lock the bit lock
+        turbo_bit_spin_lock(lock_, kBitLockPosition);
+    }
+
     SpinLockScope(uint32_t *lock):
         lock_(lock) {
         // lock the bit lock
-        turbo_bit_spin_lock(lock, kBitLockPosition);
+        turbo_bit_spin_lock(lock_, kBitLockPosition);
     }
     ~SpinLockScope() {
         // release the bit lock
@@ -1789,9 +1795,11 @@ public:
     */
     class DataNode { 
     public:
+        explicit DataNode(uint64_t u64_addr):
+            data_(reinterpret_cast<value_type*>(u64_addr)) {}
+
         explicit DataNode(char* addr):
-            data_(reinterpret_cast<value_type*>(addr)) {
-        }
+            data_(reinterpret_cast<value_type*>(addr)) {}
 
         const value_type& operator*() const noexcept {
             return *data_;
@@ -2184,13 +2192,13 @@ public:
 
     bool Put(const Key& key, const T& value)  {
         // calculate hash value of the key
-        size_t hash_value = KeyToHash(key);
+        size_t hash_value   = KeyToHash(key);
         
         // allocate space to store record
-        size_t buf_len = value_type::FormatLength(key, value);
-        void* buffer = record_allocator_.Allocate(buf_len);
-        value_type* record = reinterpret_cast<value_type*>(buffer);
-        record->type = kTypeValue;
+        size_t buf_len      = value_type::FormatLength(key, value);
+        void*  buffer       = record_allocator_.Allocate(buf_len);
+        value_type* record  = static_cast<value_type*>(buffer);
+        record->type        = kTypeValue;
         record->Encode(key, value);
 
         // update DRAM index, thread safe
@@ -2205,8 +2213,8 @@ public:
         auto res = findSlot(key, hash_value);
         if (res.second) {
             // find a key in hash table
-            DataNode record((char*)res.first.entry);
-            if (record->type  == kTypeValue) {
+            DataNode record(res.first.entry);
+            if (record->type == kTypeValue) {
                 *value = record->second();                
                 return true;
             }
@@ -2257,7 +2265,7 @@ public:
             SlotInfo& info = res.first;
             info.bucket = i;
             HashSlot& slot = res.second;
-            DataNode record((char*) slot.entry);
+            DataNode record(slot.entry);
             std::cout << info.ToString() << ", addr: " << slot.entry << ". key: " << record->first() << ", value: " << record->second() << std::endl;
             ++iter;
         }
@@ -2272,7 +2280,7 @@ public:
                 auto res = (*iter);
                 SlotInfo& info = res.first;
                 HashSlot& slot = res.second;
-                DataNode record((char*) slot.entry);
+                DataNode record(slot.entry);
                 std::cout << info.ToString() << ", addr: " << slot.entry << ". key: " << record->first() << ", value: " << record->second() << std::endl;
                 ++iter;
                 count++;
@@ -2336,12 +2344,12 @@ private:
                 (offset.second << kCellSizeLeftShift);  // locate the cell cell
     }
   
-    static inline HashSlot* locateSlot(const char* cell_addr, int slot_i) {
-        return (HashSlot*)(cell_addr + (slot_i << CellMeta::SlotSizeLeftShift));
+    static inline HashSlot* locateSlot(char* cell_addr, int slot_i) {
+        return reinterpret_cast<HashSlot*>(cell_addr + (slot_i << CellMeta::SlotSizeLeftShift));
     }
 
-    static inline H2Tag* locateH2Tag(const char* cell_addr, int slot_i) {
-        return (H2Tag*)(cell_addr) + slot_i;
+    static inline H2Tag* locateH2Tag(char* cell_addr, int slot_i) {
+        return reinterpret_cast<H2Tag*>(cell_addr) + slot_i;
     }
 
     // used in rehash function, move slot to new cell_addr
@@ -2360,12 +2368,11 @@ private:
         *bitmap = (*bitmap) | (1 << des_info.slot);
     }
     
-    inline void updateSlotAndMeta(char* cell_addr, const SlotInfo& info, void* media_offset) {
-        // set bitmap, 1 byte (or 2 byte) H2, 2 byte H1, 6 byte pointer
-
+    // set bitmap, 1 byte (or 2 byte) H2, 2 byte H1, 6 byte pointer
+    inline void updateSlotAndMeta(char* cell_addr, const SlotInfo& info, void* record_addr) {
         // set H1 and pointer
         HashSlot* slot_pos  = locateSlot(cell_addr, info.slot);
-        slot_pos->entry     = (uint64_t)media_offset;
+        slot_pos->entry     = reinterpret_cast<uint64_t>(record_addr); /* transform to 8-byte UL */
         slot_pos->H1        = info.H1;
        
         // set H2
@@ -2384,7 +2391,7 @@ private:
     }
 
 
-    inline bool insertSlot(const Key& key, size_t hash_value, void* media_offset) {
+    inline bool insertSlot(const Key& key, size_t hash_value, void* record_addr) {
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
 
@@ -2393,14 +2400,14 @@ private:
             if (res.second) { // find a valid slot
                 char* cell_addr = locateCell({res.first.bucket, res.first.cell});
                 
-                util::SpinLockScope<0> lock_scope((uint32_t*)cell_addr); // Lock current cell
+                util::SpinLockScope<0> lock_scope(cell_addr); // Lock current cell
                 
                 CellMeta meta(cell_addr);   // obtain the meta part
                 
                 if (TURBO_LIKELY(   !meta.Occupy(res.first.slot) || // if the slot is not occupied or
                                     res.first.equal_key)) {         // the slot has same key, update the slot
                     
-                    updateSlotAndMeta(cell_addr, res.first, media_offset); // update slot content (including pointer and H1), H2 and bitmap
+                    updateSlotAndMeta(cell_addr, res.first, record_addr); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
                     // if (!res.first.equal_key) {
@@ -2458,7 +2465,7 @@ private:
 
                 if (TURBO_LIKELY(slot.H1 == partial_hash.H1_)) // compare if the H1 partial hash is equal (H1 is 16-byte)
                 {  
-                    DataNode record((char*)slot.entry);
+                    DataNode record(slot.entry);
 
                     if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first())))
                     {  // compare if the slot key is equal
@@ -2536,7 +2543,7 @@ private:
 
                 if (TURBO_LIKELY(slot.H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
                 {
-                    DataNode record((char*)slot.entry);                    
+                    DataNode record(slot.entry);                    
                     if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first())))
                     {      // If the slot key is equal to search key. SlotKeyEqual is very expensive 
                         return {slot, true};
