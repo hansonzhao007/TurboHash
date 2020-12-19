@@ -10,7 +10,7 @@ int main() {
     char cmd[] = "cat /proc/meminfo | grep Huge | grep HugePages_Rsvd";
     {
         int count = 32768;
-        turbo::detail::MemBlock<turbo::detail::CellMeta128> mem_block(0, count); // allocate 4 MB space for 32768 cells
+        turbo::unordered_map<int, int>::MemBlock<turbo::unordered_map<int, int>::CellMeta128> mem_block(0, count); // allocate 4 MB space for 32768 cells
         std::string res = util::Env::Default()->Execute(cmd);
         printf("%s", res.c_str());
 
@@ -34,7 +34,7 @@ int main() {
 
     {
         int block_count = 10;
-        turbo::detail::CellAllocator<turbo::detail::CellMeta128, 65536> allocater(block_count);
+        turbo::unordered_map<int, int>::CellAllocator<turbo::unordered_map<int, int>::CellMeta128, 65536> allocater(block_count);
         for (int i = 0; i < block_count; i++) {
             auto tmp = allocater.AllocateNoSafe(65536);
             printf("mem block id: %d\n", tmp.first);
@@ -51,7 +51,7 @@ int main() {
 
     {
         int block_count = 10;
-        turbo::detail::CellAllocator<turbo::detail::CellMeta128, 65536> allocater(block_count);
+        turbo::unordered_map<int, int>::CellAllocator<turbo::unordered_map<int, int>::CellMeta128, 65536> allocater(block_count);
         int kLoops=512;
         int kNumThread = 8;
         std::vector<std::thread> workers2;

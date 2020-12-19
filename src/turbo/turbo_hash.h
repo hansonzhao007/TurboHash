@@ -634,705 +634,6 @@ struct identity_hash {
 
 namespace detail {
 
-/** CellMeta128
- *  @note:  Hash cell whose size is 128 byte. There are 14 slots in the cell.
- *  @format:
- *  | ----------------------- meta ------------------------| ----- slots ---- |
- *  | 2 byte bitmap | 14 byte: one byte hash for each slot | 8 byte * 14 slot |
- * 
- *  |- bitmap: 
- *            0 bit: used as a bitlock
- *            1 bit: not in use
- *      2  - 15 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
- * 
- *  |- one byte hash:
- *      8 bit tag for the slot
- * 
- *  |- slot:
- *      0  -  5 byte: the pointer used to point to DIMM where store the actual kv value
- *      6  -  7 byte: two hash byte for this slot
-*/ 
-class CellMeta128 {
-public:
-    static constexpr uint16_t BitMapMask    = 0xFFFC;
-    static constexpr int CellSizeLeftShift  = 7;
-    static constexpr int SlotSizeLeftShift  = 3;
-    using H2Tag = uint8_t;
-
-    /** HashSlot
-     *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
-    */
-    struct HashSlot{
-        uint64_t entry:48;      // pointer to key-value record
-        uint64_t H1:16;         // hash-tag for the key
-    };
-
-    explicit CellMeta128(char* rep) {
-        meta_   = _mm_loadu_si128(reinterpret_cast<const __m128i*>(rep));
-        bitmap_ = *(uint32_t*)(rep);    // the lowest 32bit is used as bitmap
-        bitmap_ &= BitMapMask;          // hide the 0, 1 bit in bitmap
-    }
-
-    ~CellMeta128() {
-    }
-
-    // return a bitset, the position that matches the hash is set to 1
-    inline util::BitSet MatchBitSet(uint8_t hash) {
-        auto bitset = _mm_set1_epi8(hash);
-        uint16_t mask = _mm_cmpeq_epi8_mask(bitset, meta_);
-        return util::BitSet(mask & bitmap_);        
-    }
-
-    // return a bitset, the position that is empty for insertion
-    inline util::BitSet EmptyBitSet() {
-        return turbo::util::BitSet((~bitmap_) & BitMapMask);
-    }
-
-    inline util::BitSet OccupyBitSet() {
-        return util::BitSet(bitmap_ & BitMapMask);
-    }
-
-    inline bool Full() {
-        return (bitmap_ & BitMapMask) == BitMapMask;
-    }
-
-    inline bool Occupy(int slot_index) {
-        return bitmap_ & (1 << slot_index);
-    }
-    
-    inline int OccupyCount() {
-        return __builtin_popcount(bitmap_);
-    }
-
-    inline static constexpr uint8_t StartSlotPos() {
-        return 2;
-    }
-
-    inline static constexpr uint32_t CellSize() {
-        // cell size (include meta) in byte
-        return 128;
-    }
-
-    inline static constexpr uint32_t SlotMaxRange() {
-        return 16;
-    }
-
-    inline static constexpr uint32_t SlotSize() {
-        // slot count
-        return 14;
-    }
-
-    inline static constexpr size_t size() {
-        // the meta size in byte in current cell
-        return 16;
-    }
-
-    inline uint16_t bitmap() {
-        return bitmap_;
-    }
-
-    std::string BitMapToString() {
-        std::string res;
-        char buffer[1024];
-        uint64_t H2s[2];
-        memcpy(H2s, &meta_, 16);
-        sprintf(buffer, "bitmap: 0b%s - H2: 0x%016lx%016lx", print_binary(bitmap_).c_str(), H2s[1], H2s[0]);
-        return buffer;
-    }
-
-    std::string print_binary(uint16_t bitmap)
-    {
-        char buffer[1024];
-        static std::string bit_rep[16] = {
-            "0000", "0001", "0010", "0011",
-            "0100", "0101", "0110", "0111",
-            "1000", "1001", "1010", "1011",
-            "1100", "1101", "1110", "1111"
-        };
-        sprintf(buffer, "%s%s%s%s", 
-            bit_rep[(bitmap >> 12) & 0x0F].c_str(),
-            bit_rep[(bitmap >>  8) & 0x0F].c_str(),
-            bit_rep[(bitmap >>  4) & 0x0F].c_str(),
-            bit_rep[(bitmap >>  0) & 0x0F].c_str()
-        );
-        return buffer;
-    }
-
-    __m128i     meta_;          // 16 byte integer vector
-    uint16_t    bitmap_;        // 1: occupied, 0: empty or deleted
-}; // end of class CellMeta128
-
-/** CellMeta256
- *  @note: Hash cell whose size is 256 byte. There are 28 slots in the cell.
- *  @format:
- *  | ----------------------- meta ------------------------| ----- slots ---- |
- *  | 4 byte bitmap | 28 byte: one byte hash for each slot | 8 byte * 28 slot |
- * 
- *  |- bitmap: 
- *           0  bit: used as a bitlock
- *      1  - 3  bit: not in use
- *      4  - 31 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
- * 
- *  |- one byte hash:
- *      8 bit tag for the slot
- * 
- *  |- slot:
- *      0  -  5 byte: the pointer used to point to DIMM where store the actual kv value
- *      6  -  7 byte: two hash byte for this slot (totally 3 byte is used as the hash)
-*/ 
-class CellMeta256 {
-public:
-    static constexpr uint32_t BitMapMask = 0x0FFFFFFF0;
-    static constexpr int CellSizeLeftShift = 8;
-    static constexpr int SlotSizeLeftShift = 3;
-    using H2Tag = uint8_t;
-        
-    /** HashSlot
-     *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
-    */
-    struct HashSlot{
-        uint64_t entry:48;      // pointer to key-value record
-        uint64_t H1:16;         // hash-tag for the key
-    };
-
-    explicit CellMeta256(char* rep) {
-        meta_   = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
-        bitmap_ = *(uint32_t*)(rep);              // the lowest 32bit is used as bitmap
-        bitmap_ &= BitMapMask;                   // hidden the 0 - 3 bit in bitmap
-    }
-
-    ~CellMeta256() {
-    }
-
-    // return a bitset, the slot that matches the hash is set to 1
-    inline util::BitSet MatchBitSet(uint8_t hash) {
-        auto bitset = _mm256_set1_epi8(hash);
-        uint32_t mask = _mm256_cmpeq_epi8_mask(bitset, meta_);
-        return util::BitSet(mask & bitmap_);
-    }
-
-    // return a bitset, indicating the availabe slot
-    inline util::BitSet EmptyBitSet() {
-        return util::BitSet((~bitmap_) & BitMapMask);
-    }
-
-    inline util::BitSet OccupyBitSet() {
-        return util::BitSet(bitmap_ & BitMapMask);
-    }
-
-    inline bool Full() {
-        return (bitmap_ & BitMapMask) == BitMapMask;
-    }
-
-    inline bool Occupy(int slot_index) {
-        return bitmap_ & (1 << slot_index);
-    }
-
-    inline int OccupyCount() {
-        return __builtin_popcount(bitmap_);
-    }
-
-    inline static constexpr uint8_t StartSlotPos() {
-        return 4;
-    }
-
-    inline static constexpr uint32_t CellSize() {
-        // cell size (include meta) in byte
-        return 256;
-    }
-
-    inline static constexpr uint32_t SlotMaxRange() {
-        return 32;
-    }
-    
-    inline static constexpr uint32_t SlotSize() {
-        // slot count
-        return 28;
-    }
-
-    inline static constexpr size_t size() {
-        // the meta size in byte in current cell
-        return 32;
-    }
-
-    inline uint32_t bitmap() {
-        return bitmap_;
-    }
-
-    std::string BitMapToString() {
-        std::string res;
-        char buffer[1024];
-        uint64_t H2s[4];
-        memcpy(H2s, &meta_, 32);
-        sprintf(buffer, "bitmap: 0b%s - H2: 0x%016lx%016lx%016lx%016lx", print_binary(bitmap_).c_str(), H2s[3], H2s[2], H2s[1], H2s[0]);
-        return buffer;
-    }
-
-    std::string print_binary(uint32_t bitmap)
-    {
-        char buffer[1024];
-        static std::string bit_rep[16] = {
-            "0000", "0001", "0010", "0011",
-            "0100", "0101", "0110", "0111",
-            "1000", "1001", "1010", "1011",
-            "1100", "1101", "1110", "1111"
-        };
-        sprintf(buffer, "%s%s%s%s%s%s%s%s", 
-            bit_rep[(bitmap >> 28) & 0x0F].c_str(),
-            bit_rep[(bitmap >> 24) & 0x0F].c_str(),
-            bit_rep[(bitmap >> 20) & 0x0F].c_str(),
-            bit_rep[(bitmap >> 16) & 0x0F].c_str(),
-            bit_rep[(bitmap >> 12) & 0x0F].c_str(),
-            bit_rep[(bitmap >>  8) & 0x0F].c_str(),
-            bit_rep[(bitmap >>  4) & 0x0F].c_str(),
-            bit_rep[(bitmap >>  0) & 0x0F].c_str()
-        );
-        return buffer;
-    }
-
-    __m256i     meta_;          // 32 byte integer vector
-    uint32_t    bitmap_;        // 1: occupied, 0: empty or deleted
-}; // end of class CellMeta256
-
-/** CellMeta256V2
- *  @note: Hash cell whose size is 256 byte. There are 14 slots in the cell.
- *  @format:
- *  | ----------------------- meta ------------------------| ----- slots ----- |
- *  | 4 byte bitmap | 28 byte: two byte hash for each slot | 16 byte * 14 slot |
- * 
- *  |- bitmap: 
- *            0 bit: used as a bitlock
- *            1 bit: not in use
- *      2  - 15 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
- *      16 - 31 bit: not in use
- * 
- *  |- two byte hash:
- *      16 bit tag for the slot
- * 
- *  |- slot:
- *      0  -  7 byte: 8-byte hash value
- *      8  - 15 byte: the pointer to record
-*/ 
-class CellMeta256V2 {
-public:
-    static constexpr uint16_t BitMapMask   = 0xFFFC;
-    static constexpr int CellSizeLeftShift = 8;
-    static constexpr int SlotSizeLeftShift = 4;
-    using H2Tag = uint16_t;
-
-    /** HashSlot
-     *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
-    */
-    struct HashSlot{
-        uint64_t entry;      // pointer to key-value record
-        uint64_t H1;         // hash-tag for the key
-    };
-
-    explicit CellMeta256V2(char* rep) {
-        meta_   = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
-        bitmap_ = *(uint32_t*)(rep);             // the lowest 32bit is used as bitmap
-        bitmap_ &= BitMapMask;                   // hidden the 0 - 1 bit in bitmap
-    }
-
-    ~CellMeta256V2() {
-    }
-
-    // return a bitset, the slot that matches the hash is set to 1
-    inline util::BitSet MatchBitSet(uint16_t hash) {
-        auto bitset = _mm256_set1_epi16(hash);
-        uint16_t mask = _mm256_cmpeq_epi16_mask(bitset, meta_);
-        return util::BitSet(mask & bitmap_);
-    }
-
-    // return a bitset, indicating the availabe slot
-    inline util::BitSet EmptyBitSet() {
-        return util::BitSet((~bitmap_) & BitMapMask);
-    }
-
-    inline util::BitSet OccupyBitSet() {
-        return util::BitSet(bitmap_ & BitMapMask);
-    }
-
-    inline bool Full() {
-        return (bitmap_ & BitMapMask) == BitMapMask;
-    }
-
-    inline bool Occupy(int slot_index) {
-        return bitmap_ & (1 << slot_index);
-    }
-
-    inline int OccupyCount() {
-        return __builtin_popcount(bitmap_);
-    }
-
-    inline static constexpr uint8_t StartSlotPos() {
-        return 2;
-    }
-
-    inline static constexpr uint32_t CellSize() {
-        // cell size (include meta) in byte
-        return 256;
-    }
-
-    inline static constexpr uint32_t SlotMaxRange() {
-        return 16;
-    }
-    
-    inline static constexpr uint32_t SlotSize() {
-        // slot count
-        return 14;
-    }
-
-    inline static constexpr size_t size() {
-        // the meta size in byte in current cell
-        return 32;
-    }
-
-    inline uint16_t bitmap() {
-        return bitmap_;
-    }
-
-    std::string BitMapToString() {
-        std::string res;
-        char buffer[1024];
-        uint64_t H2s[4];
-        memcpy(H2s, &meta_, 32);
-        sprintf(buffer, "bitmap: 0b%s - H2: 0x%016lx%016lx%016lx%016lx", print_binary(bitmap_).c_str(), H2s[3], H2s[2], H2s[1], H2s[0]);
-        return buffer;
-    }
-
-    std::string print_binary(uint16_t bitmap)
-    {
-        char buffer[1024];
-        static std::string bit_rep[16] = {
-            "0000", "0001", "0010", "0011",
-            "0100", "0101", "0110", "0111",
-            "1000", "1001", "1010", "1011",
-            "1100", "1101", "1110", "1111"
-        };
-        sprintf(buffer, "%s%s%s%s", 
-            bit_rep[(bitmap >> 12) & 0x0F].c_str(),
-            bit_rep[(bitmap >>  8) & 0x0F].c_str(),
-            bit_rep[(bitmap >>  4) & 0x0F].c_str(),
-            bit_rep[(bitmap >>  0) & 0x0F].c_str()
-        );
-        return buffer;
-    }
-
-    __m256i     meta_;          // 32 byte integer vector
-    uint16_t    bitmap_;        // 1: occupied, 0: empty or deleted
-}; // end of class CellMeta256V2
-
-/** MemBlock
- *  @note: a memory block that can allocate at most 'count' Cell (128-byte Cell or 256-byte Cell)
-*/
-template <typename CellMeta = CellMeta128>
-class MemBlock { 
-public:
-    MemBlock(int block_id, size_t count):
-        start_addr_(nullptr),
-        cur_addr_(nullptr),
-        ref_(0),
-        size_(count),
-        remaining_(count),
-        is_hugepage_(true),
-        block_id_(block_id) {
-        // Allocate memory space for this MemBlock
-        size_t space = size_ * CellMeta::CellSize();
-        if ((space & 0xfff) != 0) {
-            // space is not several times of 4KB
-            TURBO_ERROR("MemBlock size is not 4KB aligned. Space size: " << space);
-            exit(1);
-        }
-        // printf("Add %.2f MB MemBlock\n", space/1024.0/1024.0 );
-        start_addr_ = (char*) mmap(TURBO_HUGE_ADDR, space, TURBO_HUGE_PROTECTION, TURBO_HUGE_FLAGS, -1, 0);
-        if (start_addr_ == MAP_FAILED) {
-            TURBO_WARNING("mmap hugepage fail. space: " << space);
-            is_hugepage_ = false;
-            start_addr_ = (char* ) aligned_alloc(CellMeta::CellSize(), space);
-            if (start_addr_ == nullptr) {
-                TURBO_ERROR("malloc space fail. Space size: " << space);
-                exit(1);
-            }
-        }
-        cur_addr_ = start_addr_;
-    }
-
-    ~MemBlock() {
-        /* munmap() size_ of MAP_HUGETLB memory must be hugepage aligned */
-        size_t space = size_ * CellMeta::CellSize();
-        if (is_hugepage_) {
-            if (munmap(start_addr_, space)) {
-                TURBO_ERROR("munmap hugepage fail. munmap size: " << space);
-                exit(1);
-            }
-        } else {
-            free(start_addr_);
-        }
-    }
-    
-    inline size_t Remaining() {
-        return remaining_;
-    }
-
-    inline char* Allocate(size_t request_count) {
-        // Allocate 'request_count' cells 
-        if (request_count > remaining_) {
-            // There isn't enough space for allocation
-            return nullptr;
-        }
-
-        // allocate count space.
-        ++ref_;
-        remaining_ -= request_count; 
-        char* return_addr = cur_addr_;
-        cur_addr_ += (request_count * CellMeta::CellSize());
-        
-        return return_addr;
-    }
-
-    inline bool Release() {
-        // reduce reference counter
-        // return true if reference is 0, meaning this MemBlock can be added to free list.
-         --ref_;
-        if (ref_ == 0) {
-            remaining_ = size_;
-            cur_addr_ = start_addr_;
-            return true;
-        }
-        else {
-            return false;
-        }
-    }
-
-    inline int Reference() {
-        return ref_;
-    }
-
-    inline bool IsHugePage() {
-        return is_hugepage_;
-    }
-
-    inline int ID() {
-        return block_id_;
-    }
-
-    std::string ToString() {
-        char buffer[1024];
-        sprintf(buffer, "ID: %d, size: %lu, remain: %lu, ref: %d\n", block_id_, size_, remaining_, ref_);
-        return buffer;
-    }
-private:
-    char*   start_addr_;    // start address of MemBlock
-    char*   cur_addr_;      // current position for space allocation
-    int     ref_;           // reference of this MemBlock
-    size_t  size_;          // number of cells
-    size_t  remaining_;     // remaining cells for allocation
-    bool    is_hugepage_;   // This MemBlock uses hugepage or not
-    int     block_id_;          
-};// end of class MemBlock
-
-/** CellAllocator
- *  @note: used to allocate N Cell space
-*/
-template <typename CellMeta = CellMeta128, size_t kBucketCellCount = 32768>
-class CellAllocator {
-public:
-    CellAllocator(int initial_blocks = 1):
-        cur_mem_block_(nullptr),
-        next_id_(0),
-        spin_lock_(0) {
-        AddMemBlock(initial_blocks);
-        cur_mem_block_ = GetMemBlock();
-    }
-
-    // Allocate memory space for a Bucket with 'count' cells
-    // Return:
-    // int: the MemBlock ID
-    // char*: address in MemBlock
-    inline std::pair<int, char*> AllocateNoSafe(size_t count) {
-        if (cur_mem_block_->Remaining() < count) {
-            // if remaining space is not enough, allocate a new MemBlock
-            cur_mem_block_ = GetMemBlock();
-        }
-        char* addr = cur_mem_block_->Allocate(count);
-        if (addr == nullptr) {
-            fprintf(stderr, "CellAllocator::Allocate addr is nullptr\n");
-            exit(1);
-        }
-        
-        return {cur_mem_block_->ID(), addr};
-    }
-
-    inline std::pair<int, char*> AllocateSafe(size_t count) {
-        util::SpinLockScope<0> lock(&spin_lock_);
-        if (cur_mem_block_->Remaining() < count) {
-            // if remaining space is not enough, allocate a new MemBlock
-            cur_mem_block_ = GetMemBlock();
-        }
-        char* addr = cur_mem_block_->Allocate(count);
-        if (addr == nullptr) {
-            fprintf(stderr, "CellAllocator::Allocate addr is nullptr\n");
-            exit(1);
-        }
-        
-        return {cur_mem_block_->ID(), addr};
-    }
-
-    inline void ReleaseNoSafe(int id) {
-        auto iter = mem_block_map_.find(id);
-        if (iter != mem_block_map_.end()) {
-            bool should_recycle = iter->second->Release();
-            if (should_recycle) {
-                RecycleMemBlock(iter->second);
-            }
-        }
-    }
-
-    inline void ReleaseSafe(int id) {
-        util::SpinLockScope<0> lock(&spin_lock_);
-        auto iter = mem_block_map_.find(id);
-        if (iter != mem_block_map_.end()) {
-            bool should_recycle = iter->second->Release();
-            if (should_recycle) {
-                RecycleMemBlock(iter->second);
-            }
-        }
-    }
-
-    std::string ToString() {
-        std::string res;
-        for (auto& mb : mem_block_map_) {
-            res.append(mb.second->ToString());
-        }
-        return res;
-    }
-
-private:
-    inline void AddMemBlock(int n) {
-        // add n MemBlock to free_mem_block_list_
-        for (int i = 0; i < n; i++) {
-            MemBlock<CellMeta>* mem_block = new MemBlock<CellMeta>(next_id_++, kBucketCellCount);
-            free_mem_block_list_.push_back(mem_block);
-            mem_block_map_[mem_block->ID()] = mem_block;
-        }
-    }
-
-    inline MemBlock<CellMeta>* GetMemBlock() {
-        if (free_mem_block_list_.empty()) {
-            AddMemBlock(1);
-        }
-        auto res = free_mem_block_list_.front();
-        free_mem_block_list_.pop_front();
-        return res;
-    }
-
-    inline void RecycleMemBlock(MemBlock<CellMeta>* mem_block) {
-        assert(mem_block->Reference() == 0);
-        free_mem_block_list_.push_back(mem_block);
-    }
-
-    std::deque<MemBlock<CellMeta>*> free_mem_block_list_;
-    std::unordered_map<int, MemBlock<CellMeta>*> mem_block_map_;
-    MemBlock<CellMeta>* cur_mem_block_;
-    int         next_id_;
-    uint32_t    spin_lock_;
-}; // end of class CellAllocator
-
-/** ProbeWithinCell
- *  @note: probe within each cell
-*/
-class ProbeWithinCell {
-public:
-    static const int MAX_PROBE_LEN  = kTurboMaxProbeLen;
-    static const int PROBE_STEP     = kTurboProbeStep;
-
-    ProbeWithinCell(uint64_t initial_hash, uint32_t cell_count_mask, uint32_t bucket_i) {
-        h_               = initial_hash;
-        cell_count_mask_  = cell_count_mask;
-        cell_index_ = h_ & cell_count_mask_;
-        bucket_i_        = bucket_i;
-        probe_count_     = 0;
-    }
-
-    inline void reset() {
-        cell_index_ = h_ & cell_count_mask_;
-        probe_count_     = 0;
-    }
-    // indicate whether we have already probed all the assocaite cells
-    inline operator bool() const {
-        return probe_count_ < 1;
-    }
-
-    inline void next() {
-        cell_index_ += PROBE_STEP;
-        // CellCountMask should be like 0b11
-        cell_index_ &= cell_count_mask_;
-        probe_count_++;
-    }
-
-    inline std::pair<uint32_t, uint32_t> offset() {
-        return {bucket_i_, cell_index_};
-    }
-
-    static std::string name() {
-        return "ProbeWithinCell";
-    }
-private:
-    uint64_t  h_;
-    uint32_t  cell_count_mask_;
-    uint32_t  cell_index_;
-    uint32_t  bucket_i_;
-    uint32_t  probe_count_;
-}; // end of class ProbeWithinCell
-
-/** ProbeWithinBucket
- *  @note: probe within a bucket
-*/
-class ProbeWithinBucket {
-public:
-    static const int MAX_PROBE_LEN  = kTurboMaxProbeLen;
-    static const int PROBE_STEP     = kTurboProbeStep;
-    ProbeWithinBucket(uint64_t initial_hash, uint32_t cell_count_mask, uint32_t bucket_i) {
-        h_               = initial_hash;
-        cell_count_mask_  = cell_count_mask;
-        cell_index_ = h_ & cell_count_mask_;
-        bucket_i_        = bucket_i;
-        probe_count_     = 0;
-    }
-
-    inline void reset() {
-        cell_index_ = h_ & cell_count_mask_;
-        probe_count_     = 0;
-    }
-    
-    // indicate whether we have already probed all the assocaite cells
-    inline operator bool() const {
-        return probe_count_ <= cell_count_mask_;
-    }
-
-    inline void next() {
-        cell_index_ += PROBE_STEP;
-        // CellCountMask should be like 0b11
-        cell_index_ &= cell_count_mask_;
-        probe_count_++;
-    }
-
-    inline std::pair<uint32_t, uint32_t> offset() {
-        return {bucket_i_, cell_index_};
-    }
-
-    static std::string name() {
-        return "ProbeWithinBucket";
-    }
-private:
-    uint64_t  h_;
-    uint32_t  cell_count_mask_;
-    uint32_t  cell_index_;
-    uint32_t  bucket_i_;
-    uint32_t  probe_count_;
-};
-
 // using wrapper classes for hash and key_equal prevents the diamond problem when the same type is
 // used. see https://stackoverflow.com/a/28771920/48181
 // from robinhood hash. https://github.com/martinus/robin-hood-hashing
@@ -1364,9 +665,18 @@ struct WrapKeyEqual : public T {
  *         the higher 2-byte is used as partial hash
  *  Description:
  *  TurboHashTable has bucket_count * cell_count cells
+ * 
+ *  @note: CellMetaType:
+ *              0 - CellMeta128
+ *              1 - CellMeta256
+ *              2 - CellMeta256V2
+ *         ProbeStrategyType:
+ *              0 - ProbeWithinBucket
+ *              1 - ProbeWithinCell
+ *              
 */
 template <  typename Key, typename T, typename Hash, typename KeyEqual,
-            typename CellMeta = CellMeta128, typename ProbeStrategy = ProbeWithinBucket, int kCellCountLimit = 32768>
+            int CellMetaType = 0, int ProbeStrategyType = 0, int kCellCountLimit = 32768>
 class TurboHashTable 
     : public WrapHash<Hash>, 
       public WrapKeyEqual<KeyEqual> {
@@ -1377,89 +687,25 @@ public:
     // Internal transformation for std::string
     using key_type    = Key;
     using mapped_type = T;
-    using size_type = size_t;
-    using hasher    = Hash;
-    using key_equal = typename std::conditional<  std::is_same<Key, std::string>::value == false  /* is numeric */,
+    using size_type   = size_t;
+    using hasher      = Hash;
+    using key_equal   = typename std::conditional<  std::is_same<Key, std::string>::value == false  /* is numeric */,
                                                     KeyEqual, std::equal_to<util::Slice> >::type;
-    using Self = TurboHashTable<key_type, mapped_type, hasher, key_equal, CellMeta, ProbeStrategy, kCellCountLimit>;
+    using Self        = TurboHashTable<key_type, mapped_type, hasher, key_equal, CellMetaType, ProbeStrategyType, kCellCountLimit>;
 
 // private:
 
-    static_assert(kCellCountLimit <= 32768, "kCellCountLimit needs to be <= 32768");
-    using WHash     = WrapHash<Hash>;
-    using WKeyEqual = WrapKeyEqual<KeyEqual>;
-    using HashSlot  = typename CellMeta::HashSlot;
-    using H2Tag     = typename CellMeta::H2Tag;
-    
-    /** PartialHash
-     *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
-     *  @format:
-     *  | MSB    - - - - - - - - - - - - - - - - - - LSB |
-     *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
-     *  |    bucket_hash |     H1    |         H2        |
-     *  ! some CellMeta may only use the lowest 8 bit of H2
-    */
-    struct PartialHash {
-        PartialHash(uint64_t hash) :
-            bucket_hash_( hash >> 32 ),
-            H1_( ( hash >> 16 ) & 0xFFFF ),
-            H2_( hash & 0xFFFF )
-            { };        
-        uint32_t  bucket_hash_; // used to locate in the bucket directory
-        uint16_t  H1_; // H1: 2 byte hash tag         
-        H2Tag     H2_; // H2: 2 byte hash tag in CellMeta for parallel comparison using SIMD cmd
-    }; // end of class PartialHash
-
-
-    /** SlotInfo
-     *  @note: use to store the target slot location info
-    */
-    class SlotInfo {
-    public:
-        uint32_t bucket;        // bucket index
-        uint16_t cell;          // cell index
-        uint8_t  slot;          // slot index        
-        uint16_t H1;            // hash-tag in HashSlot
-        H2Tag    H2;            // hash-tag in CellMeta
-        bool equal_key;         // If we find a equal key in this slot
-        SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, H2Tag h2, bool euqal):
-            bucket(b),
-            cell(a),
-            slot(s),                    
-            H1(h1),
-            H2(h2),
-            equal_key(euqal) {}
-        SlotInfo():
-            bucket(0),
-            cell(0),
-            slot(0),                    
-            H1(0),
-            H2(0),
-            equal_key(false) {}
-        std::string ToString() {
-            char buffer[128];
-            sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%04x, H1: 0x%04x",
-                bucket,
-                cell,
-                slot,
-                H2,
-                H1);
-            return buffer;
-        }
-    }; // end of class SlotInfo
-
+    /* #region: for value_type */
 
     /** ValueType
      *  @note: for key-value record type
      *  @format:
-     *  |  
-     *  
     */
     enum ValueType: unsigned char {
         kTypeDeletion = 0x2A,   // 0b 0_0101010
         kTypeValue    = 0xAA,   // 0b 1_0101010
         kTypeMask     = 0x7F    // 0b 0_1111111
-    };
+    };    
 
     /**
      *  @note: the Record Lenght
@@ -1766,6 +1012,791 @@ public:
                     T1, T2>::Encode(t1, t2, reinterpret_cast<char*>(this) + 1);
         }
     }; // end of class Record2
+    
+    /* #endregion: for value_type */
+
+    using value_type = typename std::conditional<is_set, Record1<key_type>, Record2<key_type, mapped_type> >::type;
+
+    /* #region: for CellMeta */
+
+    /** CellMeta128
+     *  @note:  Hash cell whose size is 128 byte. There are 14 slots in the cell.
+     *  @format:
+     *  | ----------------------- meta ------------------------| ----- slots ---- |
+     *  | 2 byte bitmap | 14 byte: one byte hash for each slot | 8 byte * 14 slot |
+     * 
+     *  |- bitmap: 
+     *            0 bit: used as a bitlock
+     *            1 bit: not in use
+     *      2  - 15 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
+     * 
+     *  |- one byte hash:
+     *      8 bit tag for the slot
+     * 
+     *  |- slot:
+     *      0  -  5 byte: the pointer used to point to DIMM where store the actual kv value
+     *      6  -  7 byte: two hash byte for this slot
+    */ 
+    class CellMeta128 {
+    public:
+        static constexpr uint16_t BitMapMask    = 0xFFFC;
+        static constexpr int CellSizeLeftShift  = 7;
+        static constexpr int SlotSizeLeftShift  = 3;
+        using H2Tag = uint8_t;
+
+        /** HashSlot
+         *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
+        */
+        struct HashSlot{
+            uint64_t entry:48;      // pointer to key-value record
+            uint64_t H1:16;         // hash-tag for the key
+        };
+
+        explicit CellMeta128(char* rep) {
+            meta_   = _mm_loadu_si128(reinterpret_cast<const __m128i*>(rep));
+            bitmap_ = *(uint32_t*)(rep);    // the lowest 32bit is used as bitmap
+            bitmap_ &= BitMapMask;          // hide the 0, 1 bit in bitmap
+        }
+
+        ~CellMeta128() {
+        }
+
+        // return a bitset, the position that matches the hash is set to 1
+        inline util::BitSet MatchBitSet(uint8_t hash) {
+            auto bitset = _mm_set1_epi8(hash);
+            uint16_t mask = _mm_cmpeq_epi8_mask(bitset, meta_);
+            return util::BitSet(mask & bitmap_);        
+        }
+
+        // return a bitset, the position that is empty for insertion
+        inline util::BitSet EmptyBitSet() {
+            return turbo::util::BitSet((~bitmap_) & BitMapMask);
+        }
+
+        inline util::BitSet OccupyBitSet() {
+            return util::BitSet(bitmap_ & BitMapMask);
+        }
+
+        inline bool Full() {
+            return (bitmap_ & BitMapMask) == BitMapMask;
+        }
+
+        inline bool Occupy(int slot_index) {
+            return bitmap_ & (1 << slot_index);
+        }
+        
+        inline int OccupyCount() {
+            return __builtin_popcount(bitmap_);
+        }
+
+        inline static constexpr uint8_t StartSlotPos() {
+            return 2;
+        }
+
+        inline static constexpr uint32_t CellSize() {
+            // cell size (include meta) in byte
+            return 128;
+        }
+
+        inline static constexpr uint32_t SlotMaxRange() {
+            return 16;
+        }
+
+        inline static constexpr uint32_t SlotSize() {
+            // slot count
+            return 14;
+        }
+
+        inline static constexpr size_t size() {
+            // the meta size in byte in current cell
+            return 16;
+        }
+
+        inline uint16_t bitmap() {
+            return bitmap_;
+        }
+
+        std::string BitMapToString() {
+            std::string res;
+            char buffer[1024];
+            uint64_t H2s[2];
+            memcpy(H2s, &meta_, 16);
+            sprintf(buffer, "bitmap: 0b%s - H2: 0x%016lx%016lx", print_binary(bitmap_).c_str(), H2s[1], H2s[0]);
+            return buffer;
+        }
+
+        std::string print_binary(uint16_t bitmap)
+        {
+            char buffer[1024];
+            static std::string bit_rep[16] = {
+                "0000", "0001", "0010", "0011",
+                "0100", "0101", "0110", "0111",
+                "1000", "1001", "1010", "1011",
+                "1100", "1101", "1110", "1111"
+            };
+            sprintf(buffer, "%s%s%s%s", 
+                bit_rep[(bitmap >> 12) & 0x0F].c_str(),
+                bit_rep[(bitmap >>  8) & 0x0F].c_str(),
+                bit_rep[(bitmap >>  4) & 0x0F].c_str(),
+                bit_rep[(bitmap >>  0) & 0x0F].c_str()
+            );
+            return buffer;
+        }
+
+        __m128i     meta_;          // 16 byte integer vector
+        uint16_t    bitmap_;        // 1: occupied, 0: empty or deleted
+    }; // end of class CellMeta128
+
+    /** CellMeta256
+     *  @note: Hash cell whose size is 256 byte. There are 28 slots in the cell.
+     *  @format:
+     *  | ----------------------- meta ------------------------| ----- slots ---- |
+     *  | 4 byte bitmap | 28 byte: one byte hash for each slot | 8 byte * 28 slot |
+     * 
+     *  |- bitmap: 
+     *           0  bit: used as a bitlock
+     *      1  - 3  bit: not in use
+     *      4  - 31 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
+     * 
+     *  |- one byte hash:
+     *      8 bit tag for the slot
+     * 
+     *  |- slot:
+     *      0  -  5 byte: the pointer used to point to DIMM where store the actual kv value
+     *      6  -  7 byte: two hash byte for this slot (totally 3 byte is used as the hash)
+    */ 
+    class CellMeta256 {
+    public:
+        static constexpr uint32_t BitMapMask = 0x0FFFFFFF0;
+        static constexpr int CellSizeLeftShift = 8;
+        static constexpr int SlotSizeLeftShift = 3;
+        using H2Tag = uint8_t;
+            
+        /** HashSlot
+         *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
+        */
+        struct HashSlot{
+            uint64_t entry:48;      // pointer to key-value record
+            uint64_t H1:16;         // hash-tag for the key
+        };
+
+        explicit CellMeta256(char* rep) {
+            meta_   = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
+            bitmap_ = *(uint32_t*)(rep);              // the lowest 32bit is used as bitmap
+            bitmap_ &= BitMapMask;                   // hidden the 0 - 3 bit in bitmap
+        }
+
+        ~CellMeta256() {
+        }
+
+        // return a bitset, the slot that matches the hash is set to 1
+        inline util::BitSet MatchBitSet(uint8_t hash) {
+            auto bitset = _mm256_set1_epi8(hash);
+            uint32_t mask = _mm256_cmpeq_epi8_mask(bitset, meta_);
+            return util::BitSet(mask & bitmap_);
+        }
+
+        // return a bitset, indicating the availabe slot
+        inline util::BitSet EmptyBitSet() {
+            return util::BitSet((~bitmap_) & BitMapMask);
+        }
+
+        inline util::BitSet OccupyBitSet() {
+            return util::BitSet(bitmap_ & BitMapMask);
+        }
+
+        inline bool Full() {
+            return (bitmap_ & BitMapMask) == BitMapMask;
+        }
+
+        inline bool Occupy(int slot_index) {
+            return bitmap_ & (1 << slot_index);
+        }
+
+        inline int OccupyCount() {
+            return __builtin_popcount(bitmap_);
+        }
+
+        inline static constexpr uint8_t StartSlotPos() {
+            return 4;
+        }
+
+        inline static constexpr uint32_t CellSize() {
+            // cell size (include meta) in byte
+            return 256;
+        }
+
+        inline static constexpr uint32_t SlotMaxRange() {
+            return 32;
+        }
+        
+        inline static constexpr uint32_t SlotSize() {
+            // slot count
+            return 28;
+        }
+
+        inline static constexpr size_t size() {
+            // the meta size in byte in current cell
+            return 32;
+        }
+
+        inline uint32_t bitmap() {
+            return bitmap_;
+        }
+
+        std::string BitMapToString() {
+            std::string res;
+            char buffer[1024];
+            uint64_t H2s[4];
+            memcpy(H2s, &meta_, 32);
+            sprintf(buffer, "bitmap: 0b%s - H2: 0x%016lx%016lx%016lx%016lx", print_binary(bitmap_).c_str(), H2s[3], H2s[2], H2s[1], H2s[0]);
+            return buffer;
+        }
+
+        std::string print_binary(uint32_t bitmap)
+        {
+            char buffer[1024];
+            static std::string bit_rep[16] = {
+                "0000", "0001", "0010", "0011",
+                "0100", "0101", "0110", "0111",
+                "1000", "1001", "1010", "1011",
+                "1100", "1101", "1110", "1111"
+            };
+            sprintf(buffer, "%s%s%s%s%s%s%s%s", 
+                bit_rep[(bitmap >> 28) & 0x0F].c_str(),
+                bit_rep[(bitmap >> 24) & 0x0F].c_str(),
+                bit_rep[(bitmap >> 20) & 0x0F].c_str(),
+                bit_rep[(bitmap >> 16) & 0x0F].c_str(),
+                bit_rep[(bitmap >> 12) & 0x0F].c_str(),
+                bit_rep[(bitmap >>  8) & 0x0F].c_str(),
+                bit_rep[(bitmap >>  4) & 0x0F].c_str(),
+                bit_rep[(bitmap >>  0) & 0x0F].c_str()
+            );
+            return buffer;
+        }
+
+        __m256i     meta_;          // 32 byte integer vector
+        uint32_t    bitmap_;        // 1: occupied, 0: empty or deleted
+    }; // end of class CellMeta256
+
+    /** CellMeta256V2
+     *  @note: Hash cell whose size is 256 byte. There are 14 slots in the cell.
+     *  @format:
+     *  | ----------------------- meta ------------------------| ----- slots ----- |
+     *  | 4 byte bitmap | 28 byte: two byte hash for each slot | 16 byte * 14 slot |
+     * 
+     *  |- bitmap: 
+     *            0 bit: used as a bitlock
+     *            1 bit: not in use
+     *      2  - 15 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
+     *      16 - 31 bit: not in use
+     * 
+     *  |- two byte hash:
+     *      16 bit tag for the slot
+     * 
+     *  |- slot:
+     *      0  -  7 byte: 8-byte hash value
+     *      8  - 15 byte: the pointer to record
+    */ 
+    class CellMeta256V2 {
+    public:
+        static constexpr uint16_t BitMapMask   = 0xFFFC;
+        static constexpr int CellSizeLeftShift = 8;
+        static constexpr int SlotSizeLeftShift = 4;
+        using H2Tag = uint16_t;
+
+        /** HashSlot
+         *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
+        */
+        struct HashSlot{
+            uint64_t entry;      // pointer to key-value record
+            uint64_t H1;         // hash-tag for the key
+        };
+
+        explicit CellMeta256V2(char* rep) {
+            meta_   = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep));
+            bitmap_ = *(uint32_t*)(rep);             // the lowest 32bit is used as bitmap
+            bitmap_ &= BitMapMask;                   // hidden the 0 - 1 bit in bitmap
+        }
+
+        ~CellMeta256V2() {
+        }
+
+        // return a bitset, the slot that matches the hash is set to 1
+        inline util::BitSet MatchBitSet(uint16_t hash) {
+            auto bitset = _mm256_set1_epi16(hash);
+            uint16_t mask = _mm256_cmpeq_epi16_mask(bitset, meta_);
+            return util::BitSet(mask & bitmap_);
+        }
+
+        // return a bitset, indicating the availabe slot
+        inline util::BitSet EmptyBitSet() {
+            return util::BitSet((~bitmap_) & BitMapMask);
+        }
+
+        inline util::BitSet OccupyBitSet() {
+            return util::BitSet(bitmap_ & BitMapMask);
+        }
+
+        inline bool Full() {
+            return (bitmap_ & BitMapMask) == BitMapMask;
+        }
+
+        inline bool Occupy(int slot_index) {
+            return bitmap_ & (1 << slot_index);
+        }
+
+        inline int OccupyCount() {
+            return __builtin_popcount(bitmap_);
+        }
+
+        inline static constexpr uint8_t StartSlotPos() {
+            return 2;
+        }
+
+        inline static constexpr uint32_t CellSize() {
+            // cell size (include meta) in byte
+            return 256;
+        }
+
+        inline static constexpr uint32_t SlotMaxRange() {
+            return 16;
+        }
+        
+        inline static constexpr uint32_t SlotSize() {
+            // slot count
+            return 14;
+        }
+
+        inline static constexpr size_t size() {
+            // the meta size in byte in current cell
+            return 32;
+        }
+
+        inline uint16_t bitmap() {
+            return bitmap_;
+        }
+
+        std::string BitMapToString() {
+            std::string res;
+            char buffer[1024];
+            uint64_t H2s[4];
+            memcpy(H2s, &meta_, 32);
+            sprintf(buffer, "bitmap: 0b%s - H2: 0x%016lx%016lx%016lx%016lx", print_binary(bitmap_).c_str(), H2s[3], H2s[2], H2s[1], H2s[0]);
+            return buffer;
+        }
+
+        std::string print_binary(uint16_t bitmap)
+        {
+            char buffer[1024];
+            static std::string bit_rep[16] = {
+                "0000", "0001", "0010", "0011",
+                "0100", "0101", "0110", "0111",
+                "1000", "1001", "1010", "1011",
+                "1100", "1101", "1110", "1111"
+            };
+            sprintf(buffer, "%s%s%s%s", 
+                bit_rep[(bitmap >> 12) & 0x0F].c_str(),
+                bit_rep[(bitmap >>  8) & 0x0F].c_str(),
+                bit_rep[(bitmap >>  4) & 0x0F].c_str(),
+                bit_rep[(bitmap >>  0) & 0x0F].c_str()
+            );
+            return buffer;
+        }
+
+        __m256i     meta_;          // 32 byte integer vector
+        uint16_t    bitmap_;        // 1: occupied, 0: empty or deleted
+    }; // end of class CellMeta256V2
+
+    /* #endregion: for CellMeta */
+
+    /* #region: for CellAllocator */
+
+    /** MemBlock
+     *  @note: a memory block that can allocate at most 'count' Cell (128-byte Cell or 256-byte Cell)
+    */
+    template <typename CellMeta = CellMeta128>
+    class MemBlock { 
+    public:
+        MemBlock(int block_id, size_t count):
+            start_addr_(nullptr),
+            cur_addr_(nullptr),
+            ref_(0),
+            size_(count),
+            remaining_(count),
+            is_hugepage_(true),
+            block_id_(block_id) {
+            // Allocate memory space for this MemBlock
+            size_t space = size_ * CellMeta::CellSize();
+            if ((space & 0xfff) != 0) {
+                // space is not several times of 4KB
+                TURBO_ERROR("MemBlock size is not 4KB aligned. Space size: " << space);
+                exit(1);
+            }
+            // printf("Add %.2f MB MemBlock\n", space/1024.0/1024.0 );
+            start_addr_ = (char*) mmap(TURBO_HUGE_ADDR, space, TURBO_HUGE_PROTECTION, TURBO_HUGE_FLAGS, -1, 0);
+            if (start_addr_ == MAP_FAILED) {
+                TURBO_WARNING("mmap hugepage fail. space: " << space);
+                is_hugepage_ = false;
+                start_addr_ = (char* ) aligned_alloc(CellMeta::CellSize(), space);
+                if (start_addr_ == nullptr) {
+                    TURBO_ERROR("malloc space fail. Space size: " << space);
+                    exit(1);
+                }
+            }
+            cur_addr_ = start_addr_;
+        }
+
+        ~MemBlock() {
+            /* munmap() size_ of MAP_HUGETLB memory must be hugepage aligned */
+            size_t space = size_ * CellMeta::CellSize();
+            if (is_hugepage_) {
+                if (munmap(start_addr_, space)) {
+                    TURBO_ERROR("munmap hugepage fail. munmap size: " << space);
+                    exit(1);
+                }
+            } else {
+                free(start_addr_);
+            }
+        }
+        
+        inline size_t Remaining() {
+            return remaining_;
+        }
+
+        inline char* Allocate(size_t request_count) {
+            // Allocate 'request_count' cells 
+            if (request_count > remaining_) {
+                // There isn't enough space for allocation
+                return nullptr;
+            }
+
+            // allocate count space.
+            ++ref_;
+            remaining_ -= request_count; 
+            char* return_addr = cur_addr_;
+            cur_addr_ += (request_count * CellMeta::CellSize());
+            
+            return return_addr;
+        }
+
+        inline bool Release() {
+            // reduce reference counter
+            // return true if reference is 0, meaning this MemBlock can be added to free list.
+            --ref_;
+            if (ref_ == 0) {
+                remaining_ = size_;
+                cur_addr_ = start_addr_;
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+
+        inline int Reference() {
+            return ref_;
+        }
+
+        inline bool IsHugePage() {
+            return is_hugepage_;
+        }
+
+        inline int ID() {
+            return block_id_;
+        }
+
+        std::string ToString() {
+            char buffer[1024];
+            sprintf(buffer, "ID: %d, size: %lu, remain: %lu, ref: %d\n", block_id_, size_, remaining_, ref_);
+            return buffer;
+        }
+    private:
+        char*   start_addr_;    // start address of MemBlock
+        char*   cur_addr_;      // current position for space allocation
+        int     ref_;           // reference of this MemBlock
+        size_t  size_;          // number of cells
+        size_t  remaining_;     // remaining cells for allocation
+        bool    is_hugepage_;   // This MemBlock uses hugepage or not
+        int     block_id_;          
+    };// end of class MemBlock
+
+    /** CellAllocator
+     *  @note: used to allocate N Cell space
+    */
+    template <typename CellMeta = CellMeta128, size_t kBucketCellCount = 32768>
+    class CellAllocator {
+    public:
+        CellAllocator(int initial_blocks = 1):
+            cur_mem_block_(nullptr),
+            next_id_(0),
+            spin_lock_(0) {
+            AddMemBlock(initial_blocks);
+            cur_mem_block_ = GetMemBlock();
+        }
+
+        // Allocate memory space for a Bucket with 'count' cells
+        // Return:
+        // int: the MemBlock ID
+        // char*: address in MemBlock
+        inline std::pair<int /* block id */, char* /* addr */> AllocateNoSafe(size_t count) {
+            if (cur_mem_block_->Remaining() < count) {
+                // if remaining space is not enough, allocate a new MemBlock
+                cur_mem_block_ = GetMemBlock();
+            }
+            char* addr = cur_mem_block_->Allocate(count);
+            if (addr == nullptr) {
+                fprintf(stderr, "CellAllocator::Allocate addr is nullptr\n");
+                exit(1);
+            }
+            
+            return {cur_mem_block_->ID(), addr};
+        }
+
+        inline std::pair<int, char*> AllocateSafe(size_t count) {
+            util::SpinLockScope<0> lock(&spin_lock_);
+            if (cur_mem_block_->Remaining() < count) {
+                // if remaining space is not enough, allocate a new MemBlock
+                cur_mem_block_ = GetMemBlock();
+            }
+            char* addr = cur_mem_block_->Allocate(count);
+            if (addr == nullptr) {
+                fprintf(stderr, "CellAllocator::Allocate addr is nullptr\n");
+                exit(1);
+            }
+            
+            return {cur_mem_block_->ID(), addr};
+        }
+
+        inline void ReleaseNoSafe(int id) {
+            auto iter = mem_block_map_.find(id);
+            if (iter != mem_block_map_.end()) {
+                bool should_recycle = iter->second->Release();
+                if (should_recycle) {
+                    RecycleMemBlock(iter->second);
+                }
+            }
+        }
+
+        inline void ReleaseSafe(int id) {
+            util::SpinLockScope<0> lock(&spin_lock_);
+            auto iter = mem_block_map_.find(id);
+            if (iter != mem_block_map_.end()) {
+                bool should_recycle = iter->second->Release();
+                if (should_recycle) {
+                    RecycleMemBlock(iter->second);
+                }
+            }
+        }
+
+        std::string ToString() {
+            std::string res;
+            for (auto& mb : mem_block_map_) {
+                res.append(mb.second->ToString());
+            }
+            return res;
+        }
+
+    private:
+        inline void AddMemBlock(int n) {
+            // add n MemBlock to free_mem_block_list_
+            for (int i = 0; i < n; i++) {
+                MemBlock<CellMeta>* mem_block = new MemBlock<CellMeta>(next_id_++, kBucketCellCount);
+                free_mem_block_list_.push_back(mem_block);
+                mem_block_map_[mem_block->ID()] = mem_block;
+            }
+        }
+
+        inline MemBlock<CellMeta>* GetMemBlock() {
+            if (free_mem_block_list_.empty()) {
+                AddMemBlock(1);
+            }
+            auto res = free_mem_block_list_.front();
+            free_mem_block_list_.pop_front();
+            return res;
+        }
+
+        inline void RecycleMemBlock(MemBlock<CellMeta>* mem_block) {
+            assert(mem_block->Reference() == 0);
+            free_mem_block_list_.push_back(mem_block);
+        }
+
+        std::deque<MemBlock<CellMeta>*> free_mem_block_list_;
+        std::unordered_map<int, MemBlock<CellMeta>*> mem_block_map_;
+        MemBlock<CellMeta>* cur_mem_block_;
+        int         next_id_;
+        uint32_t    spin_lock_;
+    }; // end of class CellAllocator
+
+    /* #endregion: for CellAllocator */
+
+    /* #region: for ProbeStrategy */
+
+    /** ProbeWithinCell
+     *  @note: probe within each cell
+    */
+    class ProbeWithinCell {
+    public:
+        static const int MAX_PROBE_LEN  = kTurboMaxProbeLen;
+        static const int PROBE_STEP     = kTurboProbeStep;
+
+        ProbeWithinCell(uint64_t initial_hash, uint32_t cell_count_mask, uint32_t bucket_i) {
+            h_               = initial_hash;
+            cell_count_mask_  = cell_count_mask;
+            cell_index_ = h_ & cell_count_mask_;
+            bucket_i_        = bucket_i;
+            probe_count_     = 0;
+        }
+
+        inline void reset() {
+            cell_index_ = h_ & cell_count_mask_;
+            probe_count_     = 0;
+        }
+        // indicate whether we have already probed all the assocaite cells
+        inline operator bool() const {
+            return probe_count_ < 1;
+        }
+
+        inline void next() {
+            cell_index_ += PROBE_STEP;
+            // CellCountMask should be like 0b11
+            cell_index_ &= cell_count_mask_;
+            probe_count_++;
+        }
+
+        inline std::pair<uint32_t, uint32_t> offset() {
+            return {bucket_i_, cell_index_};
+        }
+
+        static std::string name() {
+            return "ProbeWithinCell";
+        }
+    private:
+        uint64_t  h_;
+        uint32_t  cell_count_mask_;
+        uint32_t  cell_index_;
+        uint32_t  bucket_i_;
+        uint32_t  probe_count_;
+    }; // end of class ProbeWithinCell
+
+    /** ProbeWithinBucket
+     *  @note: probe within a bucket
+    */
+    class ProbeWithinBucket {
+    public:
+        static const int MAX_PROBE_LEN  = kTurboMaxProbeLen;
+        static const int PROBE_STEP     = kTurboProbeStep;
+        ProbeWithinBucket(uint64_t initial_hash, uint32_t cell_count_mask, uint32_t bucket_i) {
+            h_               = initial_hash;
+            cell_count_mask_  = cell_count_mask;
+            cell_index_ = h_ & cell_count_mask_;
+            bucket_i_        = bucket_i;
+            probe_count_     = 0;
+        }
+
+        inline void reset() {
+            cell_index_ = h_ & cell_count_mask_;
+            probe_count_     = 0;
+        }
+        
+        // indicate whether we have already probed all the assocaite cells
+        inline operator bool() const {
+            return probe_count_ <= cell_count_mask_;
+        }
+
+        inline void next() {
+            cell_index_ += PROBE_STEP;
+            // CellCountMask should be like 0b11
+            cell_index_ &= cell_count_mask_;
+            probe_count_++;
+        }
+
+        inline std::pair<uint32_t, uint32_t> offset() {
+            return {bucket_i_, cell_index_};
+        }
+
+        static std::string name() {
+            return "ProbeWithinBucket";
+        }
+    private:
+        uint64_t  h_;
+        uint32_t  cell_count_mask_;
+        uint32_t  cell_index_;
+        uint32_t  bucket_i_;
+        uint32_t  probe_count_;
+    };
+
+    /* #endregion: for ProbeStrategy */
+
+    static_assert(kCellCountLimit <= 32768, "kCellCountLimit needs to be <= 32768");
+    
+    using CellMeta      =    typename std::conditional<CellMetaType <= 0, CellMeta128,
+                             typename std::conditional<CellMetaType <= 1, CellMeta256,
+                                                                          CellMeta256V2>::type>::type;
+    using ProbeStrategy = typename std::conditional<ProbeStrategyType <= 0, ProbeWithinBucket,
+                                                                            ProbeWithinCell>::type;
+    using WHash     = WrapHash<Hash>;
+    using WKeyEqual = WrapKeyEqual<KeyEqual>;
+    using HashSlot  = typename CellMeta::HashSlot;
+    using H2Tag     = typename CellMeta::H2Tag;
+    
+
+    /** PartialHash
+     *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
+     *  @format:
+     *  | MSB    - - - - - - - - - - - - - - - - - - LSB |
+     *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
+     *  |    bucket_hash |     H1    |         H2        |
+     *  ! some CellMeta may only use the lowest 8 bit of H2
+    */
+    struct PartialHash {
+        PartialHash(uint64_t hash) :
+            bucket_hash_( hash >> 32 ),
+            H1_( ( hash >> 16 ) & 0xFFFF ),
+            H2_( hash & 0xFFFF )
+            { };        
+        uint32_t  bucket_hash_; // used to locate in the bucket directory
+        uint16_t  H1_; // H1: 2 byte hash tag         
+        H2Tag     H2_; // H2: 2 byte hash tag in CellMeta for parallel comparison using SIMD cmd
+    }; // end of class PartialHash
+
+
+    /** SlotInfo
+     *  @note: use to store the target slot location info
+    */
+    class SlotInfo {
+    public:
+        uint32_t bucket;        // bucket index
+        uint16_t cell;          // cell index
+        uint8_t  slot;          // slot index        
+        uint16_t H1;            // hash-tag in HashSlot
+        H2Tag    H2;            // hash-tag in CellMeta
+        bool equal_key;         // If we find a equal key in this slot
+        SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, H2Tag h2, bool euqal):
+            bucket(b),
+            cell(a),
+            slot(s),                    
+            H1(h1),
+            H2(h2),
+            equal_key(euqal) {}
+        SlotInfo():
+            bucket(0),
+            cell(0),
+            slot(0),                    
+            H1(0),
+            H2(0),
+            equal_key(false) {}
+        std::string ToString() {
+            char buffer[128];
+            sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%04x, H1: 0x%04x",
+                bucket,
+                cell,
+                slot,
+                H2,
+                H1);
+            return buffer;
+        }
+    }; // end of class SlotInfo
 
     /** RecordAllocator
      *  @note: allocate memory space for new record
@@ -1781,28 +1812,15 @@ public:
             }
     };
 
-    class DataNodeAllocator {
-    public:
-        static inline char* Allocate(size_t size) {
-            return reinterpret_cast<char*>(malloc(size));
-        }
-
-        static inline void Release(char* addr) {
-            free(addr);
-        }
-    };
-
-    using value_type = typename std::conditional<is_set, Record1<key_type>, Record2<key_type, mapped_type> >::type;
-
-    /** DataNode
+    /** RecordPtr
      *  @note: store the data pointer 
     */
-    class DataNode { 
+    class RecordPtr { 
     public:
-        explicit DataNode(uint64_t u64_addr):
+        explicit RecordPtr(uint64_t u64_addr):
             data_(reinterpret_cast<value_type*>(u64_addr)) {}
 
-        explicit DataNode(char* addr):
+        explicit RecordPtr(char* addr):
             data_(reinterpret_cast<value_type*>(addr)) {}
 
         const value_type& operator*() const noexcept {
@@ -1862,7 +1880,7 @@ public:
         }
 
         // lowest -> highest
-        // | 1 bit lock | 15 bit cell mask | 48 bit address |
+        // | 1 bit lock | 11 bit | 4 bit cell mask | 48 bit address |
         uint64_t data_;
     };
 
@@ -1964,7 +1982,7 @@ public:
     // TODO:
     class Iter {
         private:
-            using NodePtr = DataNode;
+            using NodePtr = RecordPtr;
         
         public:
             using difference_type = std::ptrdiff_t;
@@ -2032,7 +2050,11 @@ public:
         return cell_allocator_.ToString();
     }
 
-    void MinorReHashAll()  {
+    /** MinorReHashAll
+     *  @note: not thread safe. This global rehashing will double the hash table capacity.
+     *  ! 
+    */
+   void MinorReHashAll()  {
         // allocate new mem space together
         int* old_mem_block_ids = (int*)malloc(bucket_count_ * sizeof(int));
         char** new_mem_block_addr = (char**)malloc(bucket_count_ * sizeof(char*));
@@ -2042,18 +2064,20 @@ public:
             // if current bucket cannot enlarge any more, continue
             if (TURBO_UNLIKELY(new_cell_count > kCellCountLimit)) {
                 printf("Cannot rehash bucket %lu\n", i);
-                continue;
+                TURBO_ERROR("Out of capacity");
+                exit(1);
             }
-            auto res = cell_allocator_.AllocateNoSafe(new_cell_count);
+            std::pair<int /* block id */, char* /* addr */> res = 
+                cell_allocator_.AllocateNoSafe(new_cell_count);
             if (res.second == nullptr) {
-                printf("Error\n");
+                printf("Cell allocation error\n");
+                TURBO_ERROR("Cell allocation error.");
                 exit(1);
             }
             old_mem_block_ids[i] = buckets_mem_block_ids_[i];
             buckets_mem_block_ids_[i] = res.first;
             new_mem_block_addr[i] = res.second;
             capacity_.fetch_add(bucket_meta.CellCount() * CellMeta::SlotSize());
-            // printf("bucket %lu. Allocate address: 0x%lx. size: %lu\n", i, res.second, new_cell_count);
         }
 
         // rehash for all the buckets
@@ -2082,11 +2106,11 @@ public:
         });
         auto rehash_end = util::NowMicros();
         printf("Real rehash speed: %f Mops/s\n", (double)rehash_count / (rehash_end - rehash_start));
+
         // release the old mem block space
         for (size_t i = 0; i < bucket_count_; ++i) {
             cell_allocator_.ReleaseNoSafe(old_mem_block_ids[i]);
         }
-
         free(old_mem_block_ids);
         free(new_mem_block_addr);
         printf("Rehash %lu entries\n", rehash_count.load());
@@ -2214,7 +2238,7 @@ public:
         auto res = findSlot(key, hash_value);
         if (res.second) {
             // find a key in hash table
-            DataNode record(res.first.entry);
+            RecordPtr record(res.first.entry);
             if (record->type == kTypeValue) {
                 *value = record->second();                
                 return true;
@@ -2266,7 +2290,7 @@ public:
             SlotInfo& info = res.first;
             info.bucket = i;
             HashSlot& slot = res.second;
-            DataNode record(slot.entry);
+            RecordPtr record(slot.entry);
             std::cout << info.ToString() << ", addr: " << slot.entry << ". key: " << record->first() << ", value: " << record->second() << std::endl;
             ++iter;
         }
@@ -2281,7 +2305,7 @@ public:
                 auto res = (*iter);
                 SlotInfo& info = res.first;
                 HashSlot& slot = res.second;
-                DataNode record(slot.entry);
+                RecordPtr record(slot.entry);
                 std::cout << info.ToString() << ", addr: " << slot.entry << ". key: " << record->first() << ", value: " << record->second() << std::endl;
                 ++iter;
                 count++;
@@ -2411,9 +2435,9 @@ private:
                     updateSlotAndMeta(cell_addr, res.first, record_addr); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
-                    if (!res.first.equal_key) {
-                        size_.fetch_add(1, std::memory_order_relaxed); // size + 1
-                    }
+                    // if (!res.first.equal_key) {
+                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                    // }
 
                     return true;
                 }
@@ -2466,7 +2490,7 @@ private:
 
                 if (TURBO_LIKELY(slot.H1 == partial_hash.H1_)) // compare if the H1 partial hash is equal (H1 is 16-byte)
                 {  
-                    DataNode record(slot.entry);
+                    RecordPtr record(slot.entry);
 
                     if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first())))
                     {  // compare if the slot key is equal
@@ -2544,7 +2568,7 @@ private:
 
                 if (TURBO_LIKELY(slot.H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
                 {
-                    DataNode record(slot.entry);                    
+                    RecordPtr record(slot.entry);                    
                     if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first())))
                     {      // If the slot key is equal to search key. SlotKeyEqual is very expensive 
                         return {slot, true};
@@ -2566,13 +2590,16 @@ private:
 
             // if this cell still has empty slot, then it means the key does't exist.
             if (TURBO_LIKELY(meta.EmptyBitSet())) {
-                return {{0, 0}, false};
+                HashSlot empty_slot;
+                return {empty_slot, false};
             }
             
             probe.next();
         }
+        
         // after all the probe, no key exist
-        return {{0, 0}, false};
+        HashSlot empty_slot;
+        return {empty_slot, false};
     }
 
     inline bool isPowerOfTwo(uint32_t n) {
@@ -2598,11 +2625,10 @@ private:
 // When using std::string for Key, the KeyEqual uses std::equal_to<util::Slice>
 template <typename Key, typename T, typename Hash = hash<Key>,
           typename KeyEqual = std::equal_to<Key> >
-using unordered_map = detail::TurboHashTable<Key, T, Hash, typename std::conditional<
-                                                                                    std::is_same<Key, std::string>::value == false /* is numeric */, 
-                                                                                    KeyEqual, 
-                                                                                    std::equal_to<util::Slice> >::type,
-                                             detail::CellMeta128, detail::ProbeWithinBucket>;
+using unordered_map = detail::TurboHashTable<Key, T, Hash, typename std::conditional< std::is_same<Key, std::string>::value == false /* is numeric */, 
+                                                                                        KeyEqual, 
+                                                                                        std::equal_to<util::Slice> >::type,
+                                            0, 0, 32768>;
 
 }; // end of namespace turbo
 

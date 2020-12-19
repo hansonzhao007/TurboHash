@@ -123,9 +123,10 @@ public:
             size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
             PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), read_count, time_end - time_start, true);
             if (FLAGS_print_thread_read)
-            for(int i = 0; i < FLAGS_thread_read; i++) {
-                printf("thread %2d read: %10lu\n", i, counts[i]);
-            }
+                for(int i = 0; i < FLAGS_thread_read; i++) {
+                    printf("thread %2d read: %10lu\n", i, counts[i]);
+                }
+            // printf("%s\n", hashtable->PrintCellAllocator().c_str());
         };
         read_fun();
 
