@@ -29,7 +29,7 @@ using namespace util;
 // For hash table 
 DEFINE_uint32(associate_size, 64, "");
 DEFINE_uint32(bucket_size, 128 << 10, "bucket count");
-DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
+DEFINE_double(loadfactor, 0.68, "default loadfactor for turbohash.");
 DEFINE_uint32(probe_type, 0, "\
     0: probe within bucket, \
     1: probe within cell");
@@ -499,7 +499,7 @@ public:
         }
 
     void Run() {
-        max_count_ = FLAGS_bucket_size * FLAGS_associate_size * (FLAGS_cell_type == 0 ? 14 : 28);
+        max_count_ = FLAGS_bucket_size * FLAGS_associate_size * (FLAGS_cell_type == 0 ? 13 : 27);
         max_range_ = max_count_ * FLAGS_loadfactor;
         key_trace_ = new RandomKeyTrace(max_count_);
         PrintHeader();

@@ -23,6 +23,13 @@ int main() {
     }
     printf("inserted %lu kv, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());
 
+    find = 0;
+    for (size_t i = 0 ; i < COUNT && succ; i++) {
+        succ = hashtable->Put("key" + std::to_string(i), "value" + std::to_string(i));
+        if ((succ)) find++;
+    }
+    printf("update %lu kv, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());
+
     auto read_fun = [&hashtable] {
         bool succ = true;
         std::string value;
@@ -48,7 +55,7 @@ int main() {
     hashtable->MinorReHashAll();
     // hashtable->IterateValidBucket();
     // hashtable->IterateBucket(1);
-    // hashtable->PrintAllMeta();
+    // printf("%s\n", hashtable->PrintBucketMeta(1).c_str());
     // hashtable->IterateAll();
     read_fun();
 

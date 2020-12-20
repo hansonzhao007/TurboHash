@@ -69,7 +69,7 @@
 // #define LTHASH_DEBUG_OUT
 
 // Linear probing setting
-static const int kTurboMaxProbeLen = 17;
+static const int kTurboMaxProbeLen = 18;
 static const int kTurboProbeStep   = 1;    
 
 #define TURBO_LIKELY(x)     (__builtin_expect(false || (x), true))
@@ -103,7 +103,7 @@ namespace {
 static inline std::string TURBO_CMD(const std::string& content) {
     std::array<char, 128> buffer;
     std::string result;
-    auto cmd = "echo '" + content + "' >> robin_hood.log";
+    auto cmd = "echo '" + content + "' >> turbo.log";
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
     if (!pipe) {
         throw std::runtime_error("popen() failed!");
@@ -212,6 +212,10 @@ public:
         bits_ = b.bits_;
     }
     
+    inline int validCount(void) {
+        return __builtin_popcount(bits_);
+    }
+
     inline BitSet& operator++() {
         // remove the lowest 1-bit
         bits_ &= (bits_ - 1);
@@ -1104,10 +1108,11 @@ public:
         }
 
         inline static constexpr uint32_t SlotMaxRange() {
-            return 16;
+            // used for rehashing. Though we have 16 slots, one is reserved for update and deletion.
+            return 15;
         }
 
-        inline static constexpr uint32_t SlotSize() {
+        inline static constexpr uint32_t SlotCount() {
             // slot count
             return 14;
         }
@@ -1232,10 +1237,11 @@ public:
         }
 
         inline static constexpr uint32_t SlotMaxRange() {
-            return 32;
+            // used for rehashing. Though we have 32 slots, one is reserved for update and deletion.
+            return 31;
         }
         
-        inline static constexpr uint32_t SlotSize() {
+        inline static constexpr uint32_t SlotCount() {
             // slot count
             return 28;
         }
@@ -1365,10 +1371,11 @@ public:
         }
 
         inline static constexpr uint32_t SlotMaxRange() {
-            return 16;
+            // used for rehashing. Though we have 16 slots, one is reserved for update and deletion.
+            return 15;
         }
         
-        inline static constexpr uint32_t SlotSize() {
+        inline static constexpr uint32_t SlotCount() {
             // slot count
             return 14;
         }
@@ -1503,6 +1510,12 @@ public:
             return ref_;
         }
 
+        // Clear all the content to '0'
+        inline void Reset(void) {
+            size_t space = size_ * CellMeta::CellSize();
+            memset(start_addr_, 0, space);
+        }
+
         inline bool IsHugePage() {
             return is_hugepage_;
         }
@@ -1616,8 +1629,9 @@ public:
             if (free_mem_block_list_.empty()) {
                 AddMemBlock(1);
             }
-            auto res = free_mem_block_list_.front();
+            MemBlock<CellMeta>* res = free_mem_block_list_.front();
             free_mem_block_list_.pop_front();
+            // res->Reset();
             return res;
         }
 
@@ -1777,20 +1791,23 @@ public:
         uint16_t H1;            // hash-tag in HashSlot
         H2Tag    H2;            // hash-tag in CellMeta
         bool equal_key;         // If we find a equal key in this slot
-        SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, H2Tag h2, bool euqal):
+        uint8_t  old_slot;      // if equal_key, this save old slot position
+        SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, H2Tag h2, bool euqal, int os = 0):
             bucket(b),
             cell(a),
             slot(s),                    
             H1(h1),
             H2(h2),
-            equal_key(euqal) {}
+            equal_key(euqal),
+            old_slot(os) {}
         SlotInfo():
             bucket(0),
             cell(0),
             slot(0),                    
             H1(0),
             H2(0),
-            equal_key(false) {}
+            equal_key(false),
+            old_slot(0) {}
         std::string ToString() {
             char buffer[128];
             sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%04x, H1: 0x%04x",
@@ -1945,7 +1962,8 @@ public:
                         *bitmap_ /* slot index*/, 
                         (uint16_t)slot->H1, 
                         H2, 
-                        false}, 
+                        false,
+                        0}, 
                     *slot};
         }
 
@@ -2015,7 +2033,7 @@ public:
     explicit TurboHashTable(uint32_t bucket_count = 128 << 10, uint32_t cell_count = 32):
         bucket_count_(bucket_count),
         bucket_mask_(bucket_count - 1),
-        capacity_(bucket_count * cell_count * CellMeta::SlotSize()) {
+        capacity_( bucket_count * cell_count * (CellMeta::SlotCount() - 1) ) {
         if (!isPowerOfTwo(bucket_count) ||
             !isPowerOfTwo(cell_count)) {
             printf("the hash table size setting is wrong. bucket: %u, cell: %u\n", bucket_count, cell_count);
@@ -2087,7 +2105,7 @@ public:
             old_mem_block_ids[i] = buckets_mem_block_ids_[i];
             buckets_mem_block_ids_[i] = res.first;
             new_mem_block_addr[i] = res.second;
-            capacity_.fetch_add(bucket_meta.CellCount() * CellMeta::SlotSize());
+            capacity_.fetch_add(bucket_meta.CellCount() * (CellMeta::SlotCount() - 1));
         }
 
         // rehash for all the buckets
@@ -2114,16 +2132,16 @@ public:
         {
             t.join();
         });
-        auto rehash_end = util::NowMicros();
-        printf("Real rehash speed: %f Mops/s\n", (double)rehash_count / (rehash_end - rehash_start));
+        double rehash_duration = util::NowMicros() - rehash_start;
+        printf("Real rehash speed: %f Mops/s. entries: %lu, duration: %.2f s.\n", (double)rehash_count / rehash_duration, rehash_count.load(), rehash_duration/1000000.0);
 
         // release the old mem block space
         for (size_t i = 0; i < bucket_count_; ++i) {
             cell_allocator_.ReleaseNoSafe(old_mem_block_ids[i]);
         }
+
         free(old_mem_block_ids);
         free(new_mem_block_addr);
-        printf("Rehash %lu entries\n", rehash_count.load());
     }
 
     // return the cell index and slot index
@@ -2148,11 +2166,12 @@ public:
         return {ai, slot_vec[ai]++};
     }
 
+    
     size_t MinorRehash(int bi, char* new_bucket_addr) {
         size_t count = 0;
         auto& bucket_meta = locateBucket(bi);
 
-        // create new bucket and initialize its meta
+        // Step 1. Create new bucket and initialize its meta
         uint32_t old_cell_count = bucket_meta.CellCount();
         uint32_t new_cell_count      = old_cell_count << 1;
         uint32_t new_cell_count_mask = new_cell_count - 1;
@@ -2164,9 +2183,8 @@ public:
             perror("rehash alloc memory fail\n");
             exit(1);
         }
-        BucketMeta new_bucket_meta(new_bucket_addr, new_cell_count);
-     
-        // reset all cell's meta data
+        BucketMeta new_bucket_meta(new_bucket_addr, new_cell_count);     
+        // Reset all cell's meta data
         for (size_t i = 0; i < new_cell_count; ++i) {
             char* des_cell_addr = new_bucket_addr + (i << kCellSizeLeftShift);
             memset(des_cell_addr, 0, CellMeta::size());
@@ -2177,12 +2195,13 @@ public:
         //       ========>
         // new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444    |
 
-        // record next avaliable slot position of each cell within new bucket for rehash
+        // Step 2. Move the meta in old bucket to new bucket
+        //      a) Record next avaliable slot position of each cell within new bucket for rehash
         uint8_t* slot_vec = (uint8_t*)malloc(new_cell_count);
         memset(slot_vec, CellMeta::StartSlotPos(), new_cell_count);   
         BucketIterator iter(bi, bucket_meta.Address(), bucket_meta.CellCount()); 
-
-        while (iter.valid()) { // iterator every slot in this bucket
+        //      b) Iterate every slot in this bucket
+        while (iter.valid()) { 
             count++;
             // Step 1. obtain old slot info and slot content
             std::pair<SlotInfo, HashSlot> res = *iter;
@@ -2204,9 +2223,18 @@ public:
             // Step 3. to next old slot
             ++iter;
         }
+        //      c) remaining slots' slot pointer to 0 (including the backup slot)
+        for (uint32_t ci = 0; ci < new_cell_count; ++ci) {
+            char* des_cell_addr = new_bucket_addr + (ci << kCellSizeLeftShift);
+            for (uint8_t si = slot_vec[ci]; si <= CellMeta::SlotMaxRange(); si++) {
+                HashSlot* des_slot  = locateSlot(des_cell_addr, si);
+                des_slot->entry = 0;
+                des_slot->H1    = 0;
+            }   
+        }
 
-        // replace old bucket meta in buckets_
-        buckets_[bi].data_ = new_bucket_meta.data_;
+        // Step 3. Reset bucket meta in buckets_
+        buckets_[bi].Reset(new_bucket_addr, new_cell_count);
         
         free(slot_vec);
         return count;
@@ -2349,7 +2377,7 @@ public:
             probe.next();
             count_sum += count;
         }
-        sprintf(buffer, "\tBucket %u: valid slot count: %d. Load factor: %f\n", bucket_i, count_sum, (double)count_sum / (CellMeta::SlotSize() * meta.CellCount()));
+        sprintf(buffer, "\tBucket %u: valid slot count: %d. Load factor: %f\n", bucket_i, count_sum, (double)count_sum / ((CellMeta::SlotCount() - 1) * meta.CellCount()));
         res += buffer;
         return res;
     }
@@ -2425,6 +2453,12 @@ private:
 
         // obtain bitmap and set bitmap
         decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)cell_addr;
+        // if ( true == info.equal_key) {
+        //     *bitmap = ( (*bitmap) | (1 << info.slot) ) & ( ~(1 << info.old_slot) );
+        // }
+        // else {
+        //     *bitmap = (*bitmap) | (1 << info.slot);
+        // }
         *bitmap = (*bitmap) | (1 << info.slot);
     }
 
@@ -2456,9 +2490,9 @@ private:
                     updateSlotAndMeta(cell_addr, res.first, record_addr); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
-                    // if (!res.first.equal_key) {
-                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
-                    // }
+                    if (!res.first.equal_key) {
+                        size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                    }
 
                     return true;
                 }
@@ -2510,6 +2544,7 @@ private:
 
                 if (TURBO_LIKELY(slot.H1 == partial_hash.H1_)) // compare if the H1 partial hash is equal (H1 is 16-byte)
                 {  
+                    // Obtain record pointer
                     RecordPtr record(slot.entry);
 
                     if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first())))
@@ -2535,16 +2570,20 @@ private:
                     }
                 }
             }
-
+            
+            // If there is more than one empty slot, return one.
+            util::BitSet empty_bitset = meta.EmptyBitSet(); 
+            if (empty_bitset.validCount() > 1) { 
+                    // return an empty slot for new insertion            
             // return an empty slot for new insertion
-            auto empty_bitset = meta.EmptyBitSet(); 
-            if (empty_bitset) {                
+                    // return an empty slot for new insertion            
                     return {{   offset.first,           /* bucket */
                                 offset.second,          /* cell */
                                 *empty_bitset,          /* pick a slot, empty_bitset.pickOne() */ 
                                 partial_hash.H1_,       /* H1 */
                                 partial_hash.H2_,       /* H2 */
-                                false /* a new slot */}, 
+                                false                   /* equal_key */
+                                }, 
                             true};                
             }
             
@@ -2565,7 +2604,8 @@ private:
                     0, 
                     partial_hash.H1_, 
                     partial_hash.H2_, 
-                    false /* a new slot */},
+                    false
+                    },
                 false};
     }
     
@@ -2608,8 +2648,9 @@ private:
                 }
             }
 
-            // if this cell still has empty slot, then it means the key does't exist.
-            if (TURBO_LIKELY(meta.EmptyBitSet())) {
+            // If this cell still has more than one empty slot, then it means the key does't exist.
+            util::BitSet empty_bitset = meta.EmptyBitSet();
+            if (empty_bitset.validCount() > 1) {
                 HashSlot empty_slot;
                 return {empty_slot, false};
             }

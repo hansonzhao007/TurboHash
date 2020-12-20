@@ -131,28 +131,31 @@ public:
         read_fun();
 
         printf("Start Rehashing\n");
-        time_start = Env::Default()->NowNanos();
+        time_start = Env::Default()->NowMicros();
         hashtable->MinorReHashAll();
-        time_end   = Env::Default()->NowNanos();
-        printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
+        time_end   = Env::Default()->NowMicros();
+        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
         read_fun();
 
-        time_start = Env::Default()->NowNanos();
+        printf("Start Rehashing\n");
+        time_start = Env::Default()->NowMicros();
         hashtable->MinorReHashAll();
-        time_end   = Env::Default()->NowNanos();
-        printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
+        time_end   = Env::Default()->NowMicros();
+        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
         read_fun();
 
-        time_start = Env::Default()->NowNanos();
+        printf("Start Rehashing\n");
+        time_start = Env::Default()->NowMicros();
         hashtable->MinorReHashAll();
-        time_end   = Env::Default()->NowNanos();
-        printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
+        time_end   = Env::Default()->NowMicros();
+        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
         read_fun();
 
-        time_start = Env::Default()->NowNanos();
+        printf("Start Rehashing\n");
+        time_start = Env::Default()->NowMicros();
         hashtable->MinorReHashAll();
-        time_end   = Env::Default()->NowNanos();
-        printf("rehash speed (%lu entries): %f Mops/s\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start) * 1000.0);
+        time_end   = Env::Default()->NowMicros();
+        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
         read_fun();
 
         // hashtable->DebugInfo();
