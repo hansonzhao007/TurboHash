@@ -528,6 +528,7 @@ public:
         // lock the bit lock
         turbo_bit_spin_lock(lock_, kBitLockPosition);
     }
+
     ~SpinLockScope() {
         // release the bit lock
         turbo_bit_spin_unlock(lock_, kBitLockPosition);
@@ -541,7 +542,7 @@ class AtomicSpinLock {
 public:
     std::atomic<bool> lock_ = {0};
 
-    void lock() noexcept {
+    void inline lock() noexcept {
         for (;;) {
         // Optimistically assume the lock is free on the first try
         if (!lock_.exchange(true, std::memory_order_acquire)) {
@@ -556,14 +557,18 @@ public:
         }
     }
 
-    bool try_lock() noexcept {
+    bool inline is_locked(void) noexcept {
+        return lock_.load(std::memory_order_relaxed);
+    }
+
+    bool inline try_lock() noexcept {
         // First do a relaxed load to check if lock is free in order to prevent
         // unnecessary cache misses if someone does while(!try_lock())
         return !lock_.load(std::memory_order_relaxed) &&
             !lock_.exchange(true, std::memory_order_acquire);
     }
 
-    void unlock() noexcept {
+    void inline unlock() noexcept {
         lock_.store(false, std::memory_order_release);
     }
 }; // end of class AtomicSpinLock
@@ -1527,7 +1532,7 @@ public:
     template <typename CellMeta = CellMeta128, size_t kBucketCellCount = 32768>
     class CellAllocator {
     public:
-        CellAllocator(int initial_blocks = 1):
+        CellAllocator(int initial_blocks = 6):
             cur_mem_block_(nullptr),
             next_id_(0),
             spin_lock_(0) {
@@ -1817,8 +1822,8 @@ public:
     */
     class RecordPtr { 
     public:
-        explicit RecordPtr(uint64_t u64_addr):
-            data_(reinterpret_cast<value_type*>(u64_addr)) {}
+        explicit RecordPtr(uint64_t u64_addr_off):
+            data_(reinterpret_cast<value_type*>(u64_addr_off)) {}
 
         explicit RecordPtr(char* addr):
             data_(reinterpret_cast<value_type*>(addr)) {}
@@ -1845,12 +1850,12 @@ public:
     class BucketMeta {
     public:
         explicit BucketMeta(char* addr, uint16_t cell_count) {
-            data_ = (((uint64_t) addr) << 16) | ((cell_count - 1) << 1);
+            data_ = (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 12);
         }
 
         BucketMeta():
             data_(0) {}
-        
+
         BucketMeta(const BucketMeta& a) {
             data_ = a.data_;
         }
@@ -1860,31 +1865,36 @@ public:
         }
 
         inline uint16_t CellCountMask() {
-            // extract bit [1, 15]
-            return ((data_ & 0xFFFF) >> 1);
+            return CellCount() - 1;
         }
+
         inline uint16_t CellCount() {
-            return  (1 << __builtin_popcount(data_ & 0xFFFE));
-        }
-
-        inline void SetAddress(char* addr) {
-            data_ = (data_ & 0xFFFF) | (((uint64_t)addr) << 16);
-        }
-
-        inline void SetCellCount(uint16_t size) {
-            data_ = (data_ & 0xFFFFFFFFFFFF0001) | ((size - 1) << 1);
+            return  ( 1 << ((data_ >> 12) & 0xF) );
         }
 
         inline void Reset(char* addr, uint16_t cell_count) {
-            data_ = (((uint64_t) addr) << 16) | ((cell_count - 1) << 1);
+            data_ = (data_ & 0x0000000000000FFF) | (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 12);
         }
 
-        // lowest -> highest
-        // | 1 bit lock | 11 bit | 4 bit cell mask | 48 bit address |
-        uint64_t data_;
+        inline void Lock(void) {
+            lock_.lock();
+        }
+
+        inline void Unlock(void) {
+            lock_.unlock();
+        }
+
+        inline bool IsLocked(void) {
+            return lock_.is_locked();
+        }
+
+        // LSB
+        // | 8 bit lock | 4 bit reserved | 4 bit cell mask | 48 bit address |
+        union {
+            util::AtomicSpinLock lock_;
+            uint64_t data_;
+        };
     };
-
-
 
     /** Usage: iterator every slot in the bucket, return the pointer in the slot
      *  BucketIterator<CellMeta> iter(bucket_addr, cell_count_);
@@ -2215,6 +2225,9 @@ public:
         return Mix{}(WHash::operator()(key));
     }
 
+    /** Put
+     *  @note: insert or update a key-value record, return false if fails.
+    */  
     bool Put(const Key& key, const T& value)  {
         // calculate hash value of the key
         size_t hash_value   = KeyToHash(key);
@@ -2226,7 +2239,7 @@ public:
         record->type        = kTypeValue;
         record->Encode(key, value);
 
-        // update DRAM index, thread safe
+        // update index, thread safe
         return insertSlot(key, hash_value, buffer);
     }
     
@@ -2417,10 +2430,18 @@ private:
 
 
     inline bool insertSlot(const Key& key, size_t hash_value, void* record_addr) {
+        PartialHash partial_hash(hash_value);
+
+        // Check if the bucket is locked for rehashing. Wait entil is unlocked.
+        BucketMeta& bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
+        while (bucket_meta.IsLocked()) {
+            TURBO_CPU_RELAX();
+        }
+
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
-
-            std::pair<SlotInfo, bool /* find a slot or not */> res = findSlotForInsert(key, hash_value);
+ 
+            std::pair<SlotInfo, bool /* find a slot or not */> res = findSlotForInsert(key, partial_hash);
 
             if (res.second) { // find a valid slot
                 char* cell_addr = locateCell({res.first.bucket, res.first.cell});
@@ -2470,8 +2491,7 @@ private:
      *          second:  whether we can find a valid (empty or belong to the same key) slot for insertion
      *  ! We cannot insert if the second is false.
     */
-    inline std::pair<SlotInfo, bool> findSlotForInsert(const Key& key, size_t hash_value) {
-        PartialHash partial_hash(hash_value);
+    inline std::pair<SlotInfo, bool> findSlotForInsert(const Key& key, PartialHash& partial_hash) {        
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
         ProbeStrategy probe(partial_hash.H1_, bucket_meta.CellCountMask(), bucket_i);

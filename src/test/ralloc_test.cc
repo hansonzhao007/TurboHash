@@ -43,9 +43,9 @@ int main(int argc, char *argv[])
 {
     ParseCommandLineFlags(&argc, &argv, true);
 
-    printf("Size of Node with pptr pointer: %d\n", sizeof(Node));
+    printf("Size of Node with pptr pointer: %lu\n", sizeof(Node));
 
-    bool res = RP_init("hanson");
+    bool res = RP_init("hanson", 10LU << 30);
 
     if (res) {
         printf("Rmapping, prepare to recover\n");
