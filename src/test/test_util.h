@@ -13,7 +13,9 @@ void GenerateRandomKeys(std::vector<std::string>& res, size_t min, size_t max, s
     util::TraceUniform trace(seeds, min, max);
     
     for (size_t i = 0; i < count; ++i) {
-        res[i] = ("key" + std::to_string(trace.Next()));
+        char buffer[128] = {0};
+        sprintf(buffer, "key%017lu", trace.Next());
+        res[i] = std::string(buffer);
         if ((i & 0xFFFFF) == 0) {
             fprintf(stderr, "generate%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
         }

@@ -717,7 +717,13 @@ public:
     };    
 
     /**
-     *  @note: the Record Lenght
+     *  @note: obtain the Record Lenght
+    */
+    template<bool IsT1Numeric, typename T1>
+    struct Record1Size {};
+
+    /**
+     *  @note: calcuate the Record Lenght
     */
     template<bool IsT1Numeric, typename T1>
     struct Record1Format {};
@@ -742,6 +748,12 @@ public:
      *         |
      *     addr start here
     */
+    template<typename T1>
+    struct Record1Size<true, T1> {
+        static inline size_t Size(char* addr) {
+            return 1 + sizeof(T1);
+        }
+    };
     template<typename T1>
     struct Record1Format<true, T1> {
         static inline constexpr size_t Length(const T1& t1) {
@@ -768,6 +780,13 @@ public:
      *         |
      *     addr start here
     */
+    template<typename T1>
+    struct Record1Size<false, T1> {
+        static inline size_t Size(char* addr) {
+            size_t len1 = *reinterpret_cast<size_t*>(addr);
+            return 1 + sizeof(size_t) + len1;
+        }
+    };
     template<typename T1>
     struct Record1Format<false, T1> {
         static inline size_t Length(const T1& t1) {
@@ -814,11 +833,23 @@ public:
             EncodeToRecord1<std::is_same<T1, std::string>::value == false /* is numeric */, 
                             T1>::Encode(t1, reinterpret_cast<char*>(this) + 1);
         }
+
+        inline size_t Size() {
+            return Record1Size<
+                            std::is_same<T1, std::string>::value == false /* is numeric */,
+                            T1>::Size(reinterpret_cast<char*>(this) + 1);
+        }
     };  // end of class Record1
 
 
     /**
-     *  @note: the Record Lenght
+     *  @note: obtain the Record Lenght
+    */
+    template<bool IsT1Numeric, bool IsT2Numeric, typename T1, typename T2>
+    struct Record2Size {};
+
+    /**
+     *  @note: calculate the Record Lenght
     */
     template<bool IsT1Numeric, bool IsT2Numeric, typename T1, typename T2>
     struct Record2Format {};
@@ -843,6 +874,12 @@ public:
      *         |
      *     addr start here
     */
+    template<typename T1, typename T2>
+    struct Record2Size<true, true, T1, T2> {
+        static inline size_t Size(char* addr) {
+            return 1 + sizeof(T1) + sizeof(T2);
+        }
+    };
     template<typename T1, typename T2>
     struct Record2Format<true, true, T1, T2> {
         static inline constexpr size_t Length(const T1& t1, const T2& t2) {
@@ -873,9 +910,16 @@ public:
      *  * record memory layout:
      *  | type |   T1  |   len2  |   buffer2
      *  |  1B  |       |  size_t |
-     *         |
-     *     addr start here
+     *         |                 |
+     *     addr start here     offset
     */
+    template<typename T1, typename T2>
+    struct Record2Size<true, false, T1, T2> {
+        static inline size_t Size(char* addr) {
+            size_t len2 = *reinterpret_cast<size_t*>(addr + sizeof(T1));
+            return 1 + sizeof(T1) + sizeof(size_t) + len2;
+        }
+    };
     template<typename T1, typename T2>
     struct Record2Format<true, false, T1, T2> {
         static inline size_t Length(const T1& t1, const T2& t2) {
@@ -913,6 +957,13 @@ public:
      *     addr start here
     */
     template<typename T1, typename T2>
+    struct Record2Size<false, true, T1, T2> {
+        static inline size_t Size(char* addr) {
+            size_t len1 = *reinterpret_cast<size_t*>(addr);
+            return 1 + sizeof(size_t) + sizeof(T2) + len1;
+        }
+    };
+    template<typename T1, typename T2>
     struct Record2Format<false, true, T1, T2> {
         static inline size_t Length(const T1& t1, const T2& t2) {
             return 1 + sizeof(size_t) + sizeof(t2) + t1.size();
@@ -949,6 +1000,14 @@ public:
      *         |                 |
      *     addr start here     offset
     */
+    template<typename T1, typename T2>
+    struct Record2Size<false, false, T1, T2> {
+        static inline size_t Size(char* addr) {
+            size_t len1 = *reinterpret_cast<size_t*>(addr);
+            size_t len2 = *reinterpret_cast<size_t*>(addr + sizeof(size_t));
+            return 1 + sizeof(size_t) + sizeof(size_t) + len1 + len2;
+        }
+    };
     template<typename T1, typename T2>
     struct Record2Format<false, false, T1, T2> {
         static inline size_t Length(const T1& t1, const T2& t2) {
@@ -1019,6 +1078,14 @@ public:
                     std::is_same<T1, std::string>::value == false  /* is numeric */, 
                     std::is_same<T2, std::string>::value == false  /* is numeric */,
                     T1, T2>::Encode(t1, t2, reinterpret_cast<char*>(this) + 1);
+        }
+
+        // return the record size
+        inline size_t Size(void) {
+            return Record2Size<
+                    std::is_same<T1, std::string>::value == false  /* is numeric */, 
+                    std::is_same<T2, std::string>::value == false  /* is numeric */,
+                    T1, T2>::Size(reinterpret_cast<char*>(this) + 1);
         }
     }; // end of class Record2
     
@@ -2450,7 +2517,7 @@ private:
         // locate the old slot, update H1 and pointer
         HashSlot* slot  = locateSlot(cell_addr, info.slot);
         if (slot->entry != 0) {
-            // We need to recycle the space pointed by the old slot's entry            
+            // We need to recycle the space pointed by the old slot's entry
             RecordPtr record_ptr(slot->entry);
             TURBO_DEBUG("Free old slot. Key: " << record_ptr->first() << ", Value: " << record_ptr->second());
             record_allocator_.Release((char*)record_ptr.data_ptr_);
