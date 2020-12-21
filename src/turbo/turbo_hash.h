@@ -1135,6 +1135,10 @@ public:
             return buffer;
         }
 
+        std::string ToString() {
+            return BitMapToString();
+        }
+
         std::string print_binary(uint16_t bitmap)
         {
             char buffer[1024];
@@ -1262,6 +1266,9 @@ public:
             memcpy(H2s, &meta_, 32);
             sprintf(buffer, "bitmap: 0b%s - H2: 0x%016lx%016lx%016lx%016lx", print_binary(bitmap_).c_str(), H2s[3], H2s[2], H2s[1], H2s[0]);
             return buffer;
+        }
+        std::string ToString() {
+            return BitMapToString();
         }
 
         std::string print_binary(uint32_t bitmap)
@@ -1396,6 +1403,10 @@ public:
             memcpy(H2s, &meta_, 32);
             sprintf(buffer, "bitmap: 0b%s - H2: 0x%016lx%016lx%016lx%016lx", print_binary(bitmap_).c_str(), H2s[3], H2s[2], H2s[1], H2s[0]);
             return buffer;
+        }
+
+        std::string ToString() {
+            return BitMapToString();
         }
 
         std::string print_binary(uint16_t bitmap)
@@ -1787,27 +1798,27 @@ public:
     public:
         uint32_t bucket;        // bucket index
         uint16_t cell;          // cell index
-        uint8_t  slot;          // slot index        
+        uint8_t  slot;          // slot index  
+        uint8_t  old_slot;      // if equal_key, this save old slot position      
         uint16_t H1;            // hash-tag in HashSlot
         H2Tag    H2;            // hash-tag in CellMeta
-        bool equal_key;         // If we find a equal key in this slot
-        uint8_t  old_slot;      // if equal_key, this save old slot position
+        bool equal_key;         // If we find a equal key in this slot        
         SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, H2Tag h2, bool euqal, int os = 0):
             bucket(b),
             cell(a),
-            slot(s),                    
+            slot(s),
+            old_slot(os),                 
             H1(h1),
             H2(h2),
-            equal_key(euqal),
-            old_slot(os) {}
+            equal_key(euqal) {}
         SlotInfo():
             bucket(0),
             cell(0),
-            slot(0),                    
+            slot(0),            
+            old_slot(0),                  
             H1(0),
             H2(0),
-            equal_key(false),
-            old_slot(0) {}
+            equal_key(false) {}
         std::string ToString() {
             char buffer[128];
             sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%04x, H1: 0x%04x",
@@ -2212,9 +2223,10 @@ public:
             findNextSlotInRehash(slot_vec, res.first.H1, new_cell_count_mask);
             //      b) obtain des cell addr
             char* des_cell_addr = new_bucket_addr + (valid_slot.first << kCellSizeLeftShift);            
-            if (res.first.slot >= CellMeta::SlotMaxRange() || res.first.cell >= new_cell_count) {
+            if (valid_slot.second >= CellMeta::SlotMaxRange()) {                
                 printf("rehash fail: %s\n", res.first.ToString().c_str());
                 TURBO_ERROR("Rehash fail: " << res.first.ToString());
+                printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
                 exit(1);
             }
             //      c) move the slot meta to new bucket
@@ -2453,13 +2465,14 @@ private:
 
         // obtain bitmap and set bitmap
         decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)cell_addr;
-        // if ( true == info.equal_key) {
-        //     *bitmap = ( (*bitmap) | (1 << info.slot) ) & ( ~(1 << info.old_slot) );
-        // }
-        // else {
-        //     *bitmap = (*bitmap) | (1 << info.slot);
-        // }
-        *bitmap = (*bitmap) | (1 << info.slot);
+        if ( true == info.equal_key) {
+            // Set the new slot and toggle the old slot
+            *bitmap = ( (*bitmap) | (1 << info.slot) ) ^ ( 1 << info.old_slot );
+        }
+        else {
+            *bitmap = (*bitmap) | (1 << info.slot);
+        }
+        // *bitmap = (*bitmap) | (1 << info.slot);
     }
 
 
@@ -2477,26 +2490,50 @@ private:
  
             std::pair<SlotInfo, bool /* find a slot or not */> res = findSlotForInsert(key, partial_hash);
 
-            if (res.second) { // find a valid slot
+            // find a valid slot in target cell
+            if (res.second) { 
                 char* cell_addr = locateCell({res.first.bucket, res.first.cell});
                 
                 util::SpinLockScope<0> lock_scope(cell_addr); // Lock current cell
                 
                 CellMeta meta(cell_addr);   // obtain the meta part
                 
-                if (TURBO_LIKELY(   !meta.Occupy(res.first.slot) || // if the slot is not occupied or
-                                    res.first.equal_key)) {         // the slot has same key, update the slot
+                if (TURBO_LIKELY( !meta.Occupy(res.first.slot) )) { // If the new slot from 'findSlotForInsert' is not occupied, We update directly
                     
                     updateSlotAndMeta(cell_addr, res.first, record_addr); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
-                    if (!res.first.equal_key) {
-                        size_.fetch_add(1, std::memory_order_relaxed); // size + 1
-                    }
+                    // if (!res.first.equal_key) {
+                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                    // }
 
                     return true;
-                }
-                else { // current slot has been occupied by another concurrent thread, retry.
+                } else if (res.first.equal_key) {
+                    // If this is an update request and the backup slot is occupied,
+                    // it means the backup slot has changed in current cell. So we 
+                    // update the slot location.
+                    util::BitSet empty_bitset = meta.EmptyBitSet(); 
+                    if (TURBO_UNLIKELY(!empty_bitset)) {
+                        TURBO_ERROR(" Cannot update.");
+                        printf("Cannot update.\n");
+                        exit(1);
+                    }
+                    
+                    res.first.slot = *empty_bitset;
+                    updateSlotAndMeta(cell_addr, res.first, record_addr); // update slot content (including pointer and H1), H2 and bitmap
+                    return true;
+                } else { 
+                    // current new slot has been occupied by another concurrent thread.
+                    
+                    // Before retry 'findSlotForInsert', we try to find if there is any empty slot for insertion
+                    util::BitSet empty_bitset = meta.EmptyBitSet();
+                    if (empty_bitset.validCount() > 1) {
+                        res.first.slot = *empty_bitset;
+                        updateSlotAndMeta(cell_addr, res.first, record_addr); // update slot content (including pointer and H1), H2 and bitmap
+                        return true;
+                    }
+
+                    // Current cell has no empty slot for insertion, we retry 'findSlotForInsert'
                     #ifdef TURBO_ENABLE_LOGGING
                     TURBO_INFO("retry find slot in Bucket " << res.first.bucket <<
                                ". Cell " << res.first.cell <<
@@ -2547,14 +2584,19 @@ private:
                     // Obtain record pointer
                     RecordPtr record(slot.entry);
 
-                    if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first())))
-                    {  // compare if the slot key is equal
+                    if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first()))) {  
+                        // This is an update request
+                        // TURBO_DEBUG( "Update key" << key << "\n" << 
+                        //               meta.ToString());
+                        util::BitSet empty_bitset = meta.EmptyBitSet(); 
                         return {{   offset.first,           /* bucket */
                                     offset.second,          /* cell */
-                                    i,                      /* slot */
+                                    *empty_bitset,          /* new slot */
                                     partial_hash.H1_,       /* H1 */ 
                                     partial_hash.H2_,       /* H2 */
-                                    true},                  /* equal_key */
+                                    true,                   /* equal_key */
+                                    i                       /* old slot */
+                                    },                  
                                 true};
                     }
                     else {                                  // two key is not equal, go to next slot
@@ -2573,9 +2615,7 @@ private:
             
             // If there is more than one empty slot, return one.
             util::BitSet empty_bitset = meta.EmptyBitSet(); 
-            if (empty_bitset.validCount() > 1) { 
-                    // return an empty slot for new insertion            
-            // return an empty slot for new insertion
+            if (empty_bitset.validCount() > 1) {                    
                     // return an empty slot for new insertion            
                     return {{   offset.first,           /* bucket */
                                 offset.second,          /* cell */
