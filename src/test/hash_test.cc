@@ -24,8 +24,8 @@ int main() {
     printf("inserted %lu kv, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());
 
     find = 0;
-    for (size_t i = 0 ; i < COUNT && succ; i++) {
-        succ = hashtable->Put("key" + std::to_string(i), "value" + std::to_string(i));
+    for (size_t i = 0 ; i < 1000 && succ; i++) {
+        succ = hashtable->Put("key" + std::to_string(i), "update.value" + std::to_string(i));
         if ((succ)) find++;
     }
     printf("update %lu kv, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());

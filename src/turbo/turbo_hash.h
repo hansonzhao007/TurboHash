@@ -1851,25 +1851,24 @@ public:
     class RecordPtr { 
     public:
         explicit RecordPtr(uint64_t u64_addr_off):
-            data_(reinterpret_cast<value_type*>(u64_addr_off)) {}
+            data_ptr_(reinterpret_cast<value_type*>(u64_addr_off)) {}
 
         explicit RecordPtr(char* addr):
-            data_(reinterpret_cast<value_type*>(addr)) {}
+            data_ptr_(reinterpret_cast<value_type*>(addr)) {}
 
         const value_type& operator*() const noexcept {
-            return *data_;
+            return *data_ptr_;
         }
 
         value_type const* operator->() const noexcept {
-            return data_;
+            return data_ptr_;
         }
 
         value_type* operator->() noexcept {
-            return data_;
+            return data_ptr_;
         }
 
-        private:
-            value_type* data_;
+        value_type* data_ptr_;
     };
 
     /** BucketMeta
@@ -2053,7 +2052,7 @@ public:
 
         size_t bucket_meta_space = bucket_count * sizeof(BucketMeta);
         size_t bucket_meta_space_huge = (bucket_meta_space + TURBO_HUGEPAGE_SIZE - 1) / TURBO_HUGEPAGE_SIZE * TURBO_HUGEPAGE_SIZE;
-        printf("BucketMeta space required: %lu. ", bucket_meta_space);
+        TURBO_INFO("BucketMeta space required: " << bucket_meta_space);
         
         BucketMeta* buckets_addr = (BucketMeta*) mmap(TURBO_HUGE_ADDR, bucket_meta_space_huge, TURBO_HUGE_PROTECTION, TURBO_HUGE_FLAGS, -1, 0);
         if (buckets_addr == MAP_FAILED) {
@@ -2062,11 +2061,11 @@ public:
                 fprintf(stderr, "malloc %lu space fail.\n", bucket_meta_space);
                 exit(1);
             }
-            printf(" Allocated: %lu\n", bucket_meta_space);
+            TURBO_INFO(" Allocated: " << bucket_meta_space);
             memset(buckets_addr, 0, bucket_meta_space);
         }
         else {
-            printf(" Allocated: %lu\n", bucket_meta_space_huge);
+            TURBO_INFO(" Allocated: " << bucket_meta_space_huge);
             memset(buckets_addr, 0, bucket_meta_space_huge);
         }
         
@@ -2078,7 +2077,7 @@ public:
             buckets_[i].Reset(res.second, cell_count);
             buckets_mem_block_ids_[i] = res.first;
         }
-        
+
     }
 
     void DebugInfo()  {
@@ -2234,8 +2233,8 @@ public:
 
             // Step 3. to next old slot
             ++iter;
-        }
-        //      c) remaining slots' slot pointer to 0 (including the backup slot)
+        }        
+        //      c) set remaining slots' slot pointer to 0 (including the backup slot)
         for (uint32_t ci = 0; ci < new_cell_count; ++ci) {
             char* des_cell_addr = new_bucket_addr + (ci << kCellSizeLeftShift);
             for (uint8_t si = slot_vec[ci]; si <= CellMeta::SlotMaxRange(); si++) {
@@ -2448,10 +2447,16 @@ private:
     
     // set bitmap, 1 byte (or 2 byte) H2, 2 byte H1, 6 byte pointer
     inline void updateSlotAndMeta(char* cell_addr, const SlotInfo& info, void* record_addr) {
-        // set H1 and pointer
-        HashSlot* slot_pos  = locateSlot(cell_addr, info.slot);
-        slot_pos->entry     = reinterpret_cast<uint64_t>(record_addr); /* transform to 8-byte UL */
-        slot_pos->H1        = info.H1;
+        // locate the old slot, update H1 and pointer
+        HashSlot* slot  = locateSlot(cell_addr, info.slot);
+        if (slot->entry != 0) {
+            // We need to recycle the space pointed by the old slot's entry            
+            RecordPtr record_ptr(slot->entry);
+            TURBO_DEBUG("Free old slot. Key: " << record_ptr->first() << ", Value: " << record_ptr->second());
+            record_allocator_.Release((char*)record_ptr.data_ptr_);
+        }
+        slot->entry     = reinterpret_cast<uint64_t>(record_addr); /* transform to 8-byte UL */
+        slot->H1        = info.H1;
        
         // set H2
         H2Tag* h2_tag_ptr   = locateH2Tag(cell_addr, info.slot);
@@ -2466,10 +2471,11 @@ private:
         // obtain bitmap and set bitmap
         decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)cell_addr;
         if ( true == info.equal_key) {
-            // Set the new slot and toggle the old slot
+            // Update: set the new slot and toggle the old slot
             *bitmap = ( (*bitmap) | (1 << info.slot) ) ^ ( 1 << info.old_slot );
         }
         else {
+            // Insertion: set the new slot
             *bitmap = (*bitmap) | (1 << info.slot);
         }
         // *bitmap = (*bitmap) | (1 << info.slot);
