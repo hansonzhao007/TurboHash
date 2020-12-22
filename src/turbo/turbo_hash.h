@@ -2370,6 +2370,18 @@ public:
         return false;
     }
 
+    bool Probe(const Key& key)  {
+        // calculate hash value of the key
+        size_t hash_value = KeyToHash(key);
+
+        auto res = probeFirstSlot(key, hash_value);
+        if (res.second) {
+            // probe a key having same H2 and H1 tag
+            return true;
+        }
+        return false;
+    }
+
     bool Find(const Key& key, uint64_t& data_offset)  {
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
@@ -2747,17 +2759,54 @@ private:
                         return {slot, true};
                     }
                     else {
-                        #ifdef LTHASH_DEBUG_OUT
-                        std::cout << "H1 conflict. Slot (" << offset.first 
-                                    << " - " << offset.second 
-                                    << " - " << i
-                                    << ") bitmap: " << meta.BitMapToString() 
-                                    << ". Insert key: " << key 
-                                    <<  ". Hash: 0x" << std::hex << hash_value << std::dec
-                                    << " , Slot key: " << record->first() << std::endl;                        
-                        #endif
+                        // TURBO_INFO("H1 conflict. Slot (" << offset.first 
+                        //             << " - " << offset.second 
+                        //             << " - " << i
+                        //             << ") bitmap: " << meta.BitMapToString() 
+                        //             << ". Insert key: " << key 
+                        //             <<  ". Hash: 0x" << std::hex << hash_value << std::dec
+                        //             << " , Slot key: " << record->first()
+                        //             );
                     }
                     
+                }
+            }
+
+            // If this cell still has more than one empty slot, then it means the key does't exist.
+            util::BitSet empty_bitset = meta.EmptyBitSet();
+            if (empty_bitset.validCount() > 1) {
+                HashSlot empty_slot;
+                return {empty_slot, false};
+            }
+            
+            probe.next();
+        }
+        
+        // after all the probe, no key exist
+        HashSlot empty_slot;
+        return {empty_slot, false};
+    }
+
+    inline std::pair<HashSlot, bool> probeFirstSlot(const Key& key, size_t hash_value) {
+        PartialHash partial_hash(hash_value);
+        uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
+        auto& bucket_meta = locateBucket(bucket_i);
+        ProbeStrategy probe(partial_hash.H1_,  bucket_meta.CellCountMask(), bucket_i);
+
+        int probe_count = 0; // limit probe times
+        while (probe && (probe_count++ < ProbeStrategy::MAX_PROBE_LEN)) {
+            auto offset = probe.offset();
+            char* cell_addr = locateCell(offset);
+            CellMeta meta(cell_addr);
+            
+            for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell
+                                                                // i is the slot index in current cell, each slot occupies 8-byte
+                // locate the slot reference
+                const HashSlot& slot = *locateSlot(cell_addr, i);
+
+                if (TURBO_LIKELY(slot.H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
+                {
+                    return {slot, true};
                 }
             }
 

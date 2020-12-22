@@ -52,6 +52,9 @@ public:
     ~RandomKeyTrace() {
     }
 
+    void Randomize(void) {
+        std::random_shuffle(keys_.begin(), keys_.end());
+    }
     class Iterator {
     public:
         Iterator(std::vector<std::string>* pkey_vec, size_t start_index, size_t range):

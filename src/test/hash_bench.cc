@@ -27,16 +27,12 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 using namespace util;
 
 // For hash table 
+DEFINE_bool(no_rehash, true, "control hash table do not do rehashing during insertion");
 DEFINE_uint32(associate_size, 64, "");
 DEFINE_uint32(bucket_size, 128 << 10, "bucket count");
 DEFINE_double(loadfactor, 0.68, "default loadfactor for turbohash.");
-DEFINE_uint32(probe_type, 0, "\
-    0: probe within bucket, \
-    1: probe within cell");
-DEFINE_uint32(cell_type, 0, "\
-    0: 128 byte cell, \
-    1: 256 byte cell");
     
+
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
 DEFINE_uint32(thread, 1, "");
 DEFINE_uint64(report_interval, 0, "Report interval in seconds");
@@ -55,19 +51,6 @@ DEFINE_string(benchmarks, "fillrandom,readrandom", "");
 // package.
 namespace {
 
-
-// turbo::HashTable* HashTableCreate(int cell_type, int probe_type, int bucket, int associate) {
-//     if (0 == cell_type && 0 == probe_type)
-//         return new turbo::detail::TurboHashTable<turbo::detail::CellMeta128, turbo::detail::ProbeWithinBucket>(bucket, associate);
-//     if (0 == cell_type && 1 == probe_type)
-//         return new turbo::detail::TurboHashTable<turbo::detail::CellMeta128, turbo::detail::ProbeWithinCell>(bucket, associate);
-//     if (1 == cell_type && 0 == probe_type)
-//         return new turbo::detail::TurboHashTable<turbo::detail::CellMeta256, turbo::detail::ProbeWithinBucket>(bucket, associate);
-//     if (1 == cell_type && 1 == probe_type)
-//         return new turbo::detail::TurboHashTable<turbo::detail::CellMeta256, turbo::detail::ProbeWithinCell>(bucket, associate);
-//     else
-//         return new turbo::detail::TurboHashTable<turbo::detail::CellMeta128, turbo::detail::ProbeWithinBucket>(bucket, associate);
-// }
 class Random {
 private:
     uint32_t seed_;
@@ -487,7 +470,6 @@ public:
     size_t writes_;
     turbo::unordered_map<std::string, std::string>* hashtable_;
     RandomKeyTrace* key_trace_;
-    size_t max_count_;
     size_t max_range_;
     Benchmark():
         num_(FLAGS_num),
@@ -499,9 +481,17 @@ public:
         }
 
     void Run() {
-        max_count_ = FLAGS_bucket_size * FLAGS_associate_size * (FLAGS_cell_type == 0 ? 13 : 27);
-        max_range_ = max_count_ * FLAGS_loadfactor;
-        key_trace_ = new RandomKeyTrace(max_count_);
+        size_t capacity = FLAGS_bucket_size * FLAGS_associate_size * 13;
+        size_t ingest_count = capacity * FLAGS_loadfactor;
+
+        // If do not rehash, we control the distinct key to the minimum between the FLAGS_num and the rehash threshold.
+        if (FLAGS_no_rehash) {
+            max_range_ = std::min(FLAGS_num, ingest_count);
+        } else {
+            max_range_ = FLAGS_num;
+        }
+
+        key_trace_ = new RandomKeyTrace(max_range_);
         PrintHeader();
         bool fresh_db = true;
         // run benchmark
@@ -524,7 +514,12 @@ public:
                 method = &Benchmark::DoWrite;                
             } else if (name == "readrandom") {
                 fresh_db = false;
+                key_trace_->Randomize();
                 method = &Benchmark::DoRead;                
+            } else if (name == "proberandom") {
+                fresh_db = false;
+                key_trace_->Randomize();
+                method = &Benchmark::DoProbe;
             }
 
             if (fresh_db) {
@@ -535,6 +530,32 @@ public:
         }
     }
 
+    void DoProbe(ThreadState* thread) {
+        INFO("DoProbe");
+        uint64_t batch = 1000000;
+        if (key_trace_ == nullptr) {
+            ERROR("DoProbe lack key_trace_ initialization.");
+            return;
+        }
+        size_t start_offset = random() % max_range_;
+        auto key_iterator = key_trace_->trace_at(start_offset, max_range_);
+        size_t not_find = 0;
+        uint64_t data_offset;
+        Duration duration(FLAGS_readtime, num_);
+        thread->stats.Start();
+        while (!duration.Done(batch)) {
+            for (uint64_t j = 0; j < batch; j++) {                
+                bool res = hashtable_->Probe(key_iterator.Next());
+                if (unlikely(!res)) {
+                    not_find++;
+                }
+            }
+            thread->stats.FinishedBatchOp(batch);
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(num: %lu, not probed: %lu)", num_, not_find);
+        thread->stats.AddMessage(buf);
+    }
 
     void DoRead(ThreadState* thread) {
         INFO("DoRead");
