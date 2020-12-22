@@ -60,13 +60,12 @@ int main() {
         size_t i;
         
         for (i = 0; key_iterator.Valid(); i++) {
-            const std::string& k = key_iterator.Next();
+            size_t k = key_iterator.Next();
             if ((i & 0xFFFFF) == 0) {
-                fprintf(stderr, "iteration %*s-%03d->. key: %s\r", int(i >> 20), " ", int(i >> 20), k.c_str());fflush(stderr);
+                fprintf(stderr, "iteration %*s-%03d->. key: %lu\r", int(i >> 20), " ", int(i >> 20), k);fflush(stderr);
             }
         }
         time_end = Env::Default()->NowMicros();
-        printf("string final: %s\n", key_iterator.Next().c_str());
         duration = (time_end - time_start);
         printf("RandomKeyTrace speed (%lu record): %f Mops/s\n", i, i / duration);
     }

@@ -37,7 +37,7 @@ DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
 DEFINE_uint32(thread, 1, "");
 DEFINE_uint64(report_interval, 0, "Report interval in seconds");
 DEFINE_uint64(stats_interval, 10000000, "Report interval in ops");
-DEFINE_uint64(value_size, 1, "The value size");
+DEFINE_uint64(value_size, 8, "The value size");
 DEFINE_uint64(num, 100 * 1000000LU, "Number of record to operate");
 DEFINE_uint64(read,  100000000, "Number of read operations");
 DEFINE_uint64(write, 100000000, "Number of read operations");
@@ -468,7 +468,7 @@ public:
     int value_size_;
     size_t reads_;
     size_t writes_;
-    turbo::unordered_map<std::string, std::string>* hashtable_;
+    turbo::unordered_map<size_t, std::string>* hashtable_;
     RandomKeyTrace* key_trace_;
     size_t max_range_;
     Benchmark():
@@ -523,7 +523,7 @@ public:
             }
 
             if (fresh_db) {
-                hashtable_ = new turbo::unordered_map<std::string, std::string>(FLAGS_bucket_size, FLAGS_associate_size);                
+                hashtable_ = new turbo::unordered_map<size_t, std::string>(FLAGS_bucket_size, FLAGS_associate_size);                
             }
             
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
@@ -544,7 +544,7 @@ public:
         Duration duration(FLAGS_readtime, num_);
         thread->stats.Start();
         while (!duration.Done(batch)) {
-            for (uint64_t j = 0; j < batch; j++) {                
+            for (uint64_t j = 0; j < batch; j++) {         
                 bool res = hashtable_->Probe(key_iterator.Next());
                 if (unlikely(!res)) {
                     not_find++;
@@ -569,9 +569,9 @@ public:
         size_t not_find = 0;
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, num_);
-        thread->stats.Start();
+        thread->stats.Start();        
         while (!duration.Done(batch)) {
-            for (uint64_t j = 0; j < batch; j++) {                
+            for (uint64_t j = 0; j < batch; j++) {                          
                 bool res = hashtable_->Find(key_iterator.Next(), data_offset);
                 if (unlikely(!res)) {
                     not_find++;
@@ -597,7 +597,7 @@ public:
         thread->stats.Start();
         std::string val(value_size_, 'v');
         for (uint64_t i = 0; i < num_; i += batch ) {
-            for (uint64_t j = 0; j < batch; j++) {                
+            for (uint64_t j = 0; j < batch; j++) {   
                 bool res = hashtable_->Put(key_iterator.Next(), val);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
@@ -723,7 +723,7 @@ private:
     void PrintHeader() {
         fprintf(stdout, "------------------------------------------------\n");
         PrintEnvironment();
-        fprintf(stdout, "Keys:              %d bytes each\n", (int)key_trace_->KeySize());
+        fprintf(stdout, "Keys:              %d bytes each\n", 8);
         fprintf(stdout, "Values:            %d bytes each\n", (int)FLAGS_value_size);
         fprintf(stdout, "Entries:           %lu\n", (uint64_t)num_);
         fprintf(stdout, "Read:              %lu \n", (uint64_t)FLAGS_read);

@@ -69,23 +69,23 @@ public:
     size_t TestRehash() {
         size_t inserted_num = 0;
         util::Stats stats;
-        turbo::unordered_map<std::string, std::string>* hashtable = new turbo::unordered_map<std::string, std::string>(FLAGS_bucket_size, FLAGS_associate_size);
+        turbo::unordered_map<size_t, std::string> hashtable(FLAGS_bucket_size, FLAGS_associate_size);
         uint64_t i = 0;
         bool res = true;
         auto key_iterator = key_trace_.trace_at(0, max_count_);
         
         auto time_start = Env::Default()->NowNanos();
         while (res && i < max_count_) {
-            res = hashtable->Put(key_iterator.Next(), value_);
+            res = hashtable.Put(key_iterator.Next(), value_);
             if ((i++ & 0xFFFFF) == 0) {
                 fprintf(stderr, "insert%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
             }
         }
         auto time_end = Env::Default()->NowNanos();
         printf("Total put: %lu\n", i - 1);
-        std::string name = "turbo:" + hashtable->ProbeStrategyName();
+        std::string name = "turbo:" + hashtable.ProbeStrategyName();
         inserted_num = i - 1;
-        PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), inserted_num, time_end - time_start, false);
+        PrintSpeed(name, hashtable.LoadFactor(), hashtable.Size(), inserted_num, time_end - time_start, false);
         
         auto read_fun = [&]{
             std::vector<std::thread> workers(FLAGS_thread_read);
@@ -106,7 +106,7 @@ public:
                     if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
                     auto key_iterator = key_trace_.trace_at(start_offset, inserted_num);
                     while (kRunning && key_iterator.Valid() && res) {
-                        res = hashtable->Find(key_iterator.Next(), data_offset);
+                        res = hashtable.Find(key_iterator.Next(), data_offset);
                         if ((i++ & 0xFFFFF) == 0) {
                             fprintf(stderr, "thread: %2d reading%*s-%03d->\r", t,  int(i >> 20), " ", int(i >> 20));fflush(stderr);
                         }
@@ -121,53 +121,52 @@ public:
             });
             auto time_end = Env::Default()->NowNanos();
             size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
-            PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), read_count, time_end - time_start, true);
+            PrintSpeed(name, hashtable.LoadFactor(), hashtable.Size(), read_count, time_end - time_start, true);
             if (FLAGS_print_thread_read)
                 for(int i = 0; i < FLAGS_thread_read; i++) {
                     printf("thread %2d read: %10lu\n", i, counts[i]);
                 }
-            // printf("%s\n", hashtable->PrintCellAllocator().c_str());
+            // printf("%s\n", hashtable.PrintCellAllocator().c_str());
         };
         read_fun();
 
         printf("Start Rehashing\n");
         time_start = Env::Default()->NowMicros();
-        hashtable->MinorReHashAll();
+        hashtable.MinorReHashAll();
         time_end   = Env::Default()->NowMicros();
-        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
+        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable.Size(), (double)hashtable.Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
         read_fun();
 
         printf("Start Rehashing\n");
         time_start = Env::Default()->NowMicros();
-        hashtable->MinorReHashAll();
+        hashtable.MinorReHashAll();
         time_end   = Env::Default()->NowMicros();
-        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
+        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable.Size(), (double)hashtable.Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
         read_fun();
 
         printf("Start Rehashing\n");
         time_start = Env::Default()->NowMicros();
-        hashtable->MinorReHashAll();
+        hashtable.MinorReHashAll();
         time_end   = Env::Default()->NowMicros();
-        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
+        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable.Size(), (double)hashtable.Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
         read_fun();
 
         printf("Start Rehashing\n");
         time_start = Env::Default()->NowMicros();
-        hashtable->MinorReHashAll();
+        hashtable.MinorReHashAll();
         time_end   = Env::Default()->NowMicros();
-        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable->Size(), (double)hashtable->Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
+        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable.Size(), (double)hashtable.Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
         read_fun();
 
-        // hashtable->DebugInfo();
-        delete hashtable;
+        // hashtable.DebugInfo();
         return inserted_num;
     }
 
 
     size_t TurboHashSpeedTest() {
         util::Stats stats;
-        turbo::unordered_map<std::string, std::string>* hashtable = new turbo::unordered_map<std::string, std::string>(FLAGS_bucket_size, FLAGS_associate_size);
-        std::string name = "turbo:" + hashtable->ProbeStrategyName();
+        turbo::unordered_map<size_t, std::string> hashtable(FLAGS_bucket_size, FLAGS_associate_size);
+        std::string name = "turbo:" + hashtable.ProbeStrategyName();
         size_t max_range = max_count_ * FLAGS_loadfactor;
         {
             std::vector<std::thread> workers(FLAGS_thread_write);
@@ -182,7 +181,7 @@ public:
                     size_t start_offset = random() % max_range;
                     auto key_iterator = key_trace_.trace_at(start_offset, max_range);
                     while (res && i < max_range) {
-                        res = hashtable->Put(key_iterator.Next(), value_);
+                        res = hashtable.Put(key_iterator.Next(), value_);
                         if ((i++ & 0xFFFFF) == 0) {
                             fprintf(stderr, "thread: %2d inserting%*s-%03d->\r", t, int(i >> 20), " ", int(i >> 20));fflush(stderr);
                         }
@@ -197,7 +196,7 @@ public:
             auto time_end = Env::Default()->NowNanos();
             size_t write_count = std::accumulate(counts.begin(), counts.end(), 0);
             printf("Total put: %lu\n", write_count);
-            PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), write_count, time_end - time_start, false);
+            PrintSpeed(name, hashtable.LoadFactor(), hashtable.Size(), write_count, time_end - time_start, false);
             
         }
 
@@ -220,7 +219,7 @@ public:
                         if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
                         auto key_iterator = key_trace_.trace_at(start_offset, max_range);
                         while (kRunning && key_iterator.Valid() && res) {
-                            res = hashtable->Find(key_iterator.Next(), data_offset);
+                            res = hashtable.Find(key_iterator.Next(), data_offset);
                             if ((i++ & 0xFFFFF) == 0) {
                                 fprintf(stderr, "thread: %2d reading%*s-%03d->\r", t,  int(i >> 20), " ", int(i >> 20));fflush(stderr);
                             }
@@ -235,7 +234,7 @@ public:
                 });
                 auto time_end = Env::Default()->NowNanos();
                 size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
-                PrintSpeed(name, hashtable->LoadFactor(), hashtable->Size(), read_count, time_end - time_start, true);
+                PrintSpeed(name, hashtable.LoadFactor(), hashtable.Size(), read_count, time_end - time_start, true);
                 if (FLAGS_print_thread_read)
                 for(int i = 0; i < FLAGS_thread_read; i++) {
                     printf("thread %2d read: %10lu\n", i, counts[i]);
@@ -244,7 +243,6 @@ public:
             read_fun();
         }
 
-        delete hashtable;
         return max_range;
     }
     
