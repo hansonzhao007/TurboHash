@@ -2156,11 +2156,11 @@ public:
                 exit(1);
             }
             TURBO_INFO(" Allocated: " << bucket_meta_space);
-            memset(buckets_addr, 0, bucket_meta_space);
+            memset((void*)buckets_addr, 0, bucket_meta_space);
         }
         else {
             TURBO_INFO(" Allocated: " << bucket_meta_space_huge);
-            memset(buckets_addr, 0, bucket_meta_space_huge);
+            memset((void*)buckets_addr, 0, bucket_meta_space_huge);
         }
         #else
         buckets_addr = (BucketMeta* ) aligned_alloc(sizeof(BucketMeta), bucket_meta_space);
@@ -2659,9 +2659,9 @@ private:
                     insertToSlotAndRecycle(type, key, value, cell_addr, res.first); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
-                    // if (!res.first.equal_key) {
-                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
-                    // }
+                    if (!res.first.equal_key) {
+                        size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                    }
 
                     return true;
                 } else if (res.first.equal_key) {
@@ -2703,7 +2703,7 @@ private:
             else { // cannot find a valid slot for insertion, rehash current bucket then retry
                 #ifdef TURBO_ENABLE_LOGGING
                 TURBO_INFO("=========== Need Rehash Bucket " << res.first.bucket << " ==========");   
-                TURBO_INFO(PrintBucketMeta(res.first.bucket));              
+                TURBO_INFO(PrintBucketMeta(res.first.bucket));           
                 #endif
 
                 break;

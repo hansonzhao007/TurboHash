@@ -110,7 +110,7 @@ int main() {
         }
 
         for (int i = 0; i < 100; i++) {
-            double val;
+            double val = 0;
             bool res = mapi.Get("key" + std::to_string(i), &val);
             if (res == false) {
                 printf("Fail get\n");

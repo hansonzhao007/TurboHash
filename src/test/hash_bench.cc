@@ -5,7 +5,10 @@
 #include <libcuckoo/cuckoohash_map.hh>
 #endif
 
+/* --------- Different HashTable --------*/
 #include "turbo/turbo_hash.h"
+#include "util/robin_hood.h"
+#include "absl/container/flat_hash_map.h"
 
 #include "util/env.h"
 #include "util/robin_hood.h"
@@ -487,6 +490,12 @@ public:
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", num_, not_find);
         INFO("DoRead thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, num_, not_find);
         thread->stats.AddMessage(buf);
+    }
+
+    
+    void DoCompare(ThreadState* thread) {
+        // TurboHash
+        
     }
 
     void DoWrite(ThreadState* thread) {

@@ -24,33 +24,29 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 using namespace util;
 
+
 // ./hash_bench_old --thread_write=8 --thread_read=8
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
-DEFINE_bool(print_thread_read, false, "");
+DEFINE_uint64(num, 60 * 1000000, "");
+DEFINE_bool(print_thread_read, true, "");
 DEFINE_int32(thread_read, 1, "");
 DEFINE_int32(thread_write, 1, "");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 DEFINE_int32(associate_size, 64, "");
 DEFINE_int32(bucket_size, 128 << 10, "bucket count");
-DEFINE_int32(probe_type, 0, "\
-    0: probe within bucket, \
-    1: probe within cell");
-DEFINE_int32(cell_type, 0, "\
-    0: 128 byte cell, \
-    1: 256 byte cell");
-DEFINE_bool(locate_cell_with_h1, false, "using partial hash h1 to locate cell inside bucket or not");
-
-DEFINE_int32(value_size, 1, "default value size");
+DEFINE_int32(value_size, 48, "default value size");
 // use numactl --hardware command to check numa node info
 // static int kThreadIDs[16] = {16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7 };
 
+typedef turbo::unordered_map<size_t, std::string> TurboHash;
+
 class HashBench {
 public:
-    HashBench(size_t bucket_count, size_t assocaite_count, size_t cell_type, int value_size):
-        max_count_(bucket_count * assocaite_count * (cell_type == 0 ? 13 : 27) * FLAGS_loadfactor),
+    HashBench(size_t bucket_count, size_t assocaite_count, int value_size):
+        max_count_(FLAGS_num),
         key_trace_(max_count_),
         value_(value_size, 'v') {
-        arm_sig_int();
+        // arm_sig_int();
         signal(SIGALRM, &sigalrm_handler);  // set a signal handler
     }
 
@@ -82,11 +78,10 @@ public:
             }
         }
         auto time_end = Env::Default()->NowNanos();
-        printf("Total put: %lu\n", i - 1);
+        printf("Total put: %lu\n", i);
         std::string name = "turbo:" + hashtable.ProbeStrategyName();
-        inserted_num = i - 1;
+        inserted_num = i;
         PrintSpeed(name, hashtable.LoadFactor(), hashtable.Size(), inserted_num, time_end - time_start, false);
-        
         
         auto read_fun = [&]{
             key_trace_.Randomize();
@@ -383,14 +378,14 @@ int main(int argc, char *argv[]) {
     debug_perf_ppid();
     ParseCommandLineFlags(&argc, &argv, true);
 
-    HashBench hash_bench(FLAGS_bucket_size, FLAGS_associate_size, FLAGS_cell_type, FLAGS_value_size);
+    HashBench hash_bench(FLAGS_bucket_size, FLAGS_associate_size, FLAGS_value_size);
     size_t inserted_num = 0;
     // inserted_num = hash_bench.TurboHashSpeedTest();
     // printf("Inserted: %lu\n", inserted_num);
     inserted_num = hash_bench.TestRehash();
-    hash_bench.HashSpeedTest<robin_hood::unordered_map<size_t, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
-    hash_bench.HashSpeedTest<absl::flat_hash_map<size_t, std::string>, std::string >("absl::flat_hash_map", inserted_num);
-    hash_bench.HashSpeedTest<std::unordered_map<size_t, std::string>, std::string >("std::unordered_map", inserted_num);
+    hash_bench.HashSpeedTest<robin_hood::unordered_map<size_t, std::string>, std::string >("robin_hood::unordered_map", FLAGS_num);
+    hash_bench.HashSpeedTest<absl::flat_hash_map<size_t, std::string>, std::string >("absl::flat_hash_map", FLAGS_num);
+    hash_bench.HashSpeedTest<std::unordered_map<size_t, std::string>, std::string >("std::unordered_map", FLAGS_num);
     // hash_bench.CuckooSpeedTest("CuckooHashMap", inserted_num);
     return 0;
 }
