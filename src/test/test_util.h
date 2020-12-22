@@ -44,7 +44,7 @@ class RandomKeyTrace {
 public:
     RandomKeyTrace(size_t count) {
         count_ = count;
-        GenerateRandomKeys(keys_, 0, 3000000000L, count_);
+        GenerateRandomKeys(keys_, 0, 100000000000L, count_);
     }
 
     ~RandomKeyTrace() {

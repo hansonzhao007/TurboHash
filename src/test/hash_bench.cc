@@ -29,7 +29,7 @@ using namespace util;
 // For hash table 
 DEFINE_bool(no_rehash, true, "control hash table do not do rehashing during insertion");
 DEFINE_uint32(associate_size, 64, "");
-DEFINE_uint32(bucket_size, 128 << 10, "bucket count");
+DEFINE_uint32(bucket_size, 256 << 10, "bucket count");
 DEFINE_double(loadfactor, 0.68, "default loadfactor for turbohash.");
     
 
@@ -726,6 +726,7 @@ private:
         fprintf(stdout, "Keys:              %d bytes each\n", 8);
         fprintf(stdout, "Values:            %d bytes each\n", (int)FLAGS_value_size);
         fprintf(stdout, "Entries:           %lu\n", (uint64_t)num_);
+        fprintf(stdout, "Max Range:         %lu\n", (uint64_t)max_range_);
         fprintf(stdout, "Read:              %lu \n", (uint64_t)FLAGS_read);
         fprintf(stdout, "Write:             %lu \n", (uint64_t)FLAGS_write);
         fprintf(stdout, "Thread:            %lu \n", (uint64_t)FLAGS_thread);

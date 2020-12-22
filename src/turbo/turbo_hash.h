@@ -2851,9 +2851,8 @@ template <typename Key, typename T, typename Hash = hash<Key>,
 using unordered_map = detail::TurboHashTable<Key, T, Hash, typename std::conditional< std::is_same<Key, std::string>::value == false /* is numeric */, 
                                                                                         KeyEqual, 
                                                                                         std::equal_to<util::Slice> >::type,
-                                            0, 0, 32768>;
+                                            2, 0, 32768>;
 
 }; // end of namespace turbo
 
 #endif
-                                                              
