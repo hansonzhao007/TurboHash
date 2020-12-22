@@ -42,17 +42,20 @@ std::string* GenerateAllKeysInRange(size_t min, size_t max) {
 
 class RandomKeyTrace {
 public:
-    RandomKeyTrace(size_t count) {
+    RandomKeyTrace(size_t count, int seed = random()) {
         count_ = count;
-        GenerateRandomKeys(keys_, 0, 100000000000L, count_);
+        GenerateRandomKeys(keys_, 0, 100000000000L, count_, seed);
     }
 
     ~RandomKeyTrace() {
     }
 
     void Randomize(void) {
+        printf("Randomize the trace...\r");
+        fflush(nullptr);
         std::random_shuffle(keys_.begin(), keys_.end());
     }
+    
     class Iterator {
     public:
         Iterator(std::vector<size_t>* pkey_vec, size_t start_index, size_t range):
@@ -93,6 +96,10 @@ public:
 
     Iterator trace_at(size_t start_index, size_t range) {
         return Iterator(&keys_, start_index, range);
+    }
+
+    Iterator Begin(void) {
+        return Iterator(&keys_, 0, keys_.size());
     }
 
     size_t count_;

@@ -28,17 +28,16 @@ using namespace util;
 
 // For hash table 
 DEFINE_bool(no_rehash, true, "control hash table do not do rehashing during insertion");
-DEFINE_uint32(associate_size, 64, "");
-DEFINE_uint32(bucket_size, 256 << 10, "bucket count");
-DEFINE_double(loadfactor, 0.68, "default loadfactor for turbohash.");
-    
+DEFINE_uint32(cell_count, 64, "");
+DEFINE_uint32(bucket_count, 256 << 10, "bucket count");
+DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
 DEFINE_uint32(thread, 1, "");
 DEFINE_uint64(report_interval, 0, "Report interval in seconds");
 DEFINE_uint64(stats_interval, 10000000, "Report interval in ops");
 DEFINE_uint64(value_size, 8, "The value size");
-DEFINE_uint64(num, 100 * 1000000LU, "Number of record to operate");
+DEFINE_uint64(num, 100 * 1000000LU, "Number of total record");
 DEFINE_uint64(read,  100000000, "Number of read operations");
 DEFINE_uint64(write, 100000000, "Number of read operations");
 
@@ -46,114 +45,9 @@ DEFINE_bool(hist, false, "");
 
 DEFINE_string(benchmarks, "fillrandom,readrandom", "");
 
-// A very simple random number generator.  Not especially good at
-// generating truly random bits, but good enough for our needs in this
-// package.
+typedef turbo::unordered_map<size_t, std::string> Hashtable;
+
 namespace {
-
-class Random {
-private:
-    uint32_t seed_;
-public:
-    explicit Random(uint32_t s) : seed_(s & 0x7fffffffu) {
-        // Avoid bad seeds.
-        if (seed_ == 0 || seed_ == 2147483647L) {
-        seed_ = 1;
-        }
-    }
-    uint32_t Next() {
-        static const uint32_t M = 2147483647L;   // 2^31-1
-        static const uint64_t A = 16807;  // bits 14, 8, 7, 5, 2, 1, 0
-        // We are computing
-        //       seed_ = (seed_ * A) % M,    where M = 2^31-1
-        //
-        // seed_ must not be zero or M, or else all subsequent computed values
-        // will be zero or M respectively.  For all other values, seed_ will end
-        // up cycling through every number in [1,M-1]
-        uint64_t product = seed_ * A;
-
-        // Compute (product % M) using the fact that ((x << 31) % M) == x.
-        seed_ = static_cast<uint32_t>((product >> 31) + (product & M));
-        // The first reduction may overflow by 1 bit, so we may need to
-        // repeat.  mod == M is not possible; using > allows the faster
-        // sign-bit-based test.
-        if (seed_ > M) {
-        seed_ -= M;
-        }
-        return seed_;
-    }
-    // Returns a uniformly distributed value in the range [0..n-1]
-    // REQUIRES: n > 0
-    uint32_t Uniform(int n) { return Next() % n; }
-
-    // Randomly returns true ~"1/n" of the time, and false otherwise.
-    // REQUIRES: n > 0
-    bool OneIn(int n) { return (Next() % n) == 0; }
-
-    // Skewed: pick "base" uniformly from range [0,max_log] and then
-    // return "base" random bits.  The effect is to pick a number in the
-    // range [0,2^max_log-1] with exponential bias towards smaller numbers.
-    uint32_t Skewed(int max_log) {
-        return Uniform(1 << Uniform(max_log + 1));
-    }
-};
-
-
-Slice RandomString(Random* rnd, int len, std::string* dst) {
-    dst->resize(len);
-    for (int i = 0; i < len; i++) {
-        (*dst)[i] = static_cast<char>(' ' + rnd->Uniform(95));   // ' ' .. '~'
-    }
-    return Slice(*dst);
-}
-
-Slice CompressibleString(Random* rnd, double compressed_fraction,
-                         size_t len, std::string* dst) {
-    int raw = static_cast<int>(len * compressed_fraction);
-    if (raw < 1) raw = 1;
-    std::string raw_data;
-    RandomString(rnd, raw, &raw_data);
-
-    // Duplicate the random data until we have filled "len" bytes
-    dst->clear();
-    while (dst->size() < len) {
-        dst->append(raw_data);
-    }
-    dst->resize(len);
-    return Slice(*dst);
-}
-
-// Helper for quickly generating random data.
-class RandomGenerator {
- private:
-    std::string data_;
-    int pos_;
-
- public:
-    RandomGenerator() {
-        // We use a limited amount of data over and over again and ensure
-        // that it is larger than the compression window (32KB), and also
-        // large enough to serve all typical value sizes we want to write.
-        Random rnd(301);
-        std::string piece;
-        while (data_.size() < 1048576) {
-        // Add a short fragment that is as compressible as specified
-        // by FLAGS_compression_ratio.
-        CompressibleString(&rnd, 0.5, 100, &piece);
-            data_.append(piece);
-        }
-        pos_ = 0;
-    }
-
-  inline turbo::util::Slice Generate(size_t len) {
-    if (pos_ + len > data_.size()) {
-      pos_ = 0;
-      assert(len < data_.size());
-    }
-    pos_ += len;
-    return turbo::util::Slice(data_.data() + pos_ - len, len);
-  }
-};
 
 class Stats {
 public:
@@ -468,9 +362,10 @@ public:
     int value_size_;
     size_t reads_;
     size_t writes_;
-    turbo::unordered_map<size_t, std::string>* hashtable_;
+    Hashtable* hashtable_;
     RandomKeyTrace* key_trace_;
-    size_t max_range_;
+    size_t trace_size_;
+    size_t initial_capacity_;
     Benchmark():
         num_(FLAGS_num),
         value_size_(FLAGS_value_size),
@@ -481,17 +376,17 @@ public:
         }
 
     void Run() {
-        size_t capacity = FLAGS_bucket_size * FLAGS_associate_size * 13;
-        size_t ingest_count = capacity * FLAGS_loadfactor;
+        initial_capacity_ = FLAGS_bucket_count * FLAGS_cell_count * (Hashtable::CellMeta::SlotCount() - 1) ;
+        size_t rehash_threshold = initial_capacity_ * FLAGS_loadfactor;
 
         // If do not rehash, we control the distinct key to the minimum between the FLAGS_num and the rehash threshold.
         if (FLAGS_no_rehash) {
-            max_range_ = std::min(FLAGS_num, ingest_count);
+            trace_size_ = std::min(FLAGS_num, rehash_threshold);
         } else {
-            max_range_ = FLAGS_num;
+            trace_size_ = FLAGS_num;
         }
 
-        key_trace_ = new RandomKeyTrace(max_range_);
+        key_trace_ = new RandomKeyTrace(trace_size_);
         PrintHeader();
         bool fresh_db = true;
         // run benchmark
@@ -520,14 +415,23 @@ public:
                 fresh_db = false;
                 key_trace_->Randomize();
                 method = &Benchmark::DoProbe;
+            } else if (name == "rehash") {
+                fresh_db = false;
+                thread = 1;
+                method = &Benchmark::DoRehash;
             }
 
             if (fresh_db) {
-                hashtable_ = new turbo::unordered_map<size_t, std::string>(FLAGS_bucket_size, FLAGS_associate_size);                
+                hashtable_ = new Hashtable(FLAGS_bucket_count, FLAGS_cell_count);                
             }
             
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
         }
+    }
+
+    void DoRehash(ThreadState* thread) {   
+        INFO("DoRehash. Thread %2d", thread->tid);   
+        hashtable_->MinorReHashAll();
     }
 
     void DoProbe(ThreadState* thread) {
@@ -537,10 +441,9 @@ public:
             ERROR("DoProbe lack key_trace_ initialization.");
             return;
         }
-        size_t start_offset = random() % max_range_;
-        auto key_iterator = key_trace_->trace_at(start_offset, max_range_);
+        size_t start_offset = random() % trace_size_;
+        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, num_);
         thread->stats.Start();
         while (!duration.Done(batch)) {
@@ -554,6 +457,7 @@ public:
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not probed: %lu)", num_, not_find);
+        INFO("DoProbe thread: %2d. Total probe num: %lu, not find: %lu)", thread->tid, num_, not_find);
         thread->stats.AddMessage(buf);
     }
 
@@ -564,8 +468,8 @@ public:
             ERROR("DoRead lack key_trace_ initialization.");
             return;
         }
-        size_t start_offset = random() % max_range_;
-        auto key_iterator = key_trace_->trace_at(start_offset, max_range_);
+        size_t start_offset = random() % trace_size_;
+        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, num_);
@@ -581,19 +485,19 @@ public:
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", num_, not_find);
+        INFO("DoRead thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, num_, not_find);
         thread->stats.AddMessage(buf);
     }
 
     void DoWrite(ThreadState* thread) {
         INFO("DoWrite");
-        RandomGenerator gen;
         uint64_t batch = 100000;
         if (key_trace_ == nullptr) {
             ERROR("DoWrite lack key_trace_ initialization.");
             return;
         }
-        size_t start_offset = random() % max_range_;
-        auto key_iterator = key_trace_->trace_at(start_offset, max_range_);
+        size_t start_offset = random() % trace_size_;
+        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         thread->stats.Start();
         std::string val(value_size_, 'v');
         for (uint64_t i = 0; i < num_; i += batch ) {
@@ -726,12 +630,15 @@ private:
         fprintf(stdout, "Keys:              %d bytes each\n", 8);
         fprintf(stdout, "Values:            %d bytes each\n", (int)FLAGS_value_size);
         fprintf(stdout, "Entries:           %lu\n", (uint64_t)num_);
-        fprintf(stdout, "Max Range:         %lu\n", (uint64_t)max_range_);
+        fprintf(stdout, "Trace size:        %lu\n", (uint64_t)trace_size_);        
         fprintf(stdout, "Read:              %lu \n", (uint64_t)FLAGS_read);
         fprintf(stdout, "Write:             %lu \n", (uint64_t)FLAGS_write);
         fprintf(stdout, "Thread:            %lu \n", (uint64_t)FLAGS_thread);
-        fprintf(stdout, "Buckets:           %lu \n", (uint64_t)FLAGS_bucket_size);
-        fprintf(stdout, "Associate:         %lu \n", (uint64_t)FLAGS_associate_size);
+        fprintf(stdout, "Hash Buckets:      %lu \n", (uint64_t)FLAGS_bucket_count);         
+        fprintf(stdout, "Hash Cell:         %lu \n", (uint64_t)FLAGS_cell_count);
+        fprintf(stdout, "Hash capacity:     %lu \n", (uint64_t)initial_capacity_);
+        fprintf(stdout, "Hash loadfactor:   %.2f \n", FLAGS_loadfactor);
+        fprintf(stdout, "Cell Type:         %s \n", Hashtable::CellMeta::Name().c_str()); 
         fprintf(stdout, "Report interval:   %lu s\n", (uint64_t)FLAGS_report_interval);
         fprintf(stdout, "Stats interval:    %lu records\n", (uint64_t)FLAGS_stats_interval);
         fprintf(stdout, "benchmarks:        %s\n", FLAGS_benchmarks.c_str());

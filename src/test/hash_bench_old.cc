@@ -47,7 +47,7 @@ DEFINE_int32(value_size, 1, "default value size");
 class HashBench {
 public:
     HashBench(size_t bucket_count, size_t assocaite_count, size_t cell_type, int value_size):
-        max_count_(bucket_count * assocaite_count * (cell_type == 0 ? 14 : 28)),
+        max_count_(bucket_count * assocaite_count * (cell_type == 0 ? 13 : 27) * FLAGS_loadfactor),
         key_trace_(max_count_),
         value_(value_size, 'v') {
         arm_sig_int();
@@ -87,7 +87,9 @@ public:
         inserted_num = i - 1;
         PrintSpeed(name, hashtable.LoadFactor(), hashtable.Size(), inserted_num, time_end - time_start, false);
         
+        
         auto read_fun = [&]{
+            key_trace_.Randomize();
             std::vector<std::thread> workers(FLAGS_thread_read);
             std::vector<size_t> counts(FLAGS_thread_read, 0);
             kRunning = true;
@@ -128,20 +130,6 @@ public:
                 }
             // printf("%s\n", hashtable.PrintCellAllocator().c_str());
         };
-        read_fun();
-
-        printf("Start Rehashing\n");
-        time_start = Env::Default()->NowMicros();
-        hashtable.MinorReHashAll();
-        time_end   = Env::Default()->NowMicros();
-        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable.Size(), (double)hashtable.Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
-        read_fun();
-
-        printf("Start Rehashing\n");
-        time_start = Env::Default()->NowMicros();
-        hashtable.MinorReHashAll();
-        time_end   = Env::Default()->NowMicros();
-        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable.Size(), (double)hashtable.Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
         read_fun();
 
         printf("Start Rehashing\n");
@@ -202,6 +190,7 @@ public:
 
         {
             auto read_fun = [&]{
+                key_trace_.Randomize();
                 std::vector<std::thread> workers(FLAGS_thread_read);
                 std::vector<size_t> counts(FLAGS_thread_read, 0);
                 kRunning = true;
@@ -266,6 +255,7 @@ public:
         std::vector<std::thread> workers(FLAGS_thread_read);
         std::vector<size_t> counts(FLAGS_thread_read, 0);
         kRunning = true;
+        key_trace_.Randomize();
         if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
         time_start = Env::Default()->NowNanos();
         for (int t = 0; t < FLAGS_thread_read; t++) {
@@ -398,9 +388,9 @@ int main(int argc, char *argv[]) {
     // inserted_num = hash_bench.TurboHashSpeedTest();
     // printf("Inserted: %lu\n", inserted_num);
     inserted_num = hash_bench.TestRehash();
-    // hash_bench.HashSpeedTest<robin_hood::unordered_map<std::string, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
-    // hash_bench.HashSpeedTest<absl::flat_hash_map<std::string, std::string>, std::string >("absl::flat_hash_map", inserted_num);
-    // hash_bench.HashSpeedTest<std::unordered_map<std::string, std::string>, std::string >("std::unordered_map", inserted_num);
+    hash_bench.HashSpeedTest<robin_hood::unordered_map<size_t, std::string>, std::string >("robin_hood::unordered_map", inserted_num);
+    hash_bench.HashSpeedTest<absl::flat_hash_map<size_t, std::string>, std::string >("absl::flat_hash_map", inserted_num);
+    hash_bench.HashSpeedTest<std::unordered_map<size_t, std::string>, std::string >("std::unordered_map", inserted_num);
     // hash_bench.CuckooSpeedTest("CuckooHashMap", inserted_num);
     return 0;
 }

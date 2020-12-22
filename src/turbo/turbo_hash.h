@@ -68,6 +68,8 @@
 
 // #define LTHASH_DEBUG_OUT
 
+#define TURBO_ENABLE_HUGEPAGE /* enable huge page or not */
+
 // Linear probing setting
 static const int kTurboMaxProbeLen = 18;
 static const int kTurboProbeStep   = 1;    
@@ -932,7 +934,7 @@ public:
             static constexpr size_t offset = sizeof(T1) + sizeof(size_t);
             memcpy(addr, &t1, sizeof(T1));
             *reinterpret_cast<size_t*>(addr + sizeof(T1)) = t2.size();
-            memcpy(addr + offset, t2.data(), t2.size());
+            if (t2.size() != 0) memcpy(addr + offset, t2.data(), t2.size());
         }
     };
     template<typename T1, typename T2>
@@ -1021,7 +1023,7 @@ public:
             *reinterpret_cast<size_t*>(addr) = t1.size();
             *reinterpret_cast<size_t*>(addr + sizeof(size_t)) = t2.size();
             memcpy(addr + offset, t1.data(), t1.size());
-            memcpy(addr + offset + t1.size(), t2.data(), t2.size());
+            if (t2.size() != 0) memcpy(addr + offset + t1.size(), t2.data(), t2.size());
         }
     };
     template<typename T1, typename T2>
@@ -1184,11 +1186,16 @@ public:
             return 14;
         }
 
+        inline static std::string Name() {
+            return "CellMeta128";
+        }
+
         inline static constexpr size_t size() {
             // the meta size in byte in current cell
             return 16;
         }
 
+        
         inline uint16_t bitmap() {
             return bitmap_;
         }
@@ -1315,6 +1322,10 @@ public:
         inline static constexpr uint32_t SlotCount() {
             // slot count
             return 28;
+        }
+
+        inline static std::string Name() {
+            return "CellMeta256";
         }
 
         inline static constexpr size_t size() {
@@ -1454,6 +1465,10 @@ public:
             return 14;
         }
 
+        inline static std::string Name() {
+            return "CellMeta256V2";
+        }
+
         inline static constexpr size_t size() {
             // the meta size in byte in current cell
             return 32;
@@ -1514,7 +1529,7 @@ public:
             ref_(0),
             size_(count),
             remaining_(count),
-            is_hugepage_(true),
+            is_hugepage_(false),
             block_id_(block_id) {
             // Allocate memory space for this MemBlock
             size_t space = size_ * CellMeta::CellSize();
@@ -1523,17 +1538,26 @@ public:
                 TURBO_ERROR("MemBlock size is not 4KB aligned. Space size: " << space);
                 exit(1);
             }
-            // printf("Add %.2f MB MemBlock\n", space/1024.0/1024.0 );
+            
+            #ifdef TURBO_ENABLE_HUGEPAGE
             start_addr_ = (char*) mmap(TURBO_HUGE_ADDR, space, TURBO_HUGE_PROTECTION, TURBO_HUGE_FLAGS, -1, 0);
             if (start_addr_ == MAP_FAILED) {
-                TURBO_WARNING("mmap hugepage fail. space: " << space);
+                TURBO_WARNING("MemBlock mmap hugepage fail. space: " << space);
                 is_hugepage_ = false;
                 start_addr_ = (char* ) aligned_alloc(CellMeta::CellSize(), space);
                 if (start_addr_ == nullptr) {
-                    TURBO_ERROR("malloc space fail. Space size: " << space);
+                    TURBO_ERROR("MemBlock malloc space fail. Space size: " << space);
                     exit(1);
                 }
             }
+            #else
+            is_hugepage_ = false;
+            start_addr_ = (char* ) aligned_alloc(CellMeta::CellSize(), space);
+            if (start_addr_ == nullptr) {
+                TURBO_ERROR("MemBlock malloc space fail. Space size: " << space);
+                exit(1);
+            }
+            #endif
             cur_addr_ = start_addr_;
         }
 
@@ -2110,18 +2134,21 @@ public:
     explicit TurboHashTable(uint32_t bucket_count = 128 << 10, uint32_t cell_count = 32):
         bucket_count_(bucket_count),
         bucket_mask_(bucket_count - 1),
-        capacity_( bucket_count * cell_count * (CellMeta::SlotCount() - 1) ) {
+        capacity_( bucket_count * cell_count * (CellMeta::SlotCount() - 1) ),
+        size_(0) {
         if (!isPowerOfTwo(bucket_count) ||
             !isPowerOfTwo(cell_count)) {
             printf("the hash table size setting is wrong. bucket: %u, cell: %u\n", bucket_count, cell_count);
             exit(1);
         }
 
-        size_t bucket_meta_space = bucket_count * sizeof(BucketMeta);
+        size_t bucket_meta_space = bucket_count * sizeof(BucketMeta);        
+        TURBO_INFO("BucketMeta space required: " << bucket_meta_space);        
+        BucketMeta* buckets_addr = nullptr;
+
+        #ifdef TURBO_ENABLE_HUGEPAGE
         size_t bucket_meta_space_huge = (bucket_meta_space + TURBO_HUGEPAGE_SIZE - 1) / TURBO_HUGEPAGE_SIZE * TURBO_HUGEPAGE_SIZE;
-        TURBO_INFO("BucketMeta space required: " << bucket_meta_space);
-        
-        BucketMeta* buckets_addr = (BucketMeta*) mmap(TURBO_HUGE_ADDR, bucket_meta_space_huge, TURBO_HUGE_PROTECTION, TURBO_HUGE_FLAGS, -1, 0);
+        buckets_addr = (BucketMeta*) mmap(TURBO_HUGE_ADDR, bucket_meta_space_huge, TURBO_HUGE_PROTECTION, TURBO_HUGE_FLAGS, -1, 0);
         if (buckets_addr == MAP_FAILED) {
             buckets_addr = (BucketMeta* ) aligned_alloc(sizeof(BucketMeta), bucket_meta_space);            
             if (buckets_addr == nullptr) {
@@ -2135,6 +2162,15 @@ public:
             TURBO_INFO(" Allocated: " << bucket_meta_space_huge);
             memset(buckets_addr, 0, bucket_meta_space_huge);
         }
+        #else
+        buckets_addr = (BucketMeta* ) aligned_alloc(sizeof(BucketMeta), bucket_meta_space);
+        if (buckets_addr == nullptr) {
+            fprintf(stderr, "malloc %lu space fail.\n", bucket_meta_space);
+            exit(1);
+        }
+        TURBO_INFO(" Allocated: " << bucket_meta_space);
+        memset(buckets_addr, 0, bucket_meta_space);
+        #endif
         
         buckets_ = buckets_addr;
         buckets_mem_block_ids_ = new int[bucket_count];
@@ -2339,14 +2375,14 @@ public:
         size_t hash_value   = KeyToHash(key);
         
         // allocate space to store record
-        size_t buf_len      = value_type::FormatLength(key, value);
-        void*  buffer       = record_allocator_.Allocate(buf_len);
-        value_type* record  = static_cast<value_type*>(buffer);
-        record->type        = kTypeValue;
-        record->Encode(key, value);
+        // size_t buf_len      = value_type::FormatLength(key, value);
+        // void*  buffer       = record_allocator_.Allocate(buf_len);
+        // value_type* record  = static_cast<value_type*>(buffer);
+        // record->type        = kTypeValue;
+        // record->Encode(key, value);
 
         // update index, thread safe
-        return insertSlot(key, hash_value, buffer);
+        return insertSlot(kTypeValue, key, value, hash_value);
     }
     
     // Return the entry if key exists
@@ -2374,7 +2410,7 @@ public:
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
 
-        auto res = probeFirstSlot(key, hash_value);
+        auto res = probeFirstSlot(hash_value);
         if (res.second) {
             // probe a key having same H2 and H1 tag
             return true;
@@ -2523,18 +2559,51 @@ private:
         decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)des_cell_addr;
         *bitmap = (*bitmap) | (1 << des_slot_i);
     }
-    
-    // set bitmap, 1 byte (or 2 byte) H2, 2 byte H1, 6 byte pointer
-    inline void updateSlotAndMeta(char* cell_addr, const SlotInfo& info, void* record_addr) {
-        // locate the old slot, update H1 and pointer
+
+    /** insertToSlotAndRecycle
+     *  @note: Reuse or recycle the space of target slot's old entry.
+     *         Set bitmap, 1 byte (or 2 byte) H2, 2 byte H1, 6 byte pointer.
+    */
+    inline void insertToSlotAndRecycle(ValueType type, const Key& key, const T& value, char* cell_addr, const SlotInfo& info) {
+        // locate the target slot
         HashSlot* slot  = locateSlot(cell_addr, info.slot);
+
+        // Check if the old entry points to some out-dated data, reuse the space or free it.
+        value_type* record = nullptr;
         if (slot->entry != 0) {
-            // We need to recycle the space pointed by the old slot's entry
-            RecordPtr record_ptr(slot->entry);
-            TURBO_DEBUG("Free old slot. Key: " << record_ptr->first() << ", Value: " << record_ptr->second());
-            record_allocator_.Release((char*)record_ptr.data_ptr_);
+            // We need to recycle the space pointed by the old slot's entry            
+            RecordPtr old_record_ptr(slot->entry);
+            size_t old_record_size = old_record_ptr->Size();
+            size_t new_record_size = value_type::FormatLength(key, value);
+
+            if (old_record_size >= new_record_size) {
+                // reuse old space of old record
+                record  = old_record_ptr.data_ptr_;
+                record->type        = type;
+                record->Encode(key, value);
+            }
+            else {
+                // old space is not enough, we free old space
+                TURBO_INFO("Free old slot. Key: " << old_record_ptr->first() << ", Value: " << old_record_ptr->second());
+                record_allocator_.Release((char*)old_record_ptr.data_ptr_);
+
+                // Then allocate new space                
+                void*  buffer   = record_allocator_.Allocate(new_record_size);
+                record          = static_cast<value_type*>(buffer);
+                record->type    = type;
+                record->Encode(key, value);
+            }
+        } 
+        else 
+        {
+            // the old entry points to empty space, we allocate space to store new record
+            size_t buf_len  = value_type::FormatLength(key, value);
+            void*  buffer   = record_allocator_.Allocate(buf_len);
+            record          = static_cast<value_type*>(buffer);
+            record->type    = type;
+            record->Encode(key, value);
         }
-        slot->entry     = reinterpret_cast<uint64_t>(record_addr); /* transform to 8-byte UL */
+        slot->entry     = reinterpret_cast<uint64_t>(record); /* transform to 8-byte UL */
         slot->H1        = info.H1;
        
         // set H2
@@ -2561,7 +2630,8 @@ private:
     }
 
 
-    inline bool insertSlot(const Key& key, size_t hash_value, void* record_addr) {
+    inline bool insertSlot(ValueType type, const Key& key, const T& value, size_t hash_value) {
+        // Obtain the partial hash
         PartialHash partial_hash(hash_value);
 
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
@@ -2583,9 +2653,10 @@ private:
                 
                 CellMeta meta(cell_addr);   // obtain the meta part
                 
-                if (TURBO_LIKELY( !meta.Occupy(res.first.slot) )) { // If the new slot from 'findSlotForInsert' is not occupied, We update directly
-                    
-                    updateSlotAndMeta(cell_addr, res.first, record_addr); // update slot content (including pointer and H1), H2 and bitmap
+                if (TURBO_LIKELY( !meta.Occupy(res.first.slot) )) { 
+                    // If the new slot from 'findSlotForInsert' is not occupied, insert directly
+
+                    insertToSlotAndRecycle(type, key, value, cell_addr, res.first); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
                     // if (!res.first.equal_key) {
@@ -2605,20 +2676,21 @@ private:
                     }
                     
                     res.first.slot = *empty_bitset;
-                    updateSlotAndMeta(cell_addr, res.first, record_addr); // update slot content (including pointer and H1), H2 and bitmap
+                    insertToSlotAndRecycle(type, key, value, cell_addr, res.first);
                     return true;
                 } else { 
                     // current new slot has been occupied by another concurrent thread.
                     
-                    // Before retry 'findSlotForInsert', we try to find if there is any empty slot for insertion
+                    // Before retry 'findSlotForInsert', find if there is any empty slot for insertion
                     util::BitSet empty_bitset = meta.EmptyBitSet();
                     if (empty_bitset.validCount() > 1) {
                         res.first.slot = *empty_bitset;
-                        updateSlotAndMeta(cell_addr, res.first, record_addr); // update slot content (including pointer and H1), H2 and bitmap
+                        insertToSlotAndRecycle(type, key, value, cell_addr, res.first);
                         return true;
                     }
 
                     // Current cell has no empty slot for insertion, we retry 'findSlotForInsert'
+                    // This unlikely happens with all previous effort.
                     #ifdef TURBO_ENABLE_LOGGING
                     TURBO_INFO("retry find slot in Bucket " << res.first.bucket <<
                                ". Cell " << res.first.cell <<
@@ -2787,7 +2859,7 @@ private:
         return {empty_slot, false};
     }
 
-    inline std::pair<HashSlot, bool> probeFirstSlot(const Key& key, size_t hash_value) {
+    inline std::pair<HashSlot, bool> probeFirstSlot(size_t hash_value) {
         PartialHash partial_hash(hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
@@ -2851,7 +2923,7 @@ template <typename Key, typename T, typename Hash = hash<Key>,
 using unordered_map = detail::TurboHashTable<Key, T, Hash, typename std::conditional< std::is_same<Key, std::string>::value == false /* is numeric */, 
                                                                                         KeyEqual, 
                                                                                         std::equal_to<util::Slice> >::type,
-                                            2, 0, 32768>;
+                                            0, 0, 32768>;
 
 }; // end of namespace turbo
 
