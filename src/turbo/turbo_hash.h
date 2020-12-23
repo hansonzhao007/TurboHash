@@ -1121,6 +1121,25 @@ public:
         static constexpr int CellSizeLeftShift  = 7;
         static constexpr int SlotSizeLeftShift  = 3;
         using H2Tag = uint8_t;
+        using H1Tag = uint16_t;
+
+        /** PartialHash
+         *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
+         *  @format:
+         *  | MSB    - - - - - - - - - - - - - - - - - - LSB |
+         *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
+         *  |    bucket_hash |     H1    |         |   H2    |
+        */
+        struct PartialHash {
+            PartialHash(uint64_t hash) :
+                bucket_hash_( hash >> 32 ),
+                H1_( ( hash >> 16 ) & 0xFFFF ),
+                H2_( hash & 0xFF )
+                { };        
+            uint32_t  bucket_hash_; // used to locate in the bucket directory
+            H1Tag     H1_; // H1: 2 byte tag
+            H2Tag     H2_; // H2: 1 byte hash tag in CellMeta for parallel comparison using SIMD cmd
+        }; // end of class PartialHash
 
         /** HashSlot
          *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
@@ -1259,7 +1278,26 @@ public:
         static constexpr int CellSizeLeftShift = 8;
         static constexpr int SlotSizeLeftShift = 3;
         using H2Tag = uint8_t;
-            
+        using H1Tag = uint16_t;
+
+        /** PartialHash
+         *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
+         *  @format:
+         *  | MSB    - - - - - - - - - - - - - - - - - - LSB |
+         *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
+         *  |    bucket_hash |     H1    |         |   H2    |
+        */
+        struct PartialHash {
+            PartialHash(uint64_t hash) :
+                bucket_hash_( hash >> 32 ),
+                H1_( ( hash >> 16 ) & 0xFFFF ),
+                H2_( hash & 0xFF )
+                { };        
+            uint32_t  bucket_hash_; // used to locate in the bucket directory
+            H1Tag     H1_; // H1: 2 byte tag
+            H2Tag     H2_; // H2: 1 byte hash tag in CellMeta for parallel comparison using SIMD cmd
+        }; // end of class PartialHash
+
         /** HashSlot
          *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
         */
@@ -1400,13 +1438,33 @@ public:
         static constexpr int CellSizeLeftShift = 8;
         static constexpr int SlotSizeLeftShift = 4;
         using H2Tag = uint16_t;
+        using H1Tag = uint64_t;
+
+        /** PartialHash
+         *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
+         *  @format:
+         *  | MSB    - - - - - - - - - - - - - - - - - - LSB |
+         *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
+         *  |    bucket_hash |    H2     |                   |
+         *  |                     H1                         |
+        */
+        struct PartialHash {
+            PartialHash(uint64_t hash) :                
+                H1_( hash ),
+                H2_( (hash >> 16) & 0xFFFF ),
+                bucket_hash_( hash >> 32 )
+                { };            
+            H1Tag     H1_; // H1: 8 byte hash key
+            H2Tag     H2_; // H2: 1 byte hash tag in CellMeta for parallel comparison using SIMD cmd
+            uint32_t  bucket_hash_; // used to locate in the bucket directory
+        }; // end of class PartialHash
 
         /** HashSlot
          *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
         */
         struct HashSlot{
             uint64_t entry;      // pointer to key-value record
-            uint64_t H1;         // hash-tag for the key
+            H1Tag    H1;         // hash value of the key
         };
 
         explicit CellMeta256V2(char* rep) {
@@ -1860,27 +1918,8 @@ public:
     using WKeyEqual = WrapKeyEqual<KeyEqual>;
     using HashSlot  = typename CellMeta::HashSlot;
     using H2Tag     = typename CellMeta::H2Tag;
-    
-
-    /** PartialHash
-     *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
-     *  @format:
-     *  | MSB    - - - - - - - - - - - - - - - - - - LSB |
-     *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
-     *  |    bucket_hash |     H1    |         H2        |
-     *  ! some CellMeta may only use the lowest 8 bit of H2
-    */
-    struct PartialHash {
-        PartialHash(uint64_t hash) :
-            bucket_hash_( hash >> 32 ),
-            H1_( ( hash >> 16 ) & 0xFFFF ),
-            H2_( hash & 0xFFFF )
-            { };        
-        uint32_t  bucket_hash_; // used to locate in the bucket directory
-        uint16_t  H1_; // H1: 2 byte hash tag         
-        H2Tag     H2_; // H2: 2 byte hash tag in CellMeta for parallel comparison using SIMD cmd
-    }; // end of class PartialHash
-
+    using H1Tag     = typename CellMeta::H1Tag;
+    using PartialHash = typename CellMeta::PartialHash;
 
     /** SlotInfo
      *  @note: use to store the target slot location info
@@ -1891,10 +1930,10 @@ public:
         uint16_t cell;          // cell index
         uint8_t  slot;          // slot index  
         uint8_t  old_slot;      // if equal_key, this save old slot position      
-        uint16_t H1;            // hash-tag in HashSlot
+        H1Tag    H1;            // hash-tag in HashSlot
         H2Tag    H2;            // hash-tag in CellMeta
         bool equal_key;         // If we find a equal key in this slot        
-        SlotInfo(uint32_t b, uint32_t a, int s, uint16_t h1, H2Tag h2, bool euqal, int os = 0):
+        SlotInfo(uint32_t b, uint32_t a, int s, H1Tag h1, H2Tag h2, bool euqal, int os = 0):
             bucket(b),
             cell(a),
             slot(s),
@@ -1912,7 +1951,7 @@ public:
             equal_key(false) {}
         std::string ToString() {
             char buffer[128];
-            sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%04x, H1: 0x%04x",
+            sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%04x, H1: 0x%lx",
                 bucket,
                 cell,
                 slot,
@@ -2061,7 +2100,7 @@ public:
             return  { { bi_ /* ignore bucket index */, 
                         cell_i_ /* cell index */, 
                         *bitmap_ /* slot index*/, 
-                        (uint16_t)slot->H1, 
+                        (H1Tag)slot->H1, 
                         H2, 
                         false,
                         0}, 
@@ -2142,8 +2181,7 @@ public:
             exit(1);
         }
 
-        size_t bucket_meta_space = bucket_count * sizeof(BucketMeta);        
-        TURBO_INFO("BucketMeta space required: " << bucket_meta_space);        
+        size_t bucket_meta_space = bucket_count * sizeof(BucketMeta);             
         BucketMeta* buckets_addr = nullptr;
 
         #ifdef TURBO_ENABLE_HUGEPAGE
@@ -2155,11 +2193,11 @@ public:
                 fprintf(stderr, "malloc %lu space fail.\n", bucket_meta_space);
                 exit(1);
             }
-            TURBO_INFO(" Allocated: " << bucket_meta_space);
+            TURBO_INFO(" Allocated: " << bucket_meta_space << " for BucketMeta.");
             memset((void*)buckets_addr, 0, bucket_meta_space);
         }
         else {
-            TURBO_INFO(" Allocated: " << bucket_meta_space_huge);
+            TURBO_INFO(" Allocated: " << bucket_meta_space_huge << " hugepage for BucketMeta.");
             memset((void*)buckets_addr, 0, bucket_meta_space_huge);
         }
         #else
@@ -2258,7 +2296,7 @@ public:
     }
 
     // return the cell index and slot index
-    inline std::pair<uint16_t, uint8_t> findNextSlotInRehash(uint8_t* slot_vec, uint16_t h1, uint16_t cell_count_mask) {
+    inline std::pair<uint16_t, uint8_t> findNextSlotInRehash(uint8_t* slot_vec, H1Tag h1, uint16_t cell_count_mask) {
         uint16_t ai = h1 & cell_count_mask;
         int loop_count = 0;
 
@@ -2406,25 +2444,29 @@ public:
         return false;
     }
 
-    bool Probe(const Key& key)  {
+    value_type* Probe(const Key& key)  {
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
 
         auto res = probeFirstSlot(hash_value);
         if (res.second) {
             // probe a key having same H2 and H1 tag
-            return true;
+            RecordPtr record_ptr(res.first.entry);
+            return record_ptr.data_ptr_;
         }
-        return false;
+        return nullptr;
     }
 
-    bool Find(const Key& key, uint64_t& data_offset)  {
+    value_type* Find(const Key& key)  {
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
 
         auto res = findSlot(key, hash_value);
-        data_offset = res.first.entry;
-        return res.second;
+        if (res.second) {
+            RecordPtr record_ptr(res.first.entry);
+            return record_ptr.data_ptr_;
+        }
+        return nullptr;
     }
 
     void Delete(const Key& key) {
@@ -2562,7 +2604,7 @@ private:
 
     /** insertToSlotAndRecycle
      *  @note: Reuse or recycle the space of target slot's old entry.
-     *         Set bitmap, 1 byte (or 2 byte) H2, 2 byte H1, 6 byte pointer.
+     *         Set bitmap, H2, H1, pointer.
     */
     inline void insertToSlotAndRecycle(ValueType type, const Key& key, const T& value, char* cell_addr, const SlotInfo& info) {
         // locate the target slot
@@ -2614,19 +2656,20 @@ private:
         // Make sure the bitmap is updated after H2
         // https://www.modernescpp.com/index.php/fences-as-memory-barriers
         // https://preshing.com/20130922/acquire-and-release-fences/
-        TURBO_COMPILER_FENCE();
+        std::atomic_thread_fence(std::memory_order_release);
 
         // obtain bitmap and set bitmap
         decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)cell_addr;
         if ( true == info.equal_key) {
             // Update: set the new slot and toggle the old slot
-            *bitmap = ( (*bitmap) | (1 << info.slot) ) ^ ( 1 << info.old_slot );
+            auto new_bitmap = ( (*bitmap) | (1 << info.slot) ) ^ ( 1 << info.old_slot );
+            TURBO_COMPILER_FENCE();
+            *bitmap = new_bitmap;
         }
         else {
             // Insertion: set the new slot
             *bitmap = (*bitmap) | (1 << info.slot);
         }
-        // *bitmap = (*bitmap) | (1 << info.slot);
     }
 
 
@@ -2659,9 +2702,9 @@ private:
                     insertToSlotAndRecycle(type, key, value, cell_addr, res.first); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
-                    if (!res.first.equal_key) {
-                        size_.fetch_add(1, std::memory_order_relaxed); // size + 1
-                    }
+                    // if (!res.first.equal_key) {
+                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                    // }
 
                     return true;
                 } else if (res.first.equal_key) {
@@ -2736,7 +2779,7 @@ private:
                 // locate the slot reference
                 const HashSlot& slot = *locateSlot(cell_addr, i);
 
-                if (TURBO_LIKELY(slot.H1 == partial_hash.H1_)) // compare if the H1 partial hash is equal (H1 is 16-byte)
+                if (TURBO_LIKELY(slot.H1 == partial_hash.H1_)) // compare if the H1 partial hash is equal
                 {  
                     // Obtain record pointer
                     RecordPtr record(slot.entry);
@@ -2923,7 +2966,7 @@ template <typename Key, typename T, typename Hash = hash<Key>,
 using unordered_map = detail::TurboHashTable<Key, T, Hash, typename std::conditional< std::is_same<Key, std::string>::value == false /* is numeric */, 
                                                                                         KeyEqual, 
                                                                                         std::equal_to<util::Slice> >::type,
-                                            0, 0, 32768>;
+                                            2, 0, 32768>;
 
 }; // end of namespace turbo
 

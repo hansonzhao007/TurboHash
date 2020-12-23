@@ -31,7 +31,7 @@ using namespace util;
 
 // For hash table 
 DEFINE_bool(no_rehash, true, "control hash table do not do rehashing during insertion");
-DEFINE_uint32(cell_count, 64, "");
+DEFINE_uint32(cell_count, 128, "");
 DEFINE_uint32(bucket_count, 256 << 10, "bucket count");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 
@@ -40,13 +40,13 @@ DEFINE_uint32(thread, 1, "");
 DEFINE_uint64(report_interval, 0, "Report interval in seconds");
 DEFINE_uint64(stats_interval, 10000000, "Report interval in ops");
 DEFINE_uint64(value_size, 8, "The value size");
-DEFINE_uint64(num, 100 * 1000000LU, "Number of total record");
+DEFINE_uint64(num, 200 * 1000000LU, "Number of total record");
 DEFINE_uint64(read,  100000000, "Number of read operations");
 DEFINE_uint64(write, 100000000, "Number of read operations");
 
 DEFINE_bool(hist, false, "");
 
-DEFINE_string(benchmarks, "fillrandom,readrandom", "");
+DEFINE_string(benchmarks, "load,overwrite,readrandom", "");
 
 typedef turbo::unordered_map<size_t, std::string> Hashtable;
 
@@ -114,7 +114,7 @@ public:
 
         std::string cur_time = TimeToString(now/1000000);
         printf( "%s ... thread %d: (%lu,%lu) ops and "
-                "( %.1f,%.1f ) ops/second in (%.6f,%.6f) seconds\n",
+                "( %.1f,%.1f ) ops/second in (%.4f,%.4f) seconds\n",
                 cur_time.c_str(), 
                 tid_,
                 done_ - last_report_done_, done_,
@@ -407,9 +407,13 @@ public:
                 name = std::string(benchmarks, sep - benchmarks);
                 benchmarks = sep + 1;
             }
-            if (name == "fillrandom") {
+            if (name == "load") {
                 fresh_db = true;
                 method = &Benchmark::DoWrite;                
+            } else if (name == "overwrite") {
+                fresh_db = false;
+                key_trace_->Randomize();
+                method = &Benchmark::DoOverWrite;                
             } else if (name == "readrandom") {
                 fresh_db = false;
                 key_trace_->Randomize();
@@ -479,8 +483,8 @@ public:
         thread->stats.Start();        
         while (!duration.Done(batch)) {
             for (uint64_t j = 0; j < batch; j++) {                          
-                bool res = hashtable_->Find(key_iterator.Next(), data_offset);
-                if (unlikely(!res)) {
+                auto record_ptr = hashtable_->Find(key_iterator.Next());
+                if (unlikely(record_ptr == nullptr)) {
                     not_find++;
                 }
             }
@@ -505,11 +509,13 @@ public:
             ERROR("DoWrite lack key_trace_ initialization.");
             return;
         }
-        size_t start_offset = random() % trace_size_;
-        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
         thread->stats.Start();
         std::string val(value_size_, 'v');
-        for (uint64_t i = 0; i < num_; i += batch ) {
+        while (key_iterator.Valid()) {
             for (uint64_t j = 0; j < batch; j++) {   
                 bool res = hashtable_->Put(key_iterator.Next(), val);
                 if (!res) {
@@ -525,6 +531,34 @@ public:
         return;
     }
 
+
+    void DoOverWrite(ThreadState* thread) {
+        INFO("DoOverWrite");
+        uint64_t batch = 100000;
+        if (key_trace_ == nullptr) {
+            ERROR("DoOverWrite lack key_trace_ initialization.");
+            return;
+        }
+        size_t start_offset = random() % trace_size_;
+        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        Duration duration(FLAGS_readtime, FLAGS_write);
+        thread->stats.Start();
+        std::string val(value_size_, 'v');
+        while(!duration.Done(batch)) {
+            for (uint64_t j = 0; j < batch; j++) {   
+                bool res = hashtable_->Put(key_iterator.Next(), val);
+                if (!res) {
+                    INFO("Hash Table Full!!!\n");
+                    printf("Hash Table Full!!!\n");
+                    goto write_end;
+                    
+                }
+            }
+            thread->stats.FinishedBatchOp(batch);
+        }
+        write_end:
+        return;
+    }
 
 private:
     struct ThreadArg {
@@ -636,21 +670,22 @@ private:
     void PrintHeader() {
         fprintf(stdout, "------------------------------------------------\n");
         PrintEnvironment();
-        fprintf(stdout, "Keys:              %d bytes each\n", 8);
-        fprintf(stdout, "Values:            %d bytes each\n", (int)FLAGS_value_size);
-        fprintf(stdout, "Entries:           %lu\n", (uint64_t)num_);
-        fprintf(stdout, "Trace size:        %lu\n", (uint64_t)trace_size_);        
-        fprintf(stdout, "Read:              %lu \n", (uint64_t)FLAGS_read);
-        fprintf(stdout, "Write:             %lu \n", (uint64_t)FLAGS_write);
-        fprintf(stdout, "Thread:            %lu \n", (uint64_t)FLAGS_thread);
-        fprintf(stdout, "Hash Buckets:      %lu \n", (uint64_t)FLAGS_bucket_count);         
-        fprintf(stdout, "Hash Cell:         %lu \n", (uint64_t)FLAGS_cell_count);
-        fprintf(stdout, "Hash capacity:     %lu \n", (uint64_t)initial_capacity_);
-        fprintf(stdout, "Hash loadfactor:   %.2f \n", FLAGS_loadfactor);
-        fprintf(stdout, "Cell Type:         %s \n", Hashtable::CellMeta::Name().c_str()); 
-        fprintf(stdout, "Report interval:   %lu s\n", (uint64_t)FLAGS_report_interval);
-        fprintf(stdout, "Stats interval:    %lu records\n", (uint64_t)FLAGS_stats_interval);
-        fprintf(stdout, "benchmarks:        %s\n", FLAGS_benchmarks.c_str());
+        fprintf(stdout, "Keys:                  %d bytes each\n", 8);
+        fprintf(stdout, "Values:                %d bytes each\n", (int)FLAGS_value_size);
+        fprintf(stdout, "Entries:               %lu\n", (uint64_t)num_);
+        fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);        
+        fprintf(stdout, "Read:                  %lu \n", (uint64_t)FLAGS_read);
+        fprintf(stdout, "Write:                 %lu \n", (uint64_t)FLAGS_write);
+        fprintf(stdout, "Thread:                %lu \n", (uint64_t)FLAGS_thread);
+        fprintf(stdout, "Hash Buckets:          %lu \n", (uint64_t)FLAGS_bucket_count);         
+        fprintf(stdout, "Hash Cell in Bucket:   %lu \n", (uint64_t)FLAGS_cell_count);
+        fprintf(stdout, "Hash Slot in Cell:     %u \n", Hashtable::CellMeta::SlotCount());
+        fprintf(stdout, "Hash capacity:         %lu \n", (uint64_t)initial_capacity_);
+        fprintf(stdout, "Hash loadfactor:       %.2f \n", FLAGS_loadfactor);
+        fprintf(stdout, "Cell Type:             %s \n", Hashtable::CellMeta::Name().c_str()); 
+        fprintf(stdout, "Report interval:       %lu s\n", (uint64_t)FLAGS_report_interval);
+        fprintf(stdout, "Stats interval:        %lu records\n", (uint64_t)FLAGS_stats_interval);
+        fprintf(stdout, "benchmarks:            %s\n", FLAGS_benchmarks.c_str());
         fprintf(stdout, "------------------------------------------------\n");
     }
 };

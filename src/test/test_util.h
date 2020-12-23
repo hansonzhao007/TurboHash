@@ -4,8 +4,11 @@
 #include <string>
 #include <algorithm>
 #include <fstream>
+#include <random>
 
 #include "util/trace.h"
+
+auto rng = std::default_random_engine {};
 
 void GenerateRandomKeys(std::vector<size_t>& res, size_t min, size_t max, size_t count, int32_t seeds = 123) {
     res.resize(count);
@@ -15,7 +18,7 @@ void GenerateRandomKeys(std::vector<size_t>& res, size_t min, size_t max, size_t
     for (size_t i = 0; i < count; ++i) {
         res[i] = trace.Next();
         if ((i & 0xFFFFF) == 0) {
-            fprintf(stderr, "generate%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
+            fprintf(stderr, "generate%*s-%03d->seed: 0x%x\r", int(i >> 20), " ", int(i >> 20), seeds);fflush(stderr);
         }
     }
     printf("\r");
@@ -43,6 +46,7 @@ std::string* GenerateAllKeysInRange(size_t min, size_t max) {
 class RandomKeyTrace {
 public:
     RandomKeyTrace(size_t count, int seed = random()) {
+
         count_ = count;
         GenerateRandomKeys(keys_, 0, 100000000000L, count_, seed);
     }
@@ -53,9 +57,29 @@ public:
     void Randomize(void) {
         printf("Randomize the trace...\r");
         fflush(nullptr);
-        std::random_shuffle(keys_.begin(), keys_.end());
+        std::shuffle(std::begin(keys_), std::end(keys_), rng);
     }
     
+    class RangeIterator {
+    public:
+        RangeIterator(std::vector<size_t>* pkey_vec, size_t start, size_t end):
+            pkey_vec_(pkey_vec),                        
+            end_index_(end), 
+            cur_index_(start) { }
+
+        inline bool Valid() {
+            return (cur_index_ != end_index_);
+        }
+
+        inline size_t Next() {
+            return (*pkey_vec_)[cur_index_++];
+        }
+
+        std::vector<size_t>* pkey_vec_;
+        size_t end_index_;
+        size_t cur_index_;
+    };
+
     class Iterator {
     public:
         Iterator(std::vector<size_t>* pkey_vec, size_t start_index, size_t range):
@@ -100,6 +124,10 @@ public:
 
     Iterator Begin(void) {
         return Iterator(&keys_, 0, keys_.size());
+    }
+
+    RangeIterator iterate_between(size_t start, size_t end) {
+        return RangeIterator(&keys_, start, end);
     }
 
     size_t count_;
