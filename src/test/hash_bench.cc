@@ -385,6 +385,7 @@ public:
         // If do not rehash, we control the distinct key to the minimum between the FLAGS_num and the rehash threshold.
         if (FLAGS_no_rehash) {
             trace_size_ = std::min(FLAGS_num, rehash_threshold);
+            num_ = trace_size_;
         } else {
             trace_size_ = FLAGS_num;
         }
@@ -393,7 +394,7 @@ public:
         PrintHeader();
         bool fresh_db = true;
         // run benchmark
-        bool print_hist = FLAGS_hist;        
+        bool print_hist = FLAGS_hist;
         const char* benchmarks = FLAGS_benchmarks.c_str();
         int thread = FLAGS_thread;
         while (benchmarks != nullptr) {
@@ -426,6 +427,10 @@ public:
                 fresh_db = false;
                 thread = 1;
                 method = &Benchmark::DoRehash;
+            } else if (name == "compare") {
+                fresh_db = true;
+                thread = 1;
+                method = &Benchmark::DoCompare;
             }
 
             if (fresh_db) {
@@ -451,7 +456,7 @@ public:
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        Duration duration(FLAGS_readtime, num_);
+        Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(batch)) {
             for (uint64_t j = 0; j < batch; j++) {         
@@ -463,8 +468,8 @@ public:
             thread->stats.FinishedBatchOp(batch);
         }
         char buf[100];
-        snprintf(buf, sizeof(buf), "(num: %lu, not probed: %lu)", num_, not_find);
-        INFO("DoProbe thread: %2d. Total probe num: %lu, not find: %lu)", thread->tid, num_, not_find);
+        snprintf(buf, sizeof(buf), "(num: %lu, not probed: %lu)", reads_, not_find);
+        INFO("DoProbe thread: %2d. Total probe num: %lu, not find: %lu)", thread->tid, reads_, not_find);
         thread->stats.AddMessage(buf);
     }
 
@@ -479,7 +484,7 @@ public:
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
         uint64_t data_offset;
-        Duration duration(FLAGS_readtime, num_);
+        Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
         while (!duration.Done(batch)) {
             for (uint64_t j = 0; j < batch; j++) {                          
@@ -491,12 +496,14 @@ public:
             thread->stats.FinishedBatchOp(batch);
         }
         char buf[100];
-        snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", num_, not_find);
-        INFO("DoRead thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, num_, not_find);
+        snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
+        INFO("DoRead thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
         thread->stats.AddMessage(buf);
     }
 
-    
+    /** DoCompare
+     *  @note: compare TurboHash with other Dram hash table in single thread write and multithread read
+    */
     void DoCompare(ThreadState* thread) {
         // TurboHash
         
@@ -660,33 +667,51 @@ private:
                 cache_size = val;
                 }
             }
-            fclose(cpuinfo);
-            fprintf(stderr, "CPU:               %d * %s\n", num_cpus, cpu_type.c_str());
-            fprintf(stderr, "CPUCache:          %s\n", cache_size.c_str());
+        fclose(cpuinfo);
+        fprintf(stderr, "CPU:                   %d * %s\n", num_cpus, cpu_type.c_str());
+        fprintf(stderr, "CPUCache:              %s\n", cache_size.c_str());                  
         }
         #endif
     }
 
     void PrintHeader() {
-        fprintf(stdout, "------------------------------------------------\n");
+                   INFO("------------------------------------------------\n");
+        fprintf(stdout, "------------------------------------------------\n");                   
         PrintEnvironment();
         fprintf(stdout, "Keys:                  %d bytes each\n", 8);
+                   INFO("Keys:                  %d bytes each\n", 8);
         fprintf(stdout, "Values:                %d bytes each\n", (int)FLAGS_value_size);
+                   INFO("Values:                %d bytes each\n", (int)FLAGS_value_size);
         fprintf(stdout, "Entries:               %lu\n", (uint64_t)num_);
-        fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);        
+                   INFO("Entries:               %lu\n", (uint64_t)num_);
+        fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);   
+                   INFO("Trace size:            %lu\n", (uint64_t)trace_size_);        
         fprintf(stdout, "Read:                  %lu \n", (uint64_t)FLAGS_read);
+                   INFO("Read:                  %lu \n", (uint64_t)FLAGS_read);
         fprintf(stdout, "Write:                 %lu \n", (uint64_t)FLAGS_write);
+                   INFO("Write:                 %lu \n", (uint64_t)FLAGS_write);
         fprintf(stdout, "Thread:                %lu \n", (uint64_t)FLAGS_thread);
+                   INFO("Thread:                %lu \n", (uint64_t)FLAGS_thread);
         fprintf(stdout, "Hash Buckets:          %lu \n", (uint64_t)FLAGS_bucket_count);         
+                   INFO("Hash Buckets:          %lu \n", (uint64_t)FLAGS_bucket_count);
         fprintf(stdout, "Hash Cell in Bucket:   %lu \n", (uint64_t)FLAGS_cell_count);
+                   INFO("Hash Cell in Bucket:   %lu \n", (uint64_t)FLAGS_cell_count);
         fprintf(stdout, "Hash Slot in Cell:     %u \n", Hashtable::CellMeta::SlotCount());
+                   INFO("Hash Slot in Cell:     %u \n", Hashtable::CellMeta::SlotCount());
         fprintf(stdout, "Hash capacity:         %lu \n", (uint64_t)initial_capacity_);
+                   INFO("Hash capacity:         %lu \n", (uint64_t)initial_capacity_);
         fprintf(stdout, "Hash loadfactor:       %.2f \n", FLAGS_loadfactor);
+                   INFO("Hash loadfactor:       %.2f \n", FLAGS_loadfactor);
         fprintf(stdout, "Cell Type:             %s \n", Hashtable::CellMeta::Name().c_str()); 
+                   INFO("Cell Type:             %s \n", Hashtable::CellMeta::Name().c_str()); 
         fprintf(stdout, "Report interval:       %lu s\n", (uint64_t)FLAGS_report_interval);
+                   INFO("Report interval:       %lu s\n", (uint64_t)FLAGS_report_interval);
         fprintf(stdout, "Stats interval:        %lu records\n", (uint64_t)FLAGS_stats_interval);
+                   INFO("Stats interval:        %lu records\n", (uint64_t)FLAGS_stats_interval);
         fprintf(stdout, "benchmarks:            %s\n", FLAGS_benchmarks.c_str());
-        fprintf(stdout, "------------------------------------------------\n");
+                   INFO("benchmarks:            %s\n", FLAGS_benchmarks.c_str());
+        fprintf(stdout, "------------------------------------------------\n");                                      
+                   INFO("------------------------------------------------\n");
     }
 };
 

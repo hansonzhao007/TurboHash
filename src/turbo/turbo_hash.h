@@ -1449,7 +1449,7 @@ public:
          *  |                     H1                         |
         */
         struct PartialHash {
-            PartialHash(uint64_t hash) :                
+            PartialHash(uint64_t hash) :
                 H1_( hash ),
                 H2_( (hash >> 16) & 0xFFFF ),
                 bucket_hash_( hash >> 32 )
@@ -2100,7 +2100,7 @@ public:
             return  { { bi_ /* ignore bucket index */, 
                         cell_i_ /* cell index */, 
                         *bitmap_ /* slot index*/, 
-                        (H1Tag)slot->H1, 
+                        slot->H1, 
                         H2, 
                         false,
                         0}, 
@@ -2784,7 +2784,8 @@ private:
                     // Obtain record pointer
                     RecordPtr record(slot.entry);
 
-                    if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first()))) {  
+                    if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first()))) 
+                    {  
                         // This is an update request
                         // TURBO_DEBUG( "Update key" << key << "\n" << 
                         //               meta.ToString());
