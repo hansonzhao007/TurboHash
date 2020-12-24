@@ -60,15 +60,12 @@ int main() {
     read_fun();
 
     hashtable->MinorReHashAll();
-    hashtable->DebugInfo();
     read_fun();
 
     hashtable->MinorReHashAll();
-    hashtable->DebugInfo();
     read_fun();
 
     hashtable->MinorReHashAll();
-    hashtable->DebugInfo();
     read_fun();
 
     {

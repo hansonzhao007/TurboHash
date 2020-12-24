@@ -68,8 +68,6 @@
 
 // #define LTHASH_DEBUG_OUT
 
-// #define TURBO_ENABLE_HUGEPAGE /* enable huge page or not */
-
 // Linear probing setting
 static const int kTurboMaxProbeLen = 16;
 static const int kTurboProbeStep   = 1;    
@@ -1612,242 +1610,6 @@ public:
 
     /* #endregion: for CellMeta */
 
-    /* #region: for CellAllocator */
-
-    /** MemBlock
-     *  @note: a memory block that can allocate at most 'count' Cell (128-byte Cell or 256-byte Cell)
-    */
-    template <typename CellMeta = CellMeta128>
-    class MemBlock { 
-    public:
-        MemBlock(int block_id, size_t count):
-            start_addr_(nullptr),
-            cur_addr_(nullptr),
-            ref_(0),
-            size_(count),
-            remaining_(count),
-            is_hugepage_(false),
-            block_id_(block_id) {
-            // Allocate memory space for this MemBlock
-            size_t space = size_ * CellMeta::CellSize();
-            if ((space & 0xfff) != 0) {
-                // space is not several times of 4KB
-                TURBO_ERROR("MemBlock size is not 4KB aligned. Space size: " << space);
-                exit(1);
-            }
-            
-            #ifdef TURBO_ENABLE_HUGEPAGE
-            start_addr_ = (char*) mmap(TURBO_HUGE_ADDR, space, TURBO_HUGE_PROTECTION, TURBO_HUGE_FLAGS, -1, 0);
-            if (start_addr_ == MAP_FAILED) {
-                TURBO_WARNING("MemBlock mmap hugepage fail. space: " << space);
-                is_hugepage_ = false;
-                start_addr_ = (char* ) aligned_alloc(CellMeta::CellSize(), space);
-                if (start_addr_ == nullptr) {
-                    TURBO_ERROR("MemBlock malloc space fail. Space size: " << space);
-                    exit(1);
-                }
-            }
-            #else
-            is_hugepage_ = false;
-            start_addr_ = (char* ) aligned_alloc(CellMeta::CellSize(), space);
-            if (start_addr_ == nullptr) {
-                TURBO_ERROR("MemBlock malloc space fail. Space size: " << space);
-                exit(1);
-            }
-            #endif
-            cur_addr_ = start_addr_;
-        }
-
-        ~MemBlock() {
-            /* munmap() size_ of MAP_HUGETLB memory must be hugepage aligned */
-            size_t space = size_ * CellMeta::CellSize();
-            if (is_hugepage_) {
-                if (munmap(start_addr_, space)) {
-                    TURBO_ERROR("munmap hugepage fail. munmap size: " << space);
-                    exit(1);
-                }
-            } else {
-                free(start_addr_);
-            }
-        }
-        
-        inline size_t Remaining() {
-            return remaining_;
-        }
-
-        inline char* Allocate(size_t request_count) {
-            // Allocate 'request_count' cells 
-            if (request_count > remaining_) {
-                // There isn't enough space for allocation
-                return nullptr;
-            }
-
-            // allocate count space.
-            ++ref_;
-            remaining_ -= request_count; 
-            char* return_addr = cur_addr_;
-            cur_addr_ += (request_count * CellMeta::CellSize());
-            
-            return return_addr;
-        }
-
-        inline bool Release() {
-            // reduce reference counter
-            // return true if reference is 0, meaning this MemBlock can be added to free list.
-            --ref_;
-            if (ref_ == 0) {
-                remaining_ = size_;
-                cur_addr_ = start_addr_;
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
-
-        inline int Reference() {
-            return ref_;
-        }
-
-        // Clear all the content to '0'
-        inline void Reset(void) {
-            size_t space = size_ * CellMeta::CellSize();
-            memset(start_addr_, 0, space);
-        }
-
-        inline bool IsHugePage() {
-            return is_hugepage_;
-        }
-
-        inline int ID() {
-            return block_id_;
-        }
-
-        std::string ToString() {
-            char buffer[1024];
-            sprintf(buffer, "ID: %d, size: %lu, remain: %lu, ref: %d\n", block_id_, size_, remaining_, ref_);
-            return buffer;
-        }
-    private:
-        char*   start_addr_;    // start address of MemBlock
-        char*   cur_addr_;      // current position for space allocation
-        int     ref_;           // reference of this MemBlock
-        size_t  size_;          // number of cells
-        size_t  remaining_;     // remaining cells for allocation
-        bool    is_hugepage_;   // This MemBlock uses hugepage or not
-        int     block_id_;          
-    };// end of class MemBlock
-
-    /** CellAllocator
-     *  @note: used to allocate N Cell space
-    */
-    template <typename CellMeta = CellMeta128, size_t kBucketCellCount = 32768>
-    class CellAllocator {
-    public:
-        CellAllocator(int initial_blocks = 6):
-            cur_mem_block_(nullptr),
-            next_id_(0),
-            spin_lock_(0) {
-            AddMemBlock(initial_blocks);
-            cur_mem_block_ = GetMemBlock();
-        }
-
-        // Allocate memory space for a Bucket with 'count' cells
-        // Return:
-        // int: the MemBlock ID
-        // char*: address in MemBlock
-        inline std::pair<int /* block id */, char* /* addr */> AllocateNoSafe(size_t count) {
-            if (cur_mem_block_->Remaining() < count) {
-                // if remaining space is not enough, allocate a new MemBlock
-                cur_mem_block_ = GetMemBlock();
-            }
-            char* addr = cur_mem_block_->Allocate(count);
-            if (addr == nullptr) {
-                fprintf(stderr, "CellAllocator::Allocate addr is nullptr\n");
-                exit(1);
-            }
-            
-            return {cur_mem_block_->ID(), addr};
-        }
-
-        inline std::pair<int, char*> AllocateSafe(size_t count) {
-            util::SpinLockScope<0> lock(&spin_lock_);
-            if (cur_mem_block_->Remaining() < count) {
-                // if remaining space is not enough, allocate a new MemBlock
-                cur_mem_block_ = GetMemBlock();
-            }
-            char* addr = cur_mem_block_->Allocate(count);
-            if (addr == nullptr) {
-                fprintf(stderr, "CellAllocator::Allocate addr is nullptr\n");
-                exit(1);
-            }
-            
-            return {cur_mem_block_->ID(), addr};
-        }
-
-        inline void ReleaseNoSafe(int id) {
-            auto iter = mem_block_map_.find(id);
-            if (iter != mem_block_map_.end()) {
-                bool should_recycle = iter->second->Release();
-                if (should_recycle) {
-                    RecycleMemBlock(iter->second);
-                }
-            }
-        }
-
-        inline void ReleaseSafe(int id) {
-            util::SpinLockScope<0> lock(&spin_lock_);
-            auto iter = mem_block_map_.find(id);
-            if (iter != mem_block_map_.end()) {
-                bool should_recycle = iter->second->Release();
-                if (should_recycle) {
-                    RecycleMemBlock(iter->second);
-                }
-            }
-        }
-
-        std::string ToString() {
-            std::string res;
-            for (auto& mb : mem_block_map_) {
-                res.append(mb.second->ToString());
-            }
-            return res;
-        }
-
-    private:
-        inline void AddMemBlock(int n) {
-            // add n MemBlock to free_mem_block_list_
-            for (int i = 0; i < n; i++) {
-                MemBlock<CellMeta>* mem_block = new MemBlock<CellMeta>(next_id_++, kBucketCellCount);
-                free_mem_block_list_.push_back(mem_block);
-                mem_block_map_[mem_block->ID()] = mem_block;
-            }
-        }
-
-        inline MemBlock<CellMeta>* GetMemBlock() {
-            if (free_mem_block_list_.empty()) {
-                AddMemBlock(1);
-            }
-            MemBlock<CellMeta>* res = free_mem_block_list_.front();
-            free_mem_block_list_.pop_front();
-            // res->Reset();
-            return res;
-        }
-
-        inline void RecycleMemBlock(MemBlock<CellMeta>* mem_block) {
-            assert(mem_block->Reference() == 0);
-            free_mem_block_list_.push_back(mem_block);
-        }
-
-        std::deque<MemBlock<CellMeta>*> free_mem_block_list_;
-        std::unordered_map<int, MemBlock<CellMeta>*> mem_block_map_;
-        MemBlock<CellMeta>* cur_mem_block_;
-        int         next_id_;
-        uint32_t    spin_lock_;
-    }; // end of class CellAllocator
-
-    /* #endregion: for CellAllocator */
-
     /* #region: for ProbeStrategy */
 
     /** ProbeWithinCell
@@ -2000,6 +1762,18 @@ public:
             return ss.str();
         }
     }; // end of class SlotInfo
+
+    class CellAllocator {
+        public:
+            inline char* Allocate(size_t cell_count) {
+                size_t size = cell_count * kCellSize;
+                return static_cast<char*>(aligned_alloc(kCellSize, size));
+            }
+
+            inline void Release(char* addr) {
+                free(addr);
+            }
+    };
 
     /** RecordAllocator
      *  @note: allocate memory space for new record
@@ -2227,50 +2001,20 @@ public:
 
         size_t bucket_meta_space = bucket_count * sizeof(BucketMeta);             
         BucketMeta* buckets_addr = nullptr;
-
-        #ifdef TURBO_ENABLE_HUGEPAGE
-        size_t bucket_meta_space_huge = (bucket_meta_space + TURBO_HUGEPAGE_SIZE - 1) / TURBO_HUGEPAGE_SIZE * TURBO_HUGEPAGE_SIZE;
-        buckets_addr = (BucketMeta*) mmap(TURBO_HUGE_ADDR, bucket_meta_space_huge, TURBO_HUGE_PROTECTION, TURBO_HUGE_FLAGS, -1, 0);
-        if (buckets_addr == MAP_FAILED) {
-            buckets_addr = (BucketMeta* ) aligned_alloc(sizeof(BucketMeta), bucket_meta_space);            
-            if (buckets_addr == nullptr) {
-                fprintf(stderr, "malloc %lu space fail.\n", bucket_meta_space);
-                exit(1);
-            }
-            TURBO_INFO(" Allocated: " << bucket_meta_space << " for BucketMeta.");
-            memset((void*)buckets_addr, 0, bucket_meta_space);
-        }
-        else {
-            TURBO_INFO(" Allocated: " << bucket_meta_space_huge << " hugepage for BucketMeta.");
-            memset((void*)buckets_addr, 0, bucket_meta_space_huge);
-        }
-        #else
         buckets_addr = (BucketMeta* ) aligned_alloc(sizeof(BucketMeta), bucket_meta_space);
         if (buckets_addr == nullptr) {
             fprintf(stderr, "malloc %lu space fail.\n", bucket_meta_space);
             exit(1);
         }
-        TURBO_INFO(" Allocated: " << bucket_meta_space);
+        TURBO_INFO("BucketMeta Allocated: " << bucket_meta_space);
         memset(buckets_addr, 0, bucket_meta_space);
-        #endif
-        
+
         buckets_ = buckets_addr;
-        buckets_mem_block_ids_ = new int[bucket_count];
         for (size_t i = 0; i < bucket_count; ++i) {
-            auto res = cell_allocator_.AllocateNoSafe(cell_count);
-            memset(res.second, 0, cell_count * kCellSize);
-            buckets_[i].Reset(res.second, cell_count);
-            buckets_mem_block_ids_[i] = res.first;
+            char* addr = cell_allocator_.Allocate(cell_count);
+            memset(addr, 0, cell_count * kCellSize);
+            buckets_[i].Reset(addr, cell_count);
         }
-
-    }
-
-    void DebugInfo()  {
-        printf("%s\n", PrintCellAllocator().c_str());
-    }
-
-    std::string PrintCellAllocator() {
-        return cell_allocator_.ToString();
     }
 
     /** MinorReHashAll
@@ -2278,31 +2022,6 @@ public:
      *  ! 
     */
    void MinorReHashAll()  {
-        // allocate new mem space together
-        int* old_mem_block_ids = (int*)malloc(bucket_count_ * sizeof(int));
-        char** new_mem_block_addr = (char**)malloc(bucket_count_ * sizeof(char*));
-        for (size_t i = 0; i < bucket_count_; ++i) {
-            auto& bucket_meta = locateBucket(i);
-            uint32_t new_cell_count = bucket_meta.CellCount() << 1;
-            // if current bucket cannot enlarge any more, continue
-            if (TURBO_UNLIKELY(new_cell_count > kCellCountLimit)) {
-                printf("Cannot rehash bucket %lu\n", i);
-                TURBO_ERROR("Out of capacity");
-                exit(1);
-            }
-            std::pair<int /* block id */, char* /* addr */> res = 
-                cell_allocator_.AllocateNoSafe(new_cell_count);
-            if (res.second == nullptr) {
-                printf("Cell allocation error\n");
-                TURBO_ERROR("Cell allocation error.");
-                exit(1);
-            }
-            old_mem_block_ids[i] = buckets_mem_block_ids_[i];
-            buckets_mem_block_ids_[i] = res.first;
-            new_mem_block_addr[i] = res.second;
-            capacity_.fetch_add(bucket_meta.CellCount() * (CellMeta::SlotCount() - 1));
-        }
-
         // rehash for all the buckets
         int rehash_thread = 8;
         printf("Rehash threads: %d\n", rehash_thread);
@@ -2318,7 +2037,7 @@ public:
                 size_t counts  = 0;
                 // printf("Rehash bucket [%lu, %lu)\n", start_b, end_b);
                 for (size_t i = start_b; i < end_b; ++i) {
-                    counts += MinorRehash(i, new_mem_block_addr[i]);
+                    counts += MinorRehash(i);
                 }
                 rehash_count.fetch_add(counts, std::memory_order_relaxed);
             });
@@ -2329,14 +2048,6 @@ public:
         });
         double rehash_duration = util::NowMicros() - rehash_start;
         printf("Real rehash speed: %f Mops/s. entries: %lu, duration: %.2f s.\n", (double)rehash_count / rehash_duration, rehash_count.load(), rehash_duration/1000000.0);
-
-        // release the old mem block space
-        for (size_t i = 0; i < bucket_count_; ++i) {
-            cell_allocator_.ReleaseNoSafe(old_mem_block_ids[i]);
-        }
-
-        free(old_mem_block_ids);
-        free(new_mem_block_addr);
     }
 
     struct FindNextSlotInRehashResult {
@@ -2367,14 +2078,15 @@ public:
     }
 
     
-    size_t MinorRehash(int bi, char* new_bucket_addr) {
+    size_t MinorRehash(int bi) {
         size_t count = 0;
         auto& bucket_meta = locateBucket(bi);
 
         // Step 1. Create new bucket and initialize its meta
-        uint32_t old_cell_count = bucket_meta.CellCount();
+        uint32_t old_cell_count      = bucket_meta.CellCount();
         uint32_t new_cell_count      = old_cell_count << 1;
         uint32_t new_cell_count_mask = new_cell_count - 1;
+        char*    new_bucket_addr     = cell_allocator_.Allocate(new_cell_count);
         if (!isPowerOfTwo(new_cell_count)) {
             printf("rehash bucket is not power of 2. %u\n", new_cell_count);
             exit(1);
@@ -2390,10 +2102,12 @@ public:
             memset(des_cell_addr, 0, CellMeta::size());
         }
 
-        // iterator old bucket and insert slots info to new bucket
-        // old: |11111111|22222222|33333333|44444444|   
-        //       ========>
-        // new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444    |
+// ----------------------------------------------------------------------------------
+// iterator old bucket and insert slots info to new bucket
+// old: |11111111|22222222|33333333|44444444|   
+//       ========>
+// new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444    |
+// ----------------------------------------------------------------------------------
 
         // Step 2. Move the meta in old bucket to new bucket
         //      a) Record next avaliable slot position of each cell within new bucket for rehash
@@ -3041,12 +2755,11 @@ private:
     }
 
 private:
-    CellAllocator<CellMeta, kCellCountLimit> cell_allocator_;
-    RecordAllocator                          record_allocator_;
-    BucketMeta*   buckets_;
-    int*          buckets_mem_block_ids_;
-    const size_t  bucket_count_ = 0;
-    const size_t  bucket_mask_  = 0;
+    CellAllocator       cell_allocator_;
+    RecordAllocator     record_allocator_;
+    BucketMeta*         buckets_;
+    const size_t        bucket_count_ = 0;
+    const size_t        bucket_mask_  = 0;
     std::atomic<size_t> capacity_;
     std::atomic<size_t> size_;
 
