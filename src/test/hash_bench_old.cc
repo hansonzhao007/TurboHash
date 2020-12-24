@@ -34,7 +34,7 @@ DEFINE_int32(thread_write, 1, "");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 DEFINE_int32(cell_count, 64, "");
 DEFINE_int32(bucket_count, 128 << 10, "bucket count");
-DEFINE_int32(value_size, 16, "default value size");
+DEFINE_int32(value_size, 23, "default value size");
 // use numactl --hardware command to check numa node info
 // static int kThreadIDs[16] = {16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7 };
 
@@ -203,17 +203,17 @@ public:
 
         read_fun();
         find_fun();
-        probe_fun();
+        // probe_fun();
 
-        printf("Start Rehashing\n");
-        time_start = Env::Default()->NowMicros();
-        hashtable.MinorReHashAll();
-        time_end   = Env::Default()->NowMicros();
-        printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable.Size(), (double)hashtable.Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
+        // printf("Start Rehashing\n");
+        // time_start = Env::Default()->NowMicros();
+        // hashtable.MinorReHashAll();
+        // time_end   = Env::Default()->NowMicros();
+        // printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable.Size(), (double)hashtable.Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
 
-        read_fun();
-        find_fun();
-        probe_fun();
+        // read_fun();
+        // find_fun();
+        // probe_fun();
 
         return inserted_num;
     }
@@ -493,7 +493,7 @@ int main(int argc, char *argv[]) {
     // inserted_num = hash_bench.TurboHashSpeedTest();
     // printf("Inserted: %lu\n", inserted_num);
     hash_bench.HashSpeedTest<robin_hood::unordered_map<size_t, std::string>, std::string >("robin_hood::unordered_map", FLAGS_num);
-    // hash_bench.HashSpeedTest<absl::flat_hash_map<size_t, std::string>, std::string >("absl::flat_hash_map", FLAGS_num);
+    hash_bench.HashSpeedTest<absl::flat_hash_map<size_t, std::string>, std::string >("absl::flat_hash_map", FLAGS_num);
     // hash_bench.HashSpeedTest<std::unordered_map<size_t, std::string>, std::string >("std::unordered_map", FLAGS_num);
     hash_bench.TestRehash();
     // hash_bench.CuckooSpeedTest("CuckooHashMap", inserted_num);
