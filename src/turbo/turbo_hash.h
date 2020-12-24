@@ -68,10 +68,10 @@
 
 // #define LTHASH_DEBUG_OUT
 
-#define TURBO_ENABLE_HUGEPAGE /* enable huge page or not */
+// #define TURBO_ENABLE_HUGEPAGE /* enable huge page or not */
 
 // Linear probing setting
-static const int kTurboMaxProbeLen = 18;
+static const int kTurboMaxProbeLen = 16;
 static const int kTurboProbeStep   = 1;    
 
 #define TURBO_LIKELY(x)     (__builtin_expect(false || (x), true))
@@ -1990,19 +1990,15 @@ public:
             H2(0),
             equal_key(false) {}
         
-        #pragma GCC diagnostic push
-        #pragma GCC diagnostic ignored "-Wformat"
         std::string ToString() {
-            char buffer[128];
-            sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%04x, H1: 0x%lx",
-                bucket,
-                cell,
-                slot,
-                H2,
-                H1);
-            return buffer;
+            std::ostringstream ss;
+            ss <<   "bi: " << bucket
+               << ", ci: " << cell
+               << ", si: " << slot
+               << ", H2: " << H2
+               << ", H1: " << H1;
+            return ss.str();
         }
-        #pragma GCC diagnostic pop
     }; // end of class SlotInfo
 
     /** RecordAllocator
@@ -2106,7 +2102,11 @@ public:
     */        
     class BucketIterator {
     public:
-    typedef std::pair<SlotInfo, HashSlot> InfoPair;
+        struct InfoPair {
+            SlotInfo slot_info;
+            HashSlot hash_slot;
+        };
+
         BucketIterator(uint32_t bi, char* bucket_addr, size_t cell_count, size_t cell_i = 0):
             bi_(bi),
             cell_count_(cell_count),
@@ -2304,7 +2304,7 @@ public:
         }
 
         // rehash for all the buckets
-        int rehash_thread = 4;
+        int rehash_thread = 8;
         printf("Rehash threads: %d\n", rehash_thread);
         std::vector<std::thread> workers(rehash_thread);
         std::vector<size_t> add_capacity(rehash_thread, 0);
@@ -2404,21 +2404,21 @@ public:
         while (iter.valid()) { 
             count++;
             // Step 1. obtain old slot info and slot content
-            std::pair<SlotInfo, HashSlot> res = *iter;
+            typename BucketIterator::InfoPair res = *iter;
 
             // Step 2. update bitmap, H2, H1 and slot pointer in new bucket
             //      a) find valid slot in new bucket
-            FindNextSlotInRehashResult valid_slot = findNextSlotInRehash(slot_vec, res.first.H1, new_cell_count_mask);
+            FindNextSlotInRehashResult valid_slot = findNextSlotInRehash(slot_vec, res.slot_info.H1, new_cell_count_mask);
             //      b) obtain des cell addr
             char* des_cell_addr = new_bucket_addr + (valid_slot.cell_index << kCellSizeLeftShift);            
             if (valid_slot.slot_index >= CellMeta::SlotMaxRange()) {                
-                printf("rehash fail: %s\n", res.first.ToString().c_str());
-                TURBO_ERROR("Rehash fail: " << res.first.ToString());
-                printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
+                printf("rehash fail: %s\n", res.slot_info.ToString().c_str());
+                TURBO_ERROR("Rehash fail: " << res.slot_info.ToString());
+                printf("%s\n", PrintBucketMeta(res.slot_info.bucket).c_str());
                 exit(1);
             }
             //      c) move the slot meta to new bucket
-            moveSlot(des_cell_addr, valid_slot.slot_index /* des_slot_i */, res.first, res.second);
+            moveSlot(des_cell_addr, valid_slot.slot_index /* des_slot_i */, res.slot_info, res.hash_slot);
 
             // Step 3. to next old slot
             ++iter;
@@ -2577,8 +2577,8 @@ public:
             BucketIterator iter(i, bucket_meta.Address(), bucket_meta.CellCount());
             while (iter.valid()) {
                 auto res = (*iter);
-                SlotInfo& info = res.first;
-                HashSlot& slot = res.second;
+                SlotInfo& info = res.slot_info;
+                HashSlot& slot = res.hash_slot;
                 RecordPtr record(slot.entry);
                 std::cout << info.ToString() << ", addr: " << slot.entry << ". key: " << record->first() << ", value: " << record->second() << std::endl;
                 ++iter;
@@ -2763,20 +2763,20 @@ private:
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
 
-            std::pair<SlotInfo, bool /* find a slot or not */> res = findSlotForInsert(key, partial_hash);
+            FindSlotForInsertResult res = findSlotForInsert(key, partial_hash);
 
             // find a valid slot in target cell
-            if (res.second) { 
-                char* cell_addr = locateCell({res.first.bucket, res.first.cell});
+            if (res.find) { 
+                char* cell_addr = locateCell({res.target_slot.bucket, res.target_slot.cell});
 
                 util::SpinLockScope<0> lock_scope(cell_addr); // Lock current cell
 
                 CellMeta meta(cell_addr);   // obtain the meta part
 
-                if (TURBO_LIKELY( !meta.Occupy(res.first.slot) )) { 
+                if (TURBO_LIKELY( !meta.Occupy(res.target_slot.slot) )) { 
                     // If the new slot from 'findSlotForInsert' is not occupied, insert directly
 
-                    insertToSlotAndRecycle(type, key, value, cell_addr, res.first); // update slot content (including pointer and H1), H2 and bitmap
+                    insertToSlotAndRecycle(type, key, value, cell_addr, res.target_slot); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
                     // if (!res.first.equal_key) {
@@ -2784,7 +2784,7 @@ private:
                     // }
 
                     return true;
-                } else if (res.first.equal_key) {
+                } else if (res.target_slot.equal_key) {
                     // If this is an update request and the backup slot is occupied,
                     // it means the backup slot has changed in current cell. So we 
                     // update the slot location.
@@ -2795,8 +2795,8 @@ private:
                         exit(1);
                     }
 
-                    res.first.slot = *empty_bitset;
-                    insertToSlotAndRecycle(type, key, value, cell_addr, res.first);
+                    res.target_slot.slot = *empty_bitset;
+                    insertToSlotAndRecycle(type, key, value, cell_addr, res.target_slot);
                     return true;
                 } else { 
                     // current new slot has been occupied by another concurrent thread.
@@ -2804,17 +2804,17 @@ private:
                     // Before retry 'findSlotForInsert', find if there is any empty slot for insertion
                     util::BitSet empty_bitset = meta.EmptyBitSet();
                     if (empty_bitset.validCount() > 1) {
-                        res.first.slot = *empty_bitset;
-                        insertToSlotAndRecycle(type, key, value, cell_addr, res.first);
+                        res.target_slot.slot = *empty_bitset;
+                        insertToSlotAndRecycle(type, key, value, cell_addr, res.target_slot);
                         return true;
                     }
 
                     // Current cell has no empty slot for insertion, we retry 'findSlotForInsert'
                     // This unlikely happens with all previous effort.
                     #ifdef TURBO_ENABLE_LOGGING
-                    TURBO_INFO("retry find slot in Bucket " << res.first.bucket <<
-                               ". Cell " << res.first.cell <<
-                               ". Slot " << res.first.slot <<
+                    TURBO_INFO("retry find slot in Bucket " << res.target_slot.bucket <<
+                               ". Cell " << res.target_slot.cell <<
+                               ". Slot " << res.target_slot.slot <<
                                ". Key: " << key );
                     #endif
                     retry_find = true;
@@ -2822,8 +2822,8 @@ private:
             }
             else { // cannot find a valid slot for insertion, rehash current bucket then retry
                 #ifdef TURBO_ENABLE_LOGGING
-                TURBO_INFO("=========== Need Rehash Bucket " << res.first.bucket << " ==========");   
-                TURBO_INFO(PrintBucketMeta(res.first.bucket));           
+                TURBO_INFO("=========== Need Rehash Bucket " << res.target_slot.bucket << " ==========");   
+                TURBO_INFO(PrintBucketMeta(res.target_slot.bucket));           
                 #endif
 
                 break;
@@ -2841,13 +2841,18 @@ private:
         return WKeyEqual::operator()( key, record_ptr->first() );
     }
 
+    struct FindSlotForInsertResult {
+        SlotInfo target_slot;
+        bool     find;
+    };
+
     /** findSlotForInsert
      *  @note:  Find a valid slot for insertion.
      *  @out:   first: the slot info that should insert the key
      *          second:  whether we can find a valid (empty or belong to the same key) slot for insertion
      *  ! We cannot insert if the second is false.
     */
-    inline std::pair<SlotInfo, bool> findSlotForInsert(const Key& key, PartialHash& partial_hash) {        
+    inline FindSlotForInsertResult findSlotForInsert(const Key& key, PartialHash& partial_hash) {        
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
         ProbeStrategy probe(H1ToHash(partial_hash.H1_), bucket_meta.CellCountMask(), bucket_i);

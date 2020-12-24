@@ -18,7 +18,7 @@ void GenerateRandomKeys(std::vector<size_t>& res, size_t min, size_t max, size_t
     for (size_t i = 0; i < count; ++i) {
         res[i] = trace.Next();
         if ((i & 0xFFFFF) == 0) {
-            fprintf(stderr, "generate%*s-%03d->seed: 0x%x\r", int(i >> 20), " ", int(i >> 20), seeds);fflush(stderr);
+            fprintf(stderr, "generate: %03d->seed: 0x%x\r", int(i >> 20), seeds);fflush(stderr);
         }
     }
     printf("\r");
@@ -68,7 +68,7 @@ public:
             cur_index_(start) { }
 
         inline bool Valid() {
-            return (cur_index_ != end_index_);
+            return (cur_index_ < end_index_);
         }
 
         inline size_t Next() {
@@ -113,6 +113,7 @@ public:
             sprintf(buffer, "valid: %s, cur i: %lu, end_i: %lu, range: %lu", Valid() ? "true" : "false", cur_index_, end_index_, range_);
             return buffer;
         }
+
         std::vector<size_t>* pkey_vec_;
         size_t range_;
         size_t end_index_;
@@ -124,8 +125,8 @@ public:
         return Iterator(&keys_, start_index, range);
     }
 
-    Iterator Begin(void) {
-        return Iterator(&keys_, 0, keys_.size());
+    RangeIterator Begin(void) {
+        return RangeIterator(&keys_, 0, keys_.size());
     }
 
     RangeIterator iterate_between(size_t start, size_t end) {

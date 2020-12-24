@@ -32,7 +32,7 @@ using namespace util;
 // For hash table 
 DEFINE_bool(no_rehash, true, "control hash table do not do rehashing during insertion");
 DEFINE_uint32(cell_count, 128, "");
-DEFINE_uint32(bucket_count, 256 << 10, "bucket count");
+DEFINE_uint32(bucket_count, 128 << 10, "bucket count");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
@@ -40,7 +40,7 @@ DEFINE_uint32(thread, 1, "");
 DEFINE_uint64(report_interval, 0, "Report interval in seconds");
 DEFINE_uint64(stats_interval, 10000000, "Report interval in ops");
 DEFINE_uint64(value_size, 8, "The value size");
-DEFINE_uint64(num, 200 * 1000000LU, "Number of total record");
+DEFINE_uint64(num, 100 * 1000000LU, "Number of total record");
 DEFINE_uint64(read,  100000000, "Number of read operations");
 DEFINE_uint64(write, 100000000, "Number of read operations");
 
@@ -431,14 +431,42 @@ public:
                 fresh_db = true;
                 thread = 1;
                 method = &Benchmark::DoCompare;
+            } else if (name == "rehashspeed") {
+                fresh_db = true;
+                thread = 1;
+                method = &Benchmark::DoRehashSpeed;
             }
 
             if (fresh_db) {
-                hashtable_ = new Hashtable(FLAGS_bucket_count, FLAGS_cell_count);                
+                hashtable_ = new Hashtable(FLAGS_bucket_count, FLAGS_cell_count);
             }
-            
+
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
         }
+    }
+
+    void DoRehashSpeed(ThreadState* thread) {
+        RandomKeyTrace trace(initial_capacity_ * FLAGS_loadfactor);
+        auto key_iterator = trace.Begin();
+        printf("Trace size: %lu\n", trace.keys_.size());
+        printf("Iterator size: %lu\n", key_iterator.end_index_);
+        size_t batch = 100000;
+        std::string val(value_size_, 'v');
+        thread->stats.Start();
+        while (key_iterator.Valid()) {
+            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {
+                bool res = hashtable_->Put(key_iterator.Next(), val);
+                if (!res) {
+                    INFO("Hash Table Full!!!\n");
+                    printf("Hash Table Full!!!\n");
+                    break;
+                }
+            }
+            thread->stats.FinishedBatchOp(batch);
+        }
+        thread->stats.Start();
+        hashtable_->MinorReHashAll();
+        thread->stats.FinishedBatchOp(trace.keys_.size());
     }
 
     void DoRehash(ThreadState* thread) {   
