@@ -2339,8 +2339,13 @@ public:
         free(new_mem_block_addr);
     }
 
+    struct FindNextSlotInRehashResult {
+        uint16_t cell_index;
+        uint8_t  slot_index;
+    };
+
     // return the cell index and slot index
-    inline std::pair<uint16_t, uint8_t> findNextSlotInRehash(uint8_t* slot_vec, H1Tag h1, uint16_t cell_count_mask) {
+    inline FindNextSlotInRehashResult findNextSlotInRehash(uint8_t* slot_vec, H1Tag h1, uint16_t cell_count_mask) {
         uint16_t ai = H1ToHash(h1) & cell_count_mask;
         int loop_count = 0;
 
@@ -2403,18 +2408,17 @@ public:
 
             // Step 2. update bitmap, H2, H1 and slot pointer in new bucket
             //      a) find valid slot in new bucket
-            std::pair<uint16_t /* cell index */, uint8_t /* slot index */> valid_slot = 
-            findNextSlotInRehash(slot_vec, res.first.H1, new_cell_count_mask);
+            FindNextSlotInRehashResult valid_slot = findNextSlotInRehash(slot_vec, res.first.H1, new_cell_count_mask);
             //      b) obtain des cell addr
-            char* des_cell_addr = new_bucket_addr + (valid_slot.first << kCellSizeLeftShift);            
-            if (valid_slot.second >= CellMeta::SlotMaxRange()) {                
+            char* des_cell_addr = new_bucket_addr + (valid_slot.cell_index << kCellSizeLeftShift);            
+            if (valid_slot.slot_index >= CellMeta::SlotMaxRange()) {                
                 printf("rehash fail: %s\n", res.first.ToString().c_str());
                 TURBO_ERROR("Rehash fail: " << res.first.ToString());
                 printf("%s\n", PrintBucketMeta(res.first.bucket).c_str());
                 exit(1);
             }
             //      c) move the slot meta to new bucket
-            moveSlot(des_cell_addr, valid_slot.second /* des_slot_i */, res.first, res.second);
+            moveSlot(des_cell_addr, valid_slot.slot_index /* des_slot_i */, res.first, res.second);
 
             // Step 3. to next old slot
             ++iter;
@@ -2489,10 +2493,10 @@ public:
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
 
-        auto res = findSlot(key, hash_value);
-        if (res.second) {
+        FindSlotResult res = findSlot(key, hash_value);
+        if (res.find) {
             // find a key in hash table
-            RecordPtr record(res.first.entry);
+            RecordPtr record(res.target_slot.entry);
             if (record->type == kTypeValue) {
                 *value = record->second();                
                 return true;
@@ -2509,10 +2513,10 @@ public:
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
 
-        auto res = probeFirstSlot(key, hash_value);
-        if (res.second) {
+        FindSlotResult res = probeFirstSlot(key, hash_value);
+        if (res.find) {
             // probe a key having same H2 and H1 tag
-            RecordPtr record_ptr(res.first.entry);
+            RecordPtr record_ptr(res.target_slot.entry);
             return record_ptr.data_ptr_;
         }
         return nullptr;
@@ -2522,9 +2526,9 @@ public:
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
 
-        auto res = findSlot(key, hash_value);
-        if (res.second) {
-            RecordPtr record_ptr(res.first.entry);
+        FindSlotResult res = findSlot(key, hash_value);
+        if (res.find) {
+            RecordPtr record_ptr(res.target_slot.entry);
             return record_ptr.data_ptr_;
         }
         return nullptr;
@@ -2931,7 +2935,12 @@ private:
                 false};
     }
     
-    inline std::pair<HashSlot, bool> findSlot(const Key& key, size_t hash_value) {
+    struct FindSlotResult {
+        HashSlot target_slot;
+        bool     find;
+    };
+
+    inline FindSlotResult findSlot(const Key& key, size_t hash_value) {
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
@@ -2984,7 +2993,7 @@ private:
         return {empty_slot, false};
     }
 
-    inline std::pair<HashSlot, bool> probeFirstSlot(const Key& key, size_t hash_value) {
+    inline FindSlotResult probeFirstSlot(const Key& key, size_t hash_value) {
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
