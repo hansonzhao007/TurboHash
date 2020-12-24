@@ -2721,22 +2721,27 @@ private:
         H2Tag* h2_tag_ptr   = locateH2Tag(cell_addr, info.slot);
         *h2_tag_ptr         = info.H2;
 
-        // add a fence here. 
-        // Make sure the bitmap is updated after H2
-        // https://www.modernescpp.com/index.php/fences-as-memory-barriers
-        // https://preshing.com/20130922/acquire-and-release-fences/
-        std::atomic_thread_fence(std::memory_order_release);
-
         // obtain bitmap and set bitmap
         decltype(CellMeta::bitmap_)* bitmap = (decltype(CellMeta::bitmap_) *)cell_addr;
         if ( true == info.equal_key) {
             // Update: set the new slot and toggle the old slot
             auto new_bitmap = ( (*bitmap) | (1 << info.slot) ) ^ ( 1 << info.old_slot );
+
+            // add a fence here. 
+            // Make sure the bitmap is updated after H2
+            // https://www.modernescpp.com/index.php/fences-as-memory-barriers
+            // https://preshing.com/20130922/acquire-and-release-fences/
             TURBO_COMPILER_FENCE();
             *bitmap = new_bitmap;
         }
         else {
             // Insertion: set the new slot
+
+            // add a fence here. 
+            // Make sure the bitmap is updated after H2
+            // https://www.modernescpp.com/index.php/fences-as-memory-barriers
+            // https://preshing.com/20130922/acquire-and-release-fences/
+            TURBO_COMPILER_FENCE();
             *bitmap = (*bitmap) | (1 << info.slot);
         }
     }
