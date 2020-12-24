@@ -448,7 +448,7 @@ public:
 
     void DoProbe(ThreadState* thread) {
         INFO("DoProbe");
-        uint64_t batch = 1000000;
+        uint64_t batch = 10000000;
         if (key_trace_ == nullptr) {
             ERROR("DoProbe lack key_trace_ initialization.");
             return;
@@ -692,6 +692,8 @@ private:
                    INFO("Write:                 %lu \n", (uint64_t)FLAGS_write);
         fprintf(stdout, "Thread:                %lu \n", (uint64_t)FLAGS_thread);
                    INFO("Thread:                %lu \n", (uint64_t)FLAGS_thread);
+        fprintf(stdout, "Hash key flat:         %s \n", Hashtable::is_key_flat ? "true" : "false");         
+                   INFO("Hash key flat:         %s \n", Hashtable::is_key_flat ? "true" : "false");         
         fprintf(stdout, "Hash Buckets:          %lu \n", (uint64_t)FLAGS_bucket_count);         
                    INFO("Hash Buckets:          %lu \n", (uint64_t)FLAGS_bucket_count);
         fprintf(stdout, "Hash Cell in Bucket:   %lu \n", (uint64_t)FLAGS_cell_count);

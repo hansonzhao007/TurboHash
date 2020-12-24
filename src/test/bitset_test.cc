@@ -18,7 +18,7 @@ int main() {
     {   
         uint8_t bitset_buffer[] = {0x00, 0x00};
         turbo::unordered_map<int, int>::CellMeta128 meta((char*)bitset_buffer);
-        auto bitset_occupy = meta.OccupyBitSet();
+        auto bitset_occupy = meta.ValidBitSet();
         printf("bitset_occupy bitmap: 0x%x\n", bitset_occupy.bit());
         printf("bitset_occupy should be empty: %s\n", bitset_occupy ? "ERROR: not empty" : "empty");
 
@@ -32,7 +32,7 @@ int main() {
         for (int i : meta128.EmptyBitSet()) {
             printf("empty slot %d\n", i);
         }
-        for (int i : meta128.OccupyBitSet()) {
+        for (int i : meta128.ValidBitSet()) {
             printf("occupied slot %d\n", i);
         }
         for (int i : meta128.MatchBitSet(0x55)) {
@@ -64,7 +64,7 @@ int main() {
             printf("empty slot %d\n", i);
         }
 
-        for (int i : meta256.OccupyBitSet()) {
+        for (int i : meta256.ValidBitSet()) {
             printf("occupied slot %d\n", i);
         }
 
@@ -83,7 +83,7 @@ int main() {
         for (int i : meta256v2.EmptyBitSet()) {
             printf("empty slot %d\n", i);
         }
-        for (int i : meta256v2.OccupyBitSet()) {
+        for (int i : meta256v2.ValidBitSet()) {
             printf("occupied slot %d\n", i);
         }
         for (int i : meta256v2.MatchBitSet(0x55)) {

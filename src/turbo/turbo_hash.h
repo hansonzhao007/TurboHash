@@ -694,6 +694,9 @@ class TurboHashTable
 public:
     static constexpr bool is_map = !std::is_void<T>::value;
     static constexpr bool is_set = !is_map;
+    static constexpr bool is_key_flat = 
+                                        std::is_same<Key, std::string>::value == false &&                                        
+                                        CellMetaType == 2;
 
     // Internal transformation for std::string
     using key_type    = Key;
@@ -750,12 +753,16 @@ public:
      *         |
      *     addr start here
     */
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wunused-parameter"
     template<typename T1>
     struct Record1Size<true, T1> {
         static inline size_t Size(char* addr) {
             return 1 + sizeof(T1);
         }
     };
+    #pragma GCC diagnostic pop
+
     template<typename T1>
     struct Record1Format<true, T1> {
         static inline constexpr size_t Length(const T1& t1) {
@@ -876,12 +883,15 @@ public:
      *         |
      *     addr start here
     */
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wunused-parameter"
     template<typename T1, typename T2>
     struct Record2Size<true, true, T1, T2> {
         static inline size_t Size(char* addr) {
             return 1 + sizeof(T1) + sizeof(T2);
         }
     };
+    #pragma GCC diagnostic pop
     template<typename T1, typename T2>
     struct Record2Format<true, true, T1, T2> {
         static inline constexpr size_t Length(const T1& t1, const T2& t2) {
@@ -1123,6 +1133,9 @@ public:
         using H2Tag = uint8_t;
         using H1Tag = uint16_t;
 
+
+
+
         /** PartialHash
          *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
          *  @format:
@@ -1130,8 +1143,10 @@ public:
          *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
          *  |    bucket_hash |     H1    |         |   H2    |
         */
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wunused-parameter"
         struct PartialHash {
-            PartialHash(uint64_t hash) :
+            PartialHash(const Key& key, uint64_t hash) :
                 bucket_hash_( hash >> 32 ),
                 H1_( ( hash >> 16 ) & 0xFFFF ),
                 H2_( hash & 0xFF )
@@ -1140,6 +1155,7 @@ public:
             H1Tag     H1_; // H1: 2 byte tag
             H2Tag     H2_; // H2: 1 byte hash tag in CellMeta for parallel comparison using SIMD cmd
         }; // end of class PartialHash
+        #pragma GCC diagnostic pop
 
         /** HashSlot
          *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
@@ -1170,7 +1186,7 @@ public:
             return turbo::util::BitSet((~bitmap_) & BitMapMask);
         }
 
-        inline util::BitSet OccupyBitSet() {
+        inline util::BitSet ValidBitSet() {
             return util::BitSet(bitmap_ & BitMapMask);
         }
 
@@ -1287,16 +1303,19 @@ public:
          *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
          *  |    bucket_hash |     H1    |         |   H2    |
         */
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wunused-parameter"
         struct PartialHash {
-            PartialHash(uint64_t hash) :
+            PartialHash(const Key& key, uint64_t hash) :
                 bucket_hash_( hash >> 32 ),
                 H1_( ( hash >> 16 ) & 0xFFFF ),
                 H2_( hash & 0xFF )
-                { };        
+                { };
             uint32_t  bucket_hash_; // used to locate in the bucket directory
             H1Tag     H1_; // H1: 2 byte tag
             H2Tag     H2_; // H2: 1 byte hash tag in CellMeta for parallel comparison using SIMD cmd
         }; // end of class PartialHash
+        #pragma GCC diagnostic pop
 
         /** HashSlot
          *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
@@ -1327,7 +1346,7 @@ public:
             return util::BitSet((~bitmap_) & BitMapMask);
         }
 
-        inline util::BitSet OccupyBitSet() {
+        inline util::BitSet ValidBitSet() {
             return util::BitSet(bitmap_ & BitMapMask);
         }
 
@@ -1429,7 +1448,7 @@ public:
      *      16 bit tag for the slot
      * 
      *  |- slot:
-     *      0  -  7 byte: 8-byte hash value
+     *      0  -  7 byte: 8-byte. used to store real key for numeric key
      *      8  - 15 byte: the pointer to record
     */ 
     class CellMeta256V2 {
@@ -1438,8 +1457,27 @@ public:
         static constexpr int CellSizeLeftShift = 8;
         static constexpr int SlotSizeLeftShift = 4;
         using H2Tag = uint16_t;
-        using H1Tag = uint64_t;
+        using H1Tag = typename std::conditional<is_key_flat, Key, uint64_t>::type;
 
+        template<bool flat_key>
+        struct H1Convert {};
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wunused-parameter"
+        template<>
+        struct H1Convert<false> {
+            inline H1Tag operator()(const Key& key, uint64_t hash) {
+                return hash;
+            }
+        };
+        template<>
+        struct H1Convert<true> {
+            inline H1Tag operator()(const Key& key, uint64_t hash) {
+                return key;
+            }
+        };
+        #pragma GCC diagnostic pop
+
+        
         /** PartialHash
          *  @note: a 64-bit hash is used to locate the cell location, and provide hash-tag.
          *  @format:
@@ -1447,20 +1485,21 @@ public:
          *  |     32 bit     |   16 bit  |  8 bit  |  8 bit  |
          *  |    bucket_hash |    H2     |                   |
          *  |                     H1                         |
+         *  ! if Key is numeric, H1 store the key itself, and we can skip key comparison in finding slot
         */
         struct PartialHash {
-            PartialHash(uint64_t hash) :
-                H1_( hash ),
+            PartialHash(const Key& key, uint64_t hash) :
+                H1_( H1Convert<is_key_flat>{}(key, hash) ),
                 H2_( (hash >> 16) & 0xFFFF ),
                 bucket_hash_( hash >> 32 )
-                { };            
-            H1Tag     H1_; // H1: 8 byte hash key
+                { };
+            H1Tag     H1_; // H1: 
             H2Tag     H2_; // H2: 1 byte hash tag in CellMeta for parallel comparison using SIMD cmd
             uint32_t  bucket_hash_; // used to locate in the bucket directory
         }; // end of class PartialHash
 
         /** HashSlot
-         *  @node: highest 2 byte is used as hash-tag to reduce unnecessary touch key-value
+         *  @node:
         */
         struct HashSlot{
             uint64_t entry;      // pointer to key-value record
@@ -1488,7 +1527,7 @@ public:
             return util::BitSet((~bitmap_) & BitMapMask);
         }
 
-        inline util::BitSet OccupyBitSet() {
+        inline util::BitSet ValidBitSet() {
             return util::BitSet(bitmap_ & BitMapMask);
         }
 
@@ -1921,6 +1960,7 @@ public:
     using H1Tag     = typename CellMeta::H1Tag;
     using PartialHash = typename CellMeta::PartialHash;
 
+    static_assert(sizeof(HashSlot) == 8 || sizeof(HashSlot) == 16, "HashSlot size error.");
     /** SlotInfo
      *  @note: use to store the target slot location info
     */
@@ -1949,6 +1989,9 @@ public:
             H1(0),
             H2(0),
             equal_key(false) {}
+        
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wformat"
         std::string ToString() {
             char buffer[128];
             sprintf(buffer, "b: %4u, c: %4u, s: %2u, H2: 0x%04x, H1: 0x%lx",
@@ -1959,6 +2002,7 @@ public:
                 H1);
             return buffer;
         }
+        #pragma GCC diagnostic pop
     }; // end of class SlotInfo
 
     /** RecordAllocator
@@ -2072,7 +2116,7 @@ public:
 
             assert(bucket_addr != 0);
             CellMeta meta(bucket_addr);
-            bitmap_ = meta.OccupyBitSet();
+            bitmap_ = meta.ValidBitSet();
             if(!bitmap_) toNextValidBitMap();
             // printf("Initial Bucket iter at ai: %u, si: %u\n", cell_i_, *bitmap_);
         }
@@ -2100,7 +2144,7 @@ public:
             return  { { bi_ /* ignore bucket index */, 
                         cell_i_ /* cell index */, 
                         *bitmap_ /* slot index*/, 
-                        slot->H1, 
+                        static_cast<H1Tag>(slot->H1), 
                         H2, 
                         false,
                         0}, 
@@ -2297,7 +2341,7 @@ public:
 
     // return the cell index and slot index
     inline std::pair<uint16_t, uint8_t> findNextSlotInRehash(uint8_t* slot_vec, H1Tag h1, uint16_t cell_count_mask) {
-        uint16_t ai = h1 & cell_count_mask;
+        uint16_t ai = H1ToHash(h1) & cell_count_mask;
         int loop_count = 0;
 
         // find next cell that is not full yet
@@ -2405,6 +2449,23 @@ public:
         return Mix{}(WHash::operator()(key));
     }
 
+    template<typename K>
+    struct IdenticalReturn {
+        constexpr K operator()(K const& key) const noexcept {
+            return key;
+        }
+    };
+
+    // For CellMeta256V2, H1 may be used to store real key,
+    // we need to calculate the real hash of h1 accordingly.
+    // If key is flat (store the real key), we need to hash h1.    
+    inline size_t H1ToHash(H1Tag h1) {
+        using ToHash = typename std::conditional<is_key_flat,
+                                        ::turbo::hash<size_t>,
+                                        IdenticalReturn<H1Tag> >::type;
+        return ToHash{}(h1);
+    }
+
     /** Put
      *  @note: insert or update a key-value record, return false if fails.
     */  
@@ -2448,7 +2509,7 @@ public:
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
 
-        auto res = probeFirstSlot(hash_value);
+        auto res = probeFirstSlot(key, hash_value);
         if (res.second) {
             // probe a key having same H2 and H1 tag
             RecordPtr record_ptr(res.first.entry);
@@ -2540,8 +2601,16 @@ public:
             char* cell_addr = locateCell(probe.offset());
             CellMeta meta(cell_addr);
             int count = meta.OccupyCount();
-            sprintf(buffer, "\t%4u - 0x%12lx: %s. Cell valid slot count: %d\n", i++, (uint64_t)cell_addr, meta.BitMapToString().c_str(), count);
+            sprintf(buffer, "\t%4u - 0x%12lx: %s. Cell valid slot count: %d. ", i++, (uint64_t)cell_addr, meta.BitMapToString().c_str(), count);            
             res += buffer;
+            auto valid_bitset = meta.ValidBitSet();
+            for (int i : valid_bitset) {
+                std::ostringstream ss;
+                HashSlot* slot = locateSlot(cell_addr, i);
+                ss << "s" << i << "H1: " << slot->H1 << ", ";
+                res += ss.str();
+            }
+            res += "\n";
             probe.next();
             count_sum += count;
         }
@@ -2672,10 +2741,9 @@ private:
         }
     }
 
-
     inline bool insertSlot(ValueType type, const Key& key, const T& value, size_t hash_value) {
         // Obtain the partial hash
-        PartialHash partial_hash(hash_value);
+        PartialHash partial_hash(key, hash_value);
 
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
         BucketMeta& bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
@@ -2685,17 +2753,17 @@ private:
 
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
- 
+
             std::pair<SlotInfo, bool /* find a slot or not */> res = findSlotForInsert(key, partial_hash);
 
             // find a valid slot in target cell
             if (res.second) { 
                 char* cell_addr = locateCell({res.first.bucket, res.first.cell});
-                
+
                 util::SpinLockScope<0> lock_scope(cell_addr); // Lock current cell
-                
+
                 CellMeta meta(cell_addr);   // obtain the meta part
-                
+
                 if (TURBO_LIKELY( !meta.Occupy(res.first.slot) )) { 
                     // If the new slot from 'findSlotForInsert' is not occupied, insert directly
 
@@ -2717,13 +2785,13 @@ private:
                         printf("Cannot update.\n");
                         exit(1);
                     }
-                    
+
                     res.first.slot = *empty_bitset;
                     insertToSlotAndRecycle(type, key, value, cell_addr, res.first);
                     return true;
                 } else { 
                     // current new slot has been occupied by another concurrent thread.
-                    
+
                     // Before retry 'findSlotForInsert', find if there is any empty slot for insertion
                     util::BitSet empty_bitset = meta.EmptyBitSet();
                     if (empty_bitset.validCount() > 1) {
@@ -2756,6 +2824,14 @@ private:
         return false;
     }
 
+    
+    inline bool slotKeyEqual(const Key& key, RecordPtr record_ptr) {
+        if (is_key_flat) {
+            return true;
+        }
+        return WKeyEqual::operator()( key, record_ptr->first() );
+    }
+
     /** findSlotForInsert
      *  @note:  Find a valid slot for insertion.
      *  @out:   first: the slot info that should insert the key
@@ -2765,7 +2841,7 @@ private:
     inline std::pair<SlotInfo, bool> findSlotForInsert(const Key& key, PartialHash& partial_hash) {        
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
-        ProbeStrategy probe(partial_hash.H1_, bucket_meta.CellCountMask(), bucket_i);
+        ProbeStrategy probe(H1ToHash(partial_hash.H1_), bucket_meta.CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeStrategy::MAX_PROBE_LEN)) {
@@ -2784,7 +2860,7 @@ private:
                     // Obtain record pointer
                     RecordPtr record(slot.entry);
 
-                    if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first()))) 
+                    if (TURBO_LIKELY(slotKeyEqual(key, record)))
                     {  
                         // This is an update request
                         // TURBO_DEBUG( "Update key" << key << "\n" << 
@@ -2851,10 +2927,10 @@ private:
     }
     
     inline std::pair<HashSlot, bool> findSlot(const Key& key, size_t hash_value) {
-        PartialHash partial_hash(hash_value);
+        PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
-        ProbeStrategy probe(partial_hash.H1_,  bucket_meta.CellCountMask(), bucket_i);
+        ProbeStrategy probe(H1ToHash(partial_hash.H1_),  bucket_meta.CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeStrategy::MAX_PROBE_LEN)) {
@@ -2870,8 +2946,8 @@ private:
                 if (TURBO_LIKELY(slot.H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
                 {
                     RecordPtr record(slot.entry);                    
-                    if (TURBO_LIKELY(WKeyEqual::operator()(key, record->first())))
-                    {      // If the slot key is equal to search key. SlotKeyEqual is very expensive 
+                    if (TURBO_LIKELY(slotKeyEqual(key, record)))
+                    {
                         return {slot, true};
                     }
                     else {
@@ -2903,11 +2979,11 @@ private:
         return {empty_slot, false};
     }
 
-    inline std::pair<HashSlot, bool> probeFirstSlot(size_t hash_value) {
-        PartialHash partial_hash(hash_value);
+    inline std::pair<HashSlot, bool> probeFirstSlot(const Key& key, size_t hash_value) {
+        PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         auto& bucket_meta = locateBucket(bucket_i);
-        ProbeStrategy probe(partial_hash.H1_,  bucket_meta.CellCountMask(), bucket_i);
+        ProbeStrategy probe(H1ToHash(partial_hash.H1_),  bucket_meta.CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeStrategy::MAX_PROBE_LEN)) {
@@ -2961,14 +3037,23 @@ private:
 
 }; // end of namespace turbo::detail
 
+//  *  @note: CellMetaType:
+//  *              0 - CellMeta128
+//  *              1 - CellMeta256
+//  *              2 - CellMeta256V2
+//  *         ProbeStrategyType:
+//  *              0 - ProbeWithinBucket
+//  *              1 - ProbeWithinCell
 // When using std::string for Key, the KeyEqual uses std::equal_to<util::Slice>
 template <typename Key, typename T, typename Hash = hash<Key>,
           typename KeyEqual = std::equal_to<Key> >
-using unordered_map = detail::TurboHashTable<Key, T, Hash, typename std::conditional< std::is_same<Key, std::string>::value == false /* is numeric */, 
+using unordered_map = detail::TurboHashTable<
+                                            Key, T, Hash, 
+                                            typename std::conditional< std::is_same<Key, std::string>::value == false /* is numeric */, 
                                                                                         KeyEqual, 
                                                                                         std::equal_to<util::Slice> >::type,
-                                            2, 0, 32768>;
-
+                                            std::is_same<Key, std::string>::value == false ? 2 : 0 /* CellMetaType */,                                                                                         
+                                            0 /* ProbeStrategyType */, 32768>;
 }; // end of namespace turbo
 
 #endif

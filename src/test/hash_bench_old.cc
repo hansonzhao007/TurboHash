@@ -32,9 +32,9 @@ DEFINE_bool(print_thread_read, false, "");
 DEFINE_int32(thread_read, 1, "");
 DEFINE_int32(thread_write, 1, "");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
-DEFINE_int32(associate_size, 64, "");
-DEFINE_int32(bucket_size, 128 << 10, "bucket count");
-DEFINE_int32(value_size, 8, "default value size");
+DEFINE_int32(cell_count, 64, "");
+DEFINE_int32(bucket_count, 128 << 10, "bucket count");
+DEFINE_int32(value_size, 16, "default value size");
 // use numactl --hardware command to check numa node info
 // static int kThreadIDs[16] = {16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7 };
 
@@ -65,10 +65,10 @@ public:
     size_t TestRehash() {
         size_t inserted_num = 0;
         util::Stats stats;
-        turbo::unordered_map<size_t, std::string> hashtable(FLAGS_bucket_size, FLAGS_associate_size);
+        turbo::unordered_map<size_t, std::string> hashtable(FLAGS_bucket_count, FLAGS_cell_count);
         uint64_t i = 0;
         bool res = true;
-        auto key_iterator = key_trace_.trace_at(0, max_count_);
+        RandomKeyTrace::Iterator key_iterator = key_trace_.trace_at(0, max_count_);
         
         auto time_start = Env::Default()->NowNanos();
         while (res && i < max_count_) {
@@ -221,7 +221,7 @@ public:
 
     size_t TurboHashSpeedTest() {
         util::Stats stats;
-        turbo::unordered_map<size_t, std::string> hashtable(FLAGS_bucket_size, FLAGS_associate_size);
+        turbo::unordered_map<size_t, std::string> hashtable(FLAGS_bucket_count, FLAGS_cell_count);
         std::string name = "turbo:" + hashtable.ProbeStrategyName();
         size_t max_range = max_count_ * FLAGS_loadfactor;
         {

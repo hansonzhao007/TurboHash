@@ -92,6 +92,8 @@ public:
             
         }
 
+        Iterator(){}
+
         inline bool Valid() {
             return (begin_ || cur_index_ != end_index_);
         }

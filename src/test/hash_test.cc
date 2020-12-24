@@ -24,7 +24,7 @@ int main() {
     printf("inserted %lu kv, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());
 
     find = 0;
-    for (size_t i = 0 ; i < 1000 && succ; i++) {
+    for (size_t i = 0 ; i < 100 && succ; i++) {
         succ = hashtable->Put("key" + std::to_string(i), "update.value" + std::to_string(i));
         if ((succ)) find++;
     }
@@ -37,7 +37,7 @@ int main() {
         for (size_t i = 0; i < COUNT && succ; i++) {
             std::string key = "key" + std::to_string(i);
             succ = hashtable->Get(key, &value);
-            if ((i & 0xFF) == 0) {
+            if (i < 100 || (i & 0x7FF) == 0) {
                 INFO("Get key: %s. value: %s\n", key.c_str(), value.c_str());
             }
             if ((succ)) find++;
@@ -72,50 +72,66 @@ int main() {
     read_fun();
 
     {
-        turbo::unordered_map<int, double> mapi;
+        typedef turbo::unordered_map<int, double> MyHash;
+        MyHash mapi;
+        MyHash::HashSlot slot;
+        decltype(slot.entry) entry;
+        decltype(slot.H1) h1;
+        MyHash::H1Tag a;
+        INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {
-            mapi.Put(i, i *3.1415926);
+            mapi.Put(i, i * 1.0);
         }
 
         for (int i = 0; i < 100; i++) {
-            double val = 0;
-            bool res = mapi.Get(i, &val);
-            if (res == false) {
+            auto res = mapi.Find(i);
+            if (res == nullptr) {
                 printf("Fail get\n");
             }
-            INFO("Get integer key: %d, val: %f\n", i, val);
+            INFO("Get integer key: %d, val: %f\n", res->first(), res->second());
         }
     }
 
     {
-        turbo::unordered_map<double, std::string> mapi;
+        typedef turbo::unordered_map<double, std::string> MyHash;
+        MyHash mapi(2, 32);
+        MyHash::HashSlot slot;
+        decltype(slot.entry) entry;
+        decltype(slot.H1) h1;
+        MyHash::H1Tag a;
+        INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {
-            mapi.Put(i * 3.14, "value" + std::to_string(i));
+            mapi.Put(i * 1.01, "value" + std::to_string(i));
         }
 
         for (int i = 0; i < 100; i++) {
-            std::string val;
-            bool res = mapi.Get(i * 3.14, &val);
-            if (res == false) {
+            auto res = mapi.Find(i * 1.01);
+            if (res == nullptr) {
                 printf("Fail get\n");
             }
-            INFO("Get double key: %f, val: %s\n", i * 3.14, val.c_str());
+            INFO("Get double key: %f, val: %s\n", res->first(), res->second().ToString().c_str());
         }
+        std::cout << mapi.PrintBucketMeta(1) << std::endl;
     }
 
     {
-        turbo::unordered_map<std::string, double> mapi;
+        typedef turbo::unordered_map<std::string, double> MyHash;
+        MyHash mapi;
+        MyHash::HashSlot slot;
+        decltype(slot.entry) entry;
+        decltype(slot.H1) h1;
+        MyHash::H1Tag a;
+        INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {
-            mapi.Put("key" + std::to_string(i), 3.14 * i);
+            mapi.Put("key" + std::to_string(i), i);
         }
 
-        for (int i = 0; i < 100; i++) {
-            double val = 0;
-            bool res = mapi.Get("key" + std::to_string(i), &val);
-            if (res == false) {
+        for (int i = 0; i < 100; i++) {            
+            auto res = mapi.Find("key" + std::to_string(i));
+            if (res == nullptr) {
                 printf("Fail get\n");
             }
-            INFO("Get val: %f\n", val);
+            INFO("Get str key: %s, val: %f\n", res->first().ToString().c_str(), res->second() );
         }
     }
 
