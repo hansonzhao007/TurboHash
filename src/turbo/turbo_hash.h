@@ -192,6 +192,11 @@ inline uint64_t NowNanos() {
     return static_cast<uint64_t>(ts.tv_sec) * 1000000000L + ts.tv_nsec;
 }
 
+
+inline bool isPowerOfTwo(uint32_t n) {
+    return (n != 0 && __builtin_popcount(n) == 1);
+}
+
 /** BitSet
  *  @note: used for bitmap testing
  *  @example: 
@@ -1364,6 +1369,7 @@ public:
 
     /* #endregion: for ProbeWithinBucket */
 
+    static_assert(__builtin_popcount(kCellCountLimit) == 1, "kCellCountLimit should be power of two");
     static_assert(kCellCountLimit <= 32768, "kCellCountLimit needs to be <= 32768");
     
     using CellMeta  = CellMeta256V2;
@@ -1638,8 +1644,7 @@ public:
         bucket_mask_(bucket_count - 1),
         capacity_( bucket_count * cell_count * (CellMeta256V2::SlotCount() - 1) ),
         size_(0) {
-        if (!isPowerOfTwo(bucket_count) ||
-            !isPowerOfTwo(cell_count)) {
+        if (!util::isPowerOfTwo(bucket_count) || !util::isPowerOfTwo(cell_count)) {
             printf("the hash table size setting is wrong. bucket: %u, cell: %u\n", bucket_count, cell_count);
             exit(1);
         }
@@ -1725,17 +1730,14 @@ public:
     
     size_t MinorRehash(int bi) {
         size_t count = 0;
-        auto& bucket_meta = locateBucket(bi);
+        BucketMeta* bucket_meta = locateBucket(bi);
 
         // Step 1. Create new bucket and initialize its meta
-        uint32_t old_cell_count      = bucket_meta.CellCount();
+        uint32_t old_cell_count      = bucket_meta->CellCount();
         uint32_t new_cell_count      = old_cell_count << 1;
         uint32_t new_cell_count_mask = new_cell_count - 1;
         char*    new_bucket_addr     = cell_allocator_.Allocate(new_cell_count);
-        if (!isPowerOfTwo(new_cell_count)) {
-            printf("rehash bucket is not power of 2. %u\n", new_cell_count);
-            exit(1);
-        }
+        
         if (new_bucket_addr == nullptr) {
             perror("rehash alloc memory fail\n");
             exit(1);
@@ -1758,7 +1760,7 @@ public:
         //      a) Record next avaliable slot position of each cell within new bucket for rehash
         uint8_t* slot_vec = (uint8_t*)malloc(new_cell_count);
         memset(slot_vec, CellMeta256V2::StartSlotPos(), new_cell_count);   
-        BucketIterator iter(bi, bucket_meta.Address(), bucket_meta.CellCount()); 
+        BucketIterator iter(bi, bucket_meta->Address(), bucket_meta->CellCount()); 
         //      b) Iterate every slot in this bucket
         while (iter.valid()) { 
             count++;
@@ -1793,7 +1795,7 @@ public:
         }
 
         // Step 3. Reset bucket meta in buckets_
-        buckets_[bi].Reset(new_bucket_addr, new_cell_count);
+        bucket_meta->Reset(new_bucket_addr, new_cell_count);
         
         free(slot_vec);
         return count;
@@ -1921,8 +1923,8 @@ public:
     void IterateAll() {
         size_t count = 0;
         for (size_t i = 0; i < bucket_count_; ++i) {
-            auto& bucket_meta = locateBucket(i);
-            BucketIterator iter(i, bucket_meta.Address(), bucket_meta.CellCount());
+            BucketMeta* bucket_meta = locateBucket(i);
+            BucketIterator iter(i, bucket_meta->Address(), bucket_meta->CellCount());
             while (iter.valid()) {
                 auto res = (*iter);
                 SlotInfo& info = res.slot_info;
@@ -1943,10 +1945,10 @@ public:
     std::string PrintBucketMeta(uint32_t bucket_i) {
         std::string res;
         char buffer[1024];
-        BucketMeta& meta = locateBucket(bucket_i);
+        BucketMeta* bucket_meta = locateBucket(bucket_i);
         sprintf(buffer, "----- bucket %10u -----\n", bucket_i);
         res += buffer;
-        ProbeWithinBucket probe(0, meta.CellCountMask(), bucket_i);
+        ProbeWithinBucket probe(0, bucket_meta->CellCountMask(), bucket_i);
         uint32_t i = 0;
         int count_sum = 0;
         while (probe) {
@@ -1966,7 +1968,7 @@ public:
             probe.next();
             count_sum += count;
         }
-        sprintf(buffer, "\tBucket %u: valid slot count: %d. Load factor: %f\n", bucket_i, count_sum, (double)count_sum / ((CellMeta256V2::SlotCount() - 1) * meta.CellCount()));
+        sprintf(buffer, "\tBucket %u: valid slot count: %d. Load factor: %f\n", bucket_i, count_sum, (double)count_sum / ((CellMeta256V2::SlotCount() - 1) * bucket_meta->CellCount()));
         res += buffer;
         return res;
     }
@@ -1988,8 +1990,8 @@ private:
         return hash & bucket_mask_;
     }
 
-    inline BucketMeta& locateBucket(uint32_t bi) const {
-        return buckets_[bi];
+    inline BucketMeta* locateBucket(uint32_t bi) const {
+        return &buckets_[bi];
     }
 
     // offset.first: bucket index
@@ -2106,8 +2108,8 @@ private:
         PartialHash partial_hash(key, hash_value);
 
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
-        BucketMeta& bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
-        while (bucket_meta.IsLocked()) {
+        BucketMeta* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
+        while (bucket_meta->IsLocked()) {
             TURBO_CPU_RELAX();
         }
 
@@ -2215,8 +2217,8 @@ private:
     */
     inline FindSlotForInsertResult findSlotForInsert(const Key& key, PartialHash& partial_hash) {        
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        auto& bucket_meta = locateBucket(bucket_i);
-        ProbeWithinBucket probe(H1ToHash(partial_hash.H1_), bucket_meta.CellCountMask(), bucket_i);
+        BucketMeta* bucket_meta = locateBucket(bucket_i);
+        ProbeWithinBucket probe(H1ToHash(partial_hash.H1_), bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeWithinBucket::MAX_PROBE_LEN)) {
@@ -2307,8 +2309,8 @@ private:
     inline FindSlotResult findSlot(const Key& key, size_t hash_value) {
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        auto& bucket_meta = locateBucket(bucket_i);
-        ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta.CellCountMask(), bucket_i);
+        BucketMeta* bucket_meta = locateBucket(bucket_i);
+        ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeWithinBucket::MAX_PROBE_LEN)) {
@@ -2361,8 +2363,8 @@ private:
     inline void deleteSlot(const Key& key, size_t hash_value) {
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        auto& bucket_meta = locateBucket(bucket_i);
-        ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta.CellCountMask(), bucket_i);
+        BucketMeta* bucket_meta = locateBucket(bucket_i);
+        ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeWithinBucket::MAX_PROBE_LEN)) {
@@ -2402,8 +2404,8 @@ private:
     inline FindSlotResult probeFirstSlot(const Key& key, size_t hash_value) {
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        auto& bucket_meta = locateBucket(bucket_i);
-        ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta.CellCountMask(), bucket_i);
+        BucketMeta* bucket_meta = locateBucket(bucket_i);
+        ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeWithinBucket::MAX_PROBE_LEN)) {
@@ -2435,10 +2437,6 @@ private:
         // after all the probe, no key exist
         HashSlot empty_slot;
         return {empty_slot, false};
-    }
-
-    inline bool isPowerOfTwo(uint32_t n) {
-        return (n != 0 && __builtin_popcount(n) == 1);
     }
 
 private:
