@@ -1033,7 +1033,6 @@ public:
     */
     template<typename T1, typename T2>
     struct Record2 {
-        ValueType type;
         using T1_type = typename std::conditional<  std::is_same<T1, std::string>::value == false  /* is numeric */,
                                                     T1, util::Slice>::type;
         using T2_type = typename std::conditional<  std::is_same<T2, std::string>::value == false  /* is numeric */,
@@ -2043,7 +2042,6 @@ private:
             if (old_record_size >= new_record_size) {
                 // reuse old space of old record
                 record  = old_record_ptr.data_ptr_;
-                record->type        = type;
                 record->Encode(key, value);
             }
             else {
@@ -2054,7 +2052,6 @@ private:
                 // Then allocate new space                
                 void*  buffer   = record_allocator_.Allocate(new_record_size);
                 record          = static_cast<value_type*>(buffer);
-                record->type    = type;
                 record->Encode(key, value);
             }
         } 
@@ -2064,7 +2061,6 @@ private:
             size_t buf_len  = value_type::FormatLength(key, value);
             void*  buffer   = record_allocator_.Allocate(buf_len);
             record          = static_cast<value_type*>(buffer);
-            record->type    = type;
             record->Encode(key, value);
         }
         slot->entry     = (char*)record;

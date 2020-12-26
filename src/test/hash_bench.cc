@@ -395,9 +395,9 @@ public:
         bool fresh_db = true;
         // run benchmark
         bool print_hist = FLAGS_hist;
-        const char* benchmarks = FLAGS_benchmarks.c_str();
-        int thread = FLAGS_thread;
+        const char* benchmarks = FLAGS_benchmarks.c_str();        
         while (benchmarks != nullptr) {
+            int thread = FLAGS_thread;
             void (Benchmark::*method)(ThreadState*) = nullptr;
             const char* sep = strchr(benchmarks, ',');
             std::string name;
