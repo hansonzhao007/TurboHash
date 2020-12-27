@@ -1143,19 +1143,20 @@ public:
      *  @format:
      *  | ----------------------- meta ------------------------| ----- slots ----- |
      *  | 4 byte bitmap | 28 byte: two byte hash for each slot | 16 byte * 14 slot |
+     *  | Bitmap Zone   |    Tag Zone                          |    Slot Zone      |
      * 
-     *  |- bitmap: 
+     *  |- Bitmap Zone: 
      *            0 bit: used as a bitlock
      *            1 bit: not in use
      *      2  - 15 bit: indicate which slot is empty, 0: empty or deleted, 1: occupied
-     *      16 - 31 bit: not in use
+     *      16 - 31 bit: delete_bitmap. 1: deleted
      * 
      *  |- two byte hash:
-     *      16 bit tag for the slot
+     *      16 bit tag (H2) for the slot
      * 
      *  |- slot:
-     *      0  -  7 byte: 8-byte. used to store real key for numeric key
-     *      8  - 15 byte: the pointer to record
+     *      0  -  7 byte: H1 tag or real key for flat_key
+     *      8  - 15 byte: pointer to data or read value for flat_value
     */ 
     class CellMeta256V2 {
     public:
@@ -1227,10 +1228,6 @@ public:
         inline static constexpr size_t size() {
             // the meta size in byte in current cell
             return 32;
-        }
-
-        inline uint16_t bitmap() {
-            return bitmap_;
         }
 
         std::string BitMapToString() {
@@ -2318,30 +2315,27 @@ private:
             char* cell_addr = locateCell(offset);
             CellMeta256V2 meta(cell_addr);
             
-            for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell
-                                                                // i is the slot index in current cell, each slot occupies 8-byte
-                // locate the slot reference
-                const HashSlot& slot = *locateSlot(cell_addr, i);
+            for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell                                                                
+                
+                HashSlot* slot = locateSlot(cell_addr, i); // locate the slot reference
 
-                if (TURBO_LIKELY(slot.H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
-                {
-                    RecordPtr record(slot.entry);                    
-                    if (SlotKeyEqual<Key, is_key_flat>{}(key, record))
-                    {
-                        // check if the deleted bit is set                        
-                        return {slot, !meta.IsDeleted(i)};
+                if (TURBO_LIKELY(slot->H1 == partial_hash.H1_)) { // Compare if the H1 partial hash is equal.
+
+                    RecordPtr record(slot->entry);
+
+                    if (SlotKeyEqual<Key, is_key_flat>{}(key, record)) {                        
+                        return {*slot, !meta.IsDeleted(i)}; // check if the deleted bit is set
                     }
-                    else {
-                        // TURBO_INFO("H1 conflict. Slot (" << offset.first 
-                        //             << " - " << offset.second 
-                        //             << " - " << i
-                        //             << ") bitmap: " << meta.BitMapToString() 
-                        //             << ". Insert key: " << key 
-                        //             <<  ". Hash: 0x" << std::hex << hash_value << std::dec
-                        //             << " , Slot key: " << record->first()
-                        //             );
-                    }
-                    
+                    // else {
+                    //     TURBO_INFO("H1 conflict. Slot (" << offset.first 
+                    //                 << " - " << offset.second 
+                    //                 << " - " << i
+                    //                 << ") bitmap: " << meta.BitMapToString() 
+                    //                 << ". Insert key: " << key 
+                    //                 <<  ". Hash: 0x" << std::hex << hash_value << std::dec
+                    //                 << " , Slot key: " << record->first()
+                    //                 );
+                    // }                    
                 }
             }
 
@@ -2373,15 +2367,14 @@ private:
             CellMeta256V2 meta(cell_addr);
             
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell
-                                                                // i is the slot index in current cell, each slot occupies 8-byte
-                // locate the slot reference
-                const HashSlot& slot = *locateSlot(cell_addr, i);
+                
+                HashSlot* slot = locateSlot(cell_addr, i); // locate the slot reference
 
-                if (TURBO_LIKELY(slot.H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
+                if (TURBO_LIKELY(slot->H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
                 {
-                    RecordPtr record(slot.entry);                    
-                    if (SlotKeyEqual<Key, is_key_flat>{}(key, record))
-                    {
+                    RecordPtr record(slot->entry);    
+                
+                    if (SlotKeyEqual<Key, is_key_flat>{}(key, record)) {
                         // If this key exsit, set the deleted bitmap
                         uint32_t* bitmap = (uint32_t*)cell_addr;
                         *bitmap = (*bitmap) | ( 1 << (16 + i) );
@@ -2413,14 +2406,13 @@ private:
             char* cell_addr = locateCell(offset);
             CellMeta256V2 meta(cell_addr);
             
-            for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell
-                                                                // i is the slot index in current cell, each slot occupies 8-byte
-                // locate the slot reference
-                const HashSlot& slot = *locateSlot(cell_addr, i);
+            for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell                                                                
+                
+                HashSlot* slot = locateSlot(cell_addr, i); // locate the slot reference
 
-                if (TURBO_LIKELY(slot.H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
+                if (TURBO_LIKELY(slot->H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
                 {
-                    return {slot, true};
+                    return {*slot, true};
                 }
             }
 
