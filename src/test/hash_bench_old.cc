@@ -34,7 +34,7 @@ DEFINE_int32(thread_write, 1, "");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 DEFINE_int32(cell_count, 64, "");
 DEFINE_int32(bucket_count, 128 << 10, "bucket count");
-DEFINE_int32(value_size, 23, "default value size");
+DEFINE_int32(value_size, 24, "default value size");
 // use numactl --hardware command to check numa node info
 // static int kThreadIDs[16] = {16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7 };
 
@@ -203,7 +203,7 @@ public:
 
         read_fun();
         find_fun();
-        // probe_fun();
+        probe_fun();
 
         // printf("Start Rehashing\n");
         // time_start = Env::Default()->NowMicros();

@@ -204,7 +204,7 @@ inline bool isPowerOfTwo(uint32_t n) {
  *  for (int i : bitset) {
  *      printf("i: %d\n", i);
  *  }
- *  This will print out 0, 2 for little endian
+ *  This will print out 0, 2
 */
 class BitSet {
 public:
@@ -691,8 +691,6 @@ public:
 
 // private:
 
-    /* #region: for value_type */
-
     /** ValueType
      *  @note: for key-value record type
      *  @format:
@@ -799,38 +797,6 @@ public:
             return util::Slice(addr + sizeof(size_t), len1);
         }
     };
-
-    /** Record1
-     *  @note record with only one type, used in set
-    */
-    template<typename T1>
-    struct Record1 {
-        using T1_type = typename std::conditional<  std::is_same<T1, std::string>::value == false  /* is numeric */,
-                                                    T1, util::Slice>::type;
-        static inline size_t FormatLength(const T1& t1) {
-            return Record1Format<
-                            std::is_same<T1, std::string>::value == false /* is numeric */,
-                            T1>::Length(t1);
-        }
-
-        inline T1_type first() {
-            return DecodeInRecord1< 
-                            std::is_same<T1, std::string>::value == false /* is numeric */,
-                            T1>::Decode(reinterpret_cast<char*>(this));
-        }
-
-        inline void Encode(const T1& t1) {
-            EncodeToRecord1<std::is_same<T1, std::string>::value == false /* is numeric */, 
-                            T1>::Encode(t1, reinterpret_cast<char*>(this));
-        }
-
-        inline size_t Size() {
-            return Record1Size<
-                            std::is_same<T1, std::string>::value == false /* is numeric */,
-                            T1>::Size(reinterpret_cast<char*>(this));
-        }
-    };  // end of class Record1
-
 
     /**
      *  @note: obtain the Record Lenght
@@ -1034,13 +1000,10 @@ public:
     };
 
 
-    /* #region: for CellMeta256V2 */
-
     using H2Tag = uint16_t;
     using H1Tag = typename std::conditional<is_key_flat, Key, uint64_t>::type;
     using Entry = typename std::conditional<is_key_flat && is_value_flat, T, char*>::type;
     
-
     template<typename T1, bool flat_key>
     struct H1Convert {};
     #pragma GCC diagnostic push
@@ -1088,59 +1051,6 @@ public:
         H1Tag    H1;
         char  __[8 - sizeof(H1Tag)];
     };
-
-
-    /** Record2
-     *  @note record with two type, used in map
-    */
-    template<typename T1, typename T2>
-    struct Record2: public HashSlot {
-        using T1_type = typename std::conditional<  std::is_same<T1, std::string>::value == false  /* is numeric */,
-                                                    T1, util::Slice>::type;
-        using T2_type = typename std::conditional<  std::is_same<T2, std::string>::value == false  /* is numeric */,
-                                                    T2, util::Slice>::type;
-
-        static inline size_t FormatLength(const T1& t1, const T2& t2) {
-            return Record2Format<
-                    std::is_same<T1, std::string>::value == false  /* is numeric */, 
-                    std::is_same<T2, std::string>::value == false  /* is numeric */,
-                    T1, T2>::Length(t1, t2);
-        }           
-
-        inline T1_type first() {
-            return DecodeInRecord2<
-                    std::is_same<T1, std::string>::value == false  /* is numeric */, 
-                    std::is_same<T2, std::string>::value == false  /* is numeric */, 
-                    true, T1, T2>::Decode(reinterpret_cast<char*>(this));
-        }
-
-        inline T2_type second() {
-            return DecodeInRecord2<
-                    std::is_same<T1, std::string>::value == false  /* is numeric */, 
-                    std::is_same<T2, std::string>::value == false  /* is numeric */, 
-                    false, T1, T2>::Decode(reinterpret_cast<char*>(this));
-            
-        }
-
-        inline void Encode(const T1& t1, const T2& t2) {
-            EncodeToRecord2<
-                    std::is_same<T1, std::string>::value == false  /* is numeric */, 
-                    std::is_same<T2, std::string>::value == false  /* is numeric */,
-                    T1, T2>::Encode(t1, t2, reinterpret_cast<char*>(this));
-        }
-
-        // return the record size
-        inline size_t Size(void) {
-            return Record2Size<
-                    std::is_same<T1, std::string>::value == false  /* is numeric */, 
-                    std::is_same<T2, std::string>::value == false  /* is numeric */,
-                    T1, T2>::Size(reinterpret_cast<char*>(this));
-        }
-
-    }; // end of class Record2
-
-    /* #endregion: for value_type */
-
 
     /** CellMeta256V2
      *  @note: Hash cell whose size is 256 byte. There are 14 slots in the cell.
@@ -1191,7 +1101,7 @@ public:
         }
 
         inline bool IsDeleted(int i) {
-            return bitmap_deleted_ & (1 << i);
+            return (bitmap_deleted_ >> i) & 0x1;
         }
 
         inline bool Full() {
@@ -1270,57 +1180,6 @@ public:
         uint16_t    bitmap_deleted_; // 1: deleted
     }; // end of class CellMeta256V2
 
-    /* #endregion: for CellMeta256V2 */
-
-    /* #region: for ProbeWithinBucket */
-
-    /** ProbeWithinCell
-     *  @note: probe within each cell
-    */
-    class ProbeWithinCell {
-    public:
-        static const int MAX_PROBE_LEN  = kTurboMaxProbeLen;
-        static const int PROBE_STEP     = kTurboProbeStep;
-
-        ProbeWithinCell(uint64_t initial_hash, uint32_t cell_count_mask, uint32_t bucket_i) {
-            h_               = initial_hash;
-            cell_count_mask_  = cell_count_mask;
-            cell_index_ = h_ & cell_count_mask_;
-            bucket_i_        = bucket_i;
-            probe_count_     = 0;
-        }
-
-        inline void reset() {
-            cell_index_ = h_ & cell_count_mask_;
-            probe_count_     = 0;
-        }
-        // indicate whether we have already probed all the assocaite cells
-        inline operator bool() const {
-            return probe_count_ < 1;
-        }
-
-        inline void next() {
-            cell_index_ += PROBE_STEP;
-            // CellCountMask should be like 0b11
-            cell_index_ &= cell_count_mask_;
-            probe_count_++;
-        }
-
-        inline std::pair<uint32_t, uint32_t> offset() {
-            return {bucket_i_, cell_index_};
-        }
-
-        static std::string name() {
-            return "ProbeWithinCell";
-        }
-    private:
-        uint64_t  h_;
-        uint32_t  cell_count_mask_;
-        uint32_t  cell_index_;
-        uint32_t  bucket_i_;
-        uint32_t  probe_count_;
-    }; // end of class ProbeWithinCell
-
     /** ProbeWithinBucket
      *  @note: probe within a bucket
     */
@@ -1367,8 +1226,6 @@ public:
         uint32_t  bucket_i_;
         uint32_t  probe_count_;
     };
-
-    /* #endregion: for ProbeWithinBucket */
 
     static_assert(__builtin_popcount(kCellCountLimit) == 1, "kCellCountLimit should be power of two");
     static_assert(kCellCountLimit <= 32768, "kCellCountLimit needs to be <= 32768");
@@ -1449,7 +1306,8 @@ public:
 
     /**
      * @brief both key and value is numeric type
-     * 
+     * HashSlot:
+     *          | key | value |
      */
     template<typename T1>
     struct DataRecord<T1, true, true>: public HashSlot {
@@ -1469,7 +1327,9 @@ public:
 
     /**
      * @brief key is numeric, value is std::string
-     * 
+     * HashSlot:
+     *          | key | pointer | -> | val_len | value
+     *                               | size_t  | ...
      */
     template<typename T1>
     struct DataRecord<T1, true, false>: public HashSlot {
@@ -1477,7 +1337,16 @@ public:
             // if previous pointer is not emtpy
             char* old_addr = HashSlot::entry;
             if (old_addr != nullptr) {
-                allocator.Release(old_addr);
+                // check if old addr space is large enough
+                size_t old_val_len = *reinterpret_cast<size_t*>(old_addr);
+                if (old_val_len >= value.size()) {
+                    EncodeToRecord1<false, T>::Encode(value, old_addr);
+
+                    HashSlot::H1 = key;
+                    return;
+                } else {
+                    allocator.Release(old_addr);
+                }
             }
 
             size_t new_value_size = value.size();
@@ -1502,15 +1371,27 @@ public:
 
     /**
      * @brief key is std::string, value is numeric
-     * 
-     * @tparam T1 
+     * HashSlot:
+     *          | H1 | pointer | -> | key_len | value | key_buffer
+     *                              | size_t  |   T   |  ...
      */
     template<typename T1>
     struct DataRecord<T1, false, true>: public HashSlot {
         inline void Store(uint64_t hash, const Key& key, const T& value, RecordAllocator& allocator) {
             char* old_addr = HashSlot::entry;
             if (old_addr != nullptr) {
-                allocator.Release(old_addr);
+                size_t old_buf_len = Record2Size<false, true, Key, T>::Size(old_addr);
+                size_t new_buf_len = Record2Format<false, true, Key, T>::Length(key, value);
+
+                if (old_buf_len >= new_buf_len) {
+                    // reuse old space
+                    EncodeToRecord2<false, true, Key, T>::Encode(key, value, old_addr);
+
+                    HashSlot::H1 = hash;
+                    return;
+                } else {
+                    allocator.Release(old_addr);
+                }
             }
 
             size_t buf_len = Record2Format<false, true, Key, T>::Length(key, value);
@@ -1532,14 +1413,24 @@ public:
 
     /**
      * @brief key and value both are std::string
+     * HashSlot:
+     *          | H1 | pointer | -> | key_len | value | key_buffer
+     *                              | size_t  |   T   |  ...
      * 
-     * @tparam T1 
      */
     template<typename T1>
     struct DataRecord<T1, false, false>: public HashSlot {
         inline void Store(uint64_t hash, const Key& key, const T& value, RecordAllocator& allocator) {
             char* old_addr = HashSlot::entry;
             if (old_addr != nullptr) {
+                size_t old_buf_len = Record2Size<false, false, Key, T>::Size(old_addr);
+                size_t new_buf_len = Record2Format<false, false, Key, T>::Length(key, value);
+
+                if (old_buf_len >= new_buf_len) {
+                    EncodeToRecord2<false, false, Key, T>::Encode(key, value, old_addr);
+                    HashSlot::H1 = hash;
+                    return;
+                }
                 allocator.Release(old_addr);
             }
 
