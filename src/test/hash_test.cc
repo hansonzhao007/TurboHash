@@ -71,10 +71,10 @@ int main() {
     {
         typedef turbo::unordered_map<int, double> MyHash;
         MyHash mapi;
-        MyHash::HashSlot slot;
-        decltype(slot.entry) entry;
-        decltype(slot.H1) h1;
-        MyHash::H1Tag a;
+        // MyHash::HashSlot slot;
+        // decltype(slot.entry) entry;
+        // decltype(slot.H1) h1;
+        // MyHash::H1Tag a;
         INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {
             mapi.Put(i, i * 1.0);
@@ -92,10 +92,6 @@ int main() {
     {
         typedef turbo::unordered_map<double, std::string> MyHash;
         MyHash mapi(2, 32);
-        MyHash::HashSlot slot;
-        decltype(slot.entry) entry;
-        decltype(slot.H1) h1;
-        MyHash::H1Tag a;
         INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {
             mapi.Put(i * 1.01, "value" + std::to_string(i));
@@ -106,7 +102,7 @@ int main() {
             if (res == nullptr) {
                 printf("Fail get\n");
             }
-            INFO("Get double key: %f, val: %s\n", res->first(), res->second().ToString().c_str());
+            INFO("Get double key: %f, val: %s\n", res->first(), res->second().c_str());
         }
         // std::cout << mapi.PrintBucketMeta(1) << std::endl;
     }
@@ -114,10 +110,6 @@ int main() {
     {
         typedef turbo::unordered_map<std::string, double> MyHash;
         MyHash mapi;
-        MyHash::HashSlot slot;
-        decltype(slot.entry) entry;
-        decltype(slot.H1) h1;
-        MyHash::H1Tag a;
         INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {
             mapi.Put("key" + std::to_string(i), i);
@@ -128,17 +120,13 @@ int main() {
             if (res == nullptr) {
                 printf("Fail get\n");
             }
-            INFO("Get str key: %s, val: %f\n", res->first().ToString().c_str(), res->second() );
+            INFO("Get str key: %s, val: %f\n", res->first().c_str(), res->second() );
         }
     }
 
     {
         typedef turbo::unordered_map<int, int> MyHash;
         MyHash mapi(8, 16);
-        MyHash::HashSlot slot;
-        decltype(slot.entry) entry;
-        decltype(slot.H1) h1;
-        MyHash::H1Tag a;
         INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {
             mapi.Put(i, i);

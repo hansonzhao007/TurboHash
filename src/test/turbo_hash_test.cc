@@ -57,14 +57,14 @@ void Record2Test() {
     char* buf = (char*)malloc(1024);
     typedef turbo::unordered_map<int, int> HashTable;
 
-    {
-        char key = '9';
-        char val = 'b';
-        typedef HashTable::Record2<decltype(key), decltype(val)> Record;
-        Record* record_ptr = reinterpret_cast<Record*>(buf);        
-        record_ptr->Encode(key, val);
-        std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() <<  ". Size: " << record_ptr->Size() << std::endl;
-    }
+    // {
+    //     char key = '9';
+    //     char val = 'b';
+    //     typedef HashTable::Record2<decltype(key), decltype(val)> Record;
+    //     Record* record_ptr = reinterpret_cast<Record*>(buf);        
+    //     record_ptr->Encode(key, val);
+    //     std::cout << "Record lenght: " << Record::FormatLength(key, val) << ". first: "  << record_ptr->first() << ", second: " << record_ptr->second() <<  ". Size: " << record_ptr->Size() << std::endl;
+    // }
 
     {
         char key = 'b';

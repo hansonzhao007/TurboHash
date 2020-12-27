@@ -141,7 +141,7 @@ public:
                     while (kRunning && key_iterator.Valid()) {
                         record_ptr = hashtable.Find(key_iterator.Next());
                         if ((i++ & 0xFFFFF) == 0) {
-                            fprintf(stderr, "thread: %2d finding%*s-%03d->%s\r", t,  int(i >> 20), " ", int(i >> 20), record_ptr->second().ToString().c_str());fflush(stderr);
+                            fprintf(stderr, "thread: %2d finding%*s-%03d->%s\r", t,  int(i >> 20), " ", int(i >> 20), record_ptr->second().c_str());fflush(stderr);
                         }
                     }
                     if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, res ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
@@ -180,7 +180,7 @@ public:
                     while (kRunning && key_iterator.Valid()) {
                         val_ptr = hashtable.Probe(key_iterator.Next());
                         if ((i++ & 0xFFFFF) == 0) {
-                            fprintf(stderr, "thread: %2d probing%*s-%03d->%s\r", t,  int(i >> 20), " ", int(i >> 20), val_ptr->second().ToString().c_str());fflush(stderr);
+                            fprintf(stderr, "thread: %2d probing%*s-%03d->%s\r", t,  int(i >> 20), " ", int(i >> 20), val_ptr->second().c_str());fflush(stderr);
                         }
                     }
                     if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, res ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
