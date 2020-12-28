@@ -32,7 +32,7 @@ using namespace util;
 // For hash table 
 DEFINE_bool(no_rehash, true, "control hash table do not do rehashing during insertion");
 DEFINE_uint32(cell_count, 128, "");
-DEFINE_uint32(bucket_count, 128 << 10, "bucket count");
+DEFINE_uint32(bucket_count, 256 << 10, "bucket count");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
@@ -40,7 +40,7 @@ DEFINE_uint32(thread, 1, "");
 DEFINE_uint64(report_interval, 0, "Report interval in seconds");
 DEFINE_uint64(stats_interval, 10000000, "Report interval in ops");
 DEFINE_uint64(value_size, 8, "The value size");
-DEFINE_uint64(num, 100 * 1000000LU, "Number of total record");
+DEFINE_uint64(num, 200 * 1000000LU, "Number of total record");
 DEFINE_uint64(read,  100000000, "Number of read operations");
 DEFINE_uint64(write, 100000000, "Number of read operations");
 

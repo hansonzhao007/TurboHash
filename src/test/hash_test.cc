@@ -146,6 +146,9 @@ int main() {
         }
 
         mapi.PrintAllMeta();
+
+        mapi.Put(20, 202);
+        mapi.PrintAllMeta();       
     }
 
     return 0;

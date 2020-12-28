@@ -691,16 +691,6 @@ public:
 
 // private:
 
-    /** ValueType
-     *  @note: for key-value record type
-     *  @format:
-    */
-    enum ValueType: unsigned char {
-        kTypeDeletion = 0x2A,   // 0b 0_0101010
-        kTypeValue    = 0xAA,   // 0b 1_0101010
-        kTypeMask     = 0x7F    // 0b 0_1111111
-    };    
-
     /**
      *  @note: obtain the Record Lenght
     */
@@ -1829,7 +1819,7 @@ public:
         size_t hash_value   = KeyToHash(key);
 
         // update index, thread safe
-        return insertSlot(kTypeValue, key, value, hash_value);
+        return insertSlot(key, value, hash_value);
     }
     
     // Return the entry if key exists
@@ -2036,33 +2026,25 @@ private:
         // 16 - 31: delete_bitmap zone
         uint32_t* bitmap = (uint32_t*)cell_addr;
 
+        uint32_t new_bitmap = (*bitmap);
         if ( true == info.equal_key) {
-            // Update: 
-            uint32_t new_bitmap = ( (*bitmap) | (1 << info.slot) ) ^ ( 1 << info.old_slot ); // set the new slot, toggle the old slot (to 0)
-            new_bitmap &= ~( 1 << (16 + info.slot) ); // clean the delete_bitmap,
-
-            // add a fence here. 
-            // Make sure the bitmap is updated after H2
-            // https://www.modernescpp.com/index.php/fences-as-memory-barriers
-            // https://preshing.com/20130922/acquire-and-release-fences/
-            TURBO_COMPILER_FENCE();
-            *bitmap = new_bitmap;
+            new_bitmap = ( new_bitmap | (1 << info.slot) ) ^ ( 1 << info.old_slot ); // set the new slot, toggle the old slot (to 0)
+            new_bitmap &= ~( 1 << (16 + info.slot) ); // clean the delete_bitmap,            
         }
-        else {
-            // Insertion: set the new slot
-            uint32_t new_bitmap = (*bitmap) | (1 << info.slot);
+        else {            
+            new_bitmap |= (1 << info.slot); // Insertion: set the new slot
             new_bitmap &= ~( 1 << (16 + info.slot) ); // clean the delete_bitmap
-
-            // add a fence here. 
-            // Make sure the bitmap is updated after H2
-            // https://www.modernescpp.com/index.php/fences-as-memory-barriers
-            // https://preshing.com/20130922/acquire-and-release-fences/
-            TURBO_COMPILER_FENCE();
-            *bitmap = new_bitmap;
         }
+
+        // add a fence here. 
+        // Make sure the bitmap is updated after H2
+        // https://www.modernescpp.com/index.php/fences-as-memory-barriers
+        // https://preshing.com/20130922/acquire-and-release-fences/
+        TURBO_COMPILER_FENCE();
+        *bitmap = new_bitmap;
     }
 
-    inline bool insertSlot(ValueType type, const Key& key, const T& value, size_t hash_value) {
+    inline bool insertSlot(const Key& key, const T& value, size_t hash_value) {
         // Obtain the partial hash
         PartialHash partial_hash(key, hash_value);
 
