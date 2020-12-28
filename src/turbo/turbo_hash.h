@@ -1500,23 +1500,35 @@ public:
         }
 
         inline void Lock(void) {
-            lock_.lock();
+            util::turbo_bit_spin_lock((uint32_t*)(&data_), 0);
         }
 
         inline void Unlock(void) {
-            lock_.unlock();
+            util::turbo_bit_spin_unlock((uint32_t*)(&data_), 0);
         }
 
         inline bool IsLocked(void) {
-            return lock_.is_locked();
+            return util::turbo_lockbusy((uint32_t*)(&data_), 0);
         }
 
         // LSB
         // | 8 bit lock | 4 bit reserved | 4 bit cell mask | 48 bit address |
-        union {
-            util::AtomicSpinLock lock_;
-            uint64_t data_;
-        };
+        uint64_t data_;
+        
+    };
+
+
+    class BucketLockScope {
+    public:
+        BucketLockScope(BucketMeta* bucket_meta) :
+            meta_(bucket_meta) {
+            meta_->Lock();
+        }
+
+        ~BucketLockScope() {
+            meta_->Unlock();
+        }
+        BucketMeta* meta_;
     };
 
     /** Usage: iterator every slot in the bucket, return the pointer in the slot
@@ -2049,10 +2061,11 @@ private:
         PartialHash partial_hash(key, hash_value);
 
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
-        // BucketMeta* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
-        // while (bucket_meta->IsLocked()) {
-        //     TURBO_CPU_RELAX();
-        // }
+        BucketMeta* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
+        // BucketLockScope meta_lock(bucket_meta);
+        while (bucket_meta->IsLocked()) {
+            TURBO_CPU_RELAX();
+        }
 
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
