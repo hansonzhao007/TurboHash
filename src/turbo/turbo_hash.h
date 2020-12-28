@@ -2049,10 +2049,10 @@ private:
         PartialHash partial_hash(key, hash_value);
 
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
-        BucketMeta* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
-        while (bucket_meta->IsLocked()) {
-            TURBO_CPU_RELAX();
-        }
+        // BucketMeta* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
+        // while (bucket_meta->IsLocked()) {
+        //     TURBO_CPU_RELAX();
+        // }
 
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
