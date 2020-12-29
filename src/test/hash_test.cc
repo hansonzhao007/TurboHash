@@ -11,7 +11,7 @@ int main() {
     turbo::unordered_map<std::string, std::string> map;
 
     const size_t COUNT = 100000;
-    auto* hashtable = new turbo::unordered_map<std::string, std::string> (8, 2048);
+    auto* hashtable = new turbo::unordered_map<std::string, std::string> (8, 128);
     printf("------- Iterate empty hash table ------\n");
     hashtable->IterateAll();
 
@@ -37,7 +37,7 @@ int main() {
         for (size_t i = 0; i < COUNT && succ; i++) {
             std::string key = "key" + std::to_string(i);
             succ = hashtable->Get(key, &value);
-            if (i < 100 || (i & 0x7FF) == 0) {
+            if (i < 10 || (i & 0x7FF) == 0) {
                 INFO("Get key: %s. value: %s\n", key.c_str(), value.c_str());
             }
             if ((succ)) find++;
@@ -51,26 +51,22 @@ int main() {
     // hashtable->IterateAll();
     // hashtable->IterateValidBucket();
     
-    printf("------- rehash all bucket and repeat search ------\n");
-    hashtable->MinorReHashAll();
-    // hashtable->IterateValidBucket();
-    // hashtable->IterateBucket(1);
-    // printf("%s\n", hashtable->PrintBucketMeta(1).c_str());
-    // hashtable->IterateAll();
-    read_fun();
+    // printf("------- rehash all bucket and repeat search ------\n");
+    // hashtable->MinorReHashAll();
+    // read_fun();
 
-    hashtable->MinorReHashAll();
-    read_fun();
+    // hashtable->MinorReHashAll();
+    // read_fun();
 
-    hashtable->MinorReHashAll();
-    read_fun();
+    // hashtable->MinorReHashAll();
+    // read_fun();
 
-    hashtable->MinorReHashAll();
-    read_fun();
+    // hashtable->MinorReHashAll();
+    // read_fun();
 
     {
         typedef turbo::unordered_map<int, double> MyHash;
-        MyHash mapi;
+        MyHash mapi(2, 32);
         // MyHash::HashSlot slot;
         // decltype(slot.entry) entry;
         // decltype(slot.H1) h1;
@@ -109,7 +105,7 @@ int main() {
 
     {
         typedef turbo::unordered_map<std::string, double> MyHash;
-        MyHash mapi;
+        MyHash mapi(2, 32);
         INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {
             mapi.Put("key" + std::to_string(i), i);
@@ -126,7 +122,7 @@ int main() {
 
     {
         typedef turbo::unordered_map<int, int> MyHash;
-        MyHash mapi(8, 16);
+        MyHash mapi(2, 16);
         INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {
             mapi.Put(i, i);

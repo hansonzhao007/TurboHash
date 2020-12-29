@@ -498,6 +498,9 @@ public:
 
 }; // end of class AtomicBitOps
 
+static inline bool turbo_bit_spin_try_lock(uint32_t *lock, int bit_pos) {
+    return AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_SPINLOCK_FREE;
+}
 
 static inline bool turbo_lockbusy(uint32_t *lock, int bit_pos) {
     return (*lock) & (1 << bit_pos);
@@ -1499,6 +1502,10 @@ public:
             data_ = (data_ & 0x0000000000000FFF) | (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 12);
         }
 
+        inline bool TryLock(void) {
+            return util::turbo_bit_spin_try_lock((uint32_t*)(&data_), 0);
+        }
+
         inline void Lock(void) {
             util::turbo_bit_spin_lock((uint32_t*)(&data_), 0);
         }
@@ -1518,18 +1525,18 @@ public:
     };
 
 
-    class BucketLockScope {
-    public:
-        BucketLockScope(BucketMeta* bucket_meta) :
-            meta_(bucket_meta) {
-            meta_->Lock();
-        }
+    // class BucketLockScope {
+    // public:
+    //     BucketLockScope(BucketMeta* bucket_meta) :
+    //         meta_(bucket_meta) {
+    //         meta_->Lock();
+    //     }
 
-        ~BucketLockScope() {
-            meta_->Unlock();
-        }
-        BucketMeta* meta_;
-    };
+    //     ~BucketLockScope() {
+    //         meta_->Unlock();
+    //     }
+    //     BucketMeta* meta_;
+    // };
 
     /** Usage: iterator every slot in the bucket, return the pointer in the slot
      *  BucketIterator<CellMeta256V2> iter(bucket_addr, cell_count_);
@@ -1730,6 +1737,7 @@ public:
         uint32_t new_cell_count_mask = new_cell_count - 1;
         char*    new_bucket_addr     = cell_allocator_.Allocate(new_cell_count);
         
+        
         if (new_bucket_addr == nullptr) {
             perror("rehash alloc memory fail\n");
             exit(1);
@@ -1789,6 +1797,10 @@ public:
         // Step 3. Reset bucket meta in buckets_
         bucket_meta->Reset(new_bucket_addr, new_cell_count);
         
+        TURBO_DEBUG("Rehash bucket: " << bi <<
+             ", old cell count: " << old_cell_count <<
+             ", loadfactor: " << (double)count / ( old_cell_count * (CellMeta256V2::SlotCount() - 1) ) << 
+             ", new cell count: " << new_cell_count);
         free(slot_vec);
         return count;
     }
@@ -2060,6 +2072,7 @@ private:
         // Obtain the partial hash
         PartialHash partial_hash(key, hash_value);
 
+    after_rehash:
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
         BucketMeta* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
         // BucketLockScope meta_lock(bucket_meta);
@@ -2118,22 +2131,26 @@ private:
 
                     // Current cell has no empty slot for insertion, we retry 'findSlotForInsert'
                     // This unlikely happens with all previous effort.
-                    #ifdef TURBO_ENABLE_LOGGING
                     TURBO_INFO("retry find slot in Bucket " << res.target_slot.bucket <<
                                ". Cell " << res.target_slot.cell <<
                                ". Slot " << res.target_slot.slot <<
                                ". Key: " << key );
-                    #endif
                     retry_find = true;
                 }
             }
             else { // cannot find a valid slot for insertion, rehash current bucket then retry
-                #ifdef TURBO_ENABLE_LOGGING
-                TURBO_INFO("=========== Need Rehash Bucket " << res.target_slot.bucket << " ==========");   
-                TURBO_INFO(PrintBucketMeta(res.target_slot.bucket));           
-                #endif
 
-                break;
+                // Obtain the Bucket lock, rehash if success. Otherwise, other thread is already rehashing. 
+                if (bucket_meta->TryLock()) {
+                    MinorRehash(res.target_slot.bucket);
+                    bucket_meta->Unlock();
+                    retry_find = true;
+                    continue;
+                }
+
+                // While the other thread is rehashing, we can start from beginning
+                TURBO_INFO("Concurrent rehash happens.");                
+                goto after_rehash;            
             }
         } while (retry_find);
         
