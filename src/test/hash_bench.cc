@@ -1,5 +1,6 @@
 #include <immintrin.h>
 #include <cstdlib>
+#include "typename.h"
 
 #ifdef CUCKOO
 #include <libcuckoo/cuckoohash_map.hh>
@@ -30,6 +31,8 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 using namespace util;
 
+#define IS_PMEM 1
+
 // For hash table 
 DEFINE_bool(no_rehash, true, "control hash table do not do rehashing during insertion");
 DEFINE_uint32(cell_count, 128, "");
@@ -49,8 +52,15 @@ DEFINE_bool(hist, false, "");
 
 DEFINE_string(benchmarks, "load,overwrite,readrandom", "");
 
+
+#ifdef IS_PMEM
+typedef turbo_pmem::unordered_map<size_t, std::string> Hashtable;
+static bool kIsPmem = true;
+#else
 typedef turbo::unordered_map<size_t, std::string> Hashtable;
-typedef turbo_pmem::unordered_map<size_t, std::string> PmemHashtable;
+static bool kIsPmem = false;
+#endif
+
 
 namespace {
 
@@ -439,9 +449,16 @@ public:
                 method = &Benchmark::DoRehashSpeed;
             }
 
+            #ifdef IS_PMEM
+            if (fresh_db) {
+                hashtable_ = new Hashtable();
+                hashtable_->Initialize(FLAGS_bucket_count, FLAGS_cell_count);
+            }
+            #else
             if (fresh_db) {
                 hashtable_ = new Hashtable(FLAGS_bucket_count, FLAGS_cell_count);
             }
+            #endif
 
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
         }
@@ -675,7 +692,7 @@ private:
     void PrintEnvironment() {
         #if defined(__linux)
         time_t now = time(nullptr);
-        fprintf(stderr, "Date:              %s", ctime(&now));  // ctime() adds newline
+        fprintf(stderr, "Date:                  %s", ctime(&now));  // ctime() adds newline
 
         FILE* cpuinfo = fopen("/proc/cpuinfo", "r");
         if (cpuinfo != nullptr) {
@@ -708,10 +725,16 @@ private:
                    INFO("------------------------------------------------\n");
         fprintf(stdout, "------------------------------------------------\n");                   
         PrintEnvironment();
-        fprintf(stdout, "Keys:                  %d bytes each\n", 8);
-                   INFO("Keys:                  %d bytes each\n", 8);
-        fprintf(stdout, "Values:                %d bytes each\n", (int)FLAGS_value_size);
-                   INFO("Values:                %d bytes each\n", (int)FLAGS_value_size);
+        fprintf(stdout, "Pmem:                  %s\n", kIsPmem ? "true" : "false");
+                   INFO("Pmem:                  %s\n", kIsPmem ? "true" : "false");
+        fprintf(stdout, "Key type:              %s\n", type_name<Hashtable::key_type>().c_str());
+                   INFO("Key type:              %s\n", type_name<Hashtable::key_type>().c_str());
+        fprintf(stdout, "Val type:              %s\n", type_name<Hashtable::mapped_type>().c_str());
+                   INFO("Val type:              %s\n", type_name<Hashtable::mapped_type>().c_str());
+        fprintf(stdout, "Keys:                  %d bytes each\n", sizeof(Hashtable::key_type));
+                   INFO("Keys:                  %d bytes each\n", sizeof(Hashtable::key_type));
+        fprintf(stdout, "Values:                %d bytes each\n", Hashtable::is_value_flat ? sizeof(Hashtable::mapped_type) :(int)FLAGS_value_size);
+                   INFO("Values:                %d bytes each\n", Hashtable::is_value_flat ? sizeof(Hashtable::mapped_type) :(int)FLAGS_value_size);
         fprintf(stdout, "Entries:               %lu\n", (uint64_t)num_);
                    INFO("Entries:               %lu\n", (uint64_t)num_);
         fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);   
@@ -721,7 +744,7 @@ private:
         fprintf(stdout, "Write:                 %lu \n", (uint64_t)FLAGS_write);
                    INFO("Write:                 %lu \n", (uint64_t)FLAGS_write);
         fprintf(stdout, "Thread:                %lu \n", (uint64_t)FLAGS_thread);
-                   INFO("Thread:                %lu \n", (uint64_t)FLAGS_thread);
+                   INFO("Thread:                %lu \n", (uint64_t)FLAGS_thread);           
         fprintf(stdout, "Hash key flat:         %s \n", Hashtable::is_key_flat ? "true" : "false");         
                    INFO("Hash key flat:         %s \n", Hashtable::is_key_flat ? "true" : "false");         
         fprintf(stdout, "Hash val flat:         %s \n", Hashtable::is_value_flat ? "true" : "false");         

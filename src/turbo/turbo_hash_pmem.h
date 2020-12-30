@@ -1163,6 +1163,8 @@ public:
         uint16_t    bitmap_deleted_; // 1: deleted
     }; // end of class CellMeta256V2
 
+    using CellMeta = CellMeta256V2;
+
     /** ProbeWithinBucket
      *  @note: probe within a bucket
     */
