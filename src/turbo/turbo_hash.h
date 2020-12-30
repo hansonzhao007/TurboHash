@@ -1705,7 +1705,7 @@ public:
             perror("rehash alloc memory fail\n");
             exit(1);
         }
-        BucketMeta new_bucket_meta(new_bucket_addr, new_cell_count);     
+       
         // Reset all cell's meta data
         for (size_t i = 0; i < new_cell_count; ++i) {
             char* des_cell_addr = new_bucket_addr + (i << kCellSizeLeftShift);
