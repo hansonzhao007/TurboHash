@@ -54,10 +54,10 @@ int main(int argc, char *argv[])
         if (recover_res == 1) {
             printf("Dirty open, recover\n");
         } else {
-            printf("Clean open.\n");
+            printf("Clean restart.\n");
         }
     } else {
-        printf("Clean restart\n");
+        printf("Clean create\n");
     }
 
     if (FLAGS_op == "write") {        
@@ -76,6 +76,7 @@ int main(int argc, char *argv[])
         Node* cur = head;
         for (int i = 0; i < 10; i++) {
             Node* node = (Node*)RP_malloc(sizeof(Node));
+            printf("RP malloced size: %lu\n", RP_malloc_size(node));
             node->key = 100 + i;
             node->val = 1000 + i;
             node->next = nullptr;

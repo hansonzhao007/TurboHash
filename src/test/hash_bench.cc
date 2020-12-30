@@ -7,6 +7,7 @@
 
 /* --------- Different HashTable --------*/
 #include "turbo/turbo_hash.h"
+#include "turbo/turbo_hash_pmem.h"
 #include "util/robin_hood.h"
 #include "absl/container/flat_hash_map.h"
 
@@ -49,6 +50,7 @@ DEFINE_bool(hist, false, "");
 DEFINE_string(benchmarks, "load,overwrite,readrandom", "");
 
 typedef turbo::unordered_map<size_t, std::string> Hashtable;
+typedef turbo_pmem::unordered_map<size_t, std::string> PmemHashtable;
 
 namespace {
 

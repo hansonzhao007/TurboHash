@@ -4,7 +4,7 @@
 //    / / / /_/ / _, _/ /_/ / /_/ /  / __  / ___ |___/ / __  /   
 //   /_/  \____/_/ |_/_____/\____/  /_/ /_/_/  |_/____/_/ /_/    
 // 
-//  Fast concurrent hashtable for c++11
+//  Fast concurrent hashtable for persistent memory
 //  version 1.0.0 
 // 
 // MIT License
@@ -29,8 +29,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef TURBO_HASH_H_
-#define TURBO_HASH_H_
+#ifndef TURBO_HASH_PMEM_H_
+#define TURBO_HASH_PMEM_H_
 
 #include <deque>
 #include <string>
@@ -61,49 +61,39 @@
 #include <sys/mman.h>
 #include <sys/time.h>
 
-#include <jemalloc/jemalloc.h>
+// pmem library
+#include "ralloc.hpp"
+#include "pptr.hpp"
+#define TURBO_PMEM_LOG_SIZE ((100LU << 30))
 
 // un-comment this to disable logging, log is saved at robin_hood.log
-#define TURBO_ENABLE_LOGGING
+#define TURBO_PMEM_ENABLE_LOGGING
 
 // #define LTHASH_DEBUG_OUT
 
 // Linear probing setting
-static const int kTurboMaxProbeLen = 16;
-static const int kTurboProbeStep   = 1;    
+static const int kTurboPmemMaxProbeLen = 16;
+static const int kTurboPmemProbeStep   = 1;    
 
-#define TURBO_LIKELY(x)     (__builtin_expect(false || (x), true))
-#define TURBO_UNLIKELY(x)   (__builtin_expect(x, 0))
+#define TURBO_PMEM_LIKELY(x)     (__builtin_expect(false || (x), true))
+#define TURBO_PMEM_UNLIKELY(x)   (__builtin_expect(x, 0))
 
-#define TURBO_BARRIER()     asm volatile("": : :"memory")           /* Compile read-write barrier */
-#define TURBO_CPU_RELAX()   asm volatile("pause\n": : :"memory")    /* Pause instruction to prevent excess processor bus usage */ 
+#define TURBO_PMEM_BARRIER()     asm volatile("": : :"memory")           /* Compile read-write barrier */
+#define TURBO_PMEM_CPU_RELAX()   asm volatile("pause\n": : :"memory")    /* Pause instruction to prevent excess processor bus usage */ 
 
-#define TURBO_SPINLOCK_FREE ((0))
+#define TURBO_PMEM_SPINLOCK_FREE ((0))
 
-#ifndef MAP_HUGETLB
-#define MAP_HUGETLB 0x40000 /* arch specific */
-#endif
-#define TURBO_HUGEPAGE_SIZE     (2UL*1024*1024)
-#define TURBO_HUGE_PROTECTION   (PROT_READ | PROT_WRITE)
-#ifdef __ia64__  /* Only ia64 requires this */
-#define TURBO_HUGE_ADDR (void *)(0x8000000000000000UL)
-#define TURBO_HUGE_FLAGS (MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | MAP_FIXED)
-#else
-#define TURBO_HUGE_ADDR (void *)(0x0UL)
-#define TURBO_HUGE_FLAGS (MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB)
-#endif
-
-inline void TURBO_COMPILER_FENCE() {
+inline void TURBO_PMEM_COMPILER_FENCE() {
     asm volatile("" : : : "memory"); /* Compiler fence. */
 }
 
 // turbo_hash logging
 namespace {
 
-static inline std::string TURBO_CMD(const std::string& content) {
+static inline std::string TURBO_PMEM_CMD(const std::string& content) {
     std::array<char, 128> buffer;
     std::string result;
-    auto cmd = "echo '" + content + "' >> turbo.log";
+    auto cmd = "echo '" + content + "' >> turbo_pmem.log";
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
     if (!pipe) {
         throw std::runtime_error("popen() failed!");
@@ -114,34 +104,34 @@ static inline std::string TURBO_CMD(const std::string& content) {
     return result;
 }
 
-#define TURBO_LOG(M, x)\
+#define TURBO_PMEM_LOG(M, x)\
 do {\
     std::ostringstream ss;\
     ss << M << x;\
-    TURBO_CMD(ss.str());\
+    TURBO_PMEM_CMD(ss.str());\
 } while(0);
 
 #define __FILENAME__ ((strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__))
 
-#if defined TURBO_ENABLE_LOGGING
-#define TURBO_INFO(x)\
+#if defined TURBO_PMEM_ENABLE_LOGGING
+#define TURBO_PMEM_INFO(x)\
 do {\
     char buffer[1024] = "[ INFO] ";\
     sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
-    TURBO_LOG(buffer, x);\
+    TURBO_PMEM_LOG(buffer, x);\
 } while(0);
 #else
-#define TURBO_INFO(x)\
+#define TURBO_PMEM_INFO(x)\
   do {\
   } while(0);
 #endif
 
-#if !defined NDEBUG && defined TURBO_ENABLE_LOGGING
+#if !defined NDEBUG && defined TURBO_PMEM_ENABLE_LOGGING
 #define TURBO_DEBUG(x)\
 do {\
     char buffer[1024] = "[DEBUG] ";\
     sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
-    TURBO_LOG(buffer, x);\
+    TURBO_PMEM_LOG(buffer, x);\
 } while(0);
 #else
 #define TURBO_DEBUG(x)\
@@ -149,27 +139,27 @@ do {\
   } while(0);
 #endif
 
-#if defined TURBO_ENABLE_LOGGING
-#define TURBO_ERROR(x)\
+#if defined TURBO_PMEM_ENABLE_LOGGING
+#define TURBO_PMEM_ERROR(x)\
 do {\
     char buffer[1024] = "[ERROR] ";\
     sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
-    TURBO_LOG(buffer, x);\
+    TURBO_PMEM_LOG(buffer, x);\
 } while(0);
 #endif 
 
-#if defined TURBO_ENABLE_LOGGING
-#define TURBO_WARNING(x)\
+#if defined TURBO_PMEM_ENABLE_LOGGING
+#define TURBO_PMEM_WARNING(x)\
 do {\
     char buffer[1024] = "[ WARN] ";\
     sprintf(buffer + strlen(buffer), "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
-    TURBO_LOG(buffer, x);\
+    TURBO_PMEM_LOG(buffer, x);\
 } while(0);
 #endif
 
 }; // end of namespace for logging
 
-namespace turbo {
+namespace turbo_pmem {
 
 namespace util {
 
@@ -499,7 +489,7 @@ public:
 }; // end of class AtomicBitOps
 
 static inline bool turbo_bit_spin_try_lock(uint32_t *lock, int bit_pos) {
-    return AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_SPINLOCK_FREE;
+    return AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_PMEM_SPINLOCK_FREE;
 }
 
 static inline bool turbo_lockbusy(uint32_t *lock, int bit_pos) {
@@ -510,7 +500,7 @@ static inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
 {
     while(1) {
         // test & set return 0 if success
-        if (AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_SPINLOCK_FREE) {
+        if (AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_PMEM_SPINLOCK_FREE) {
             return;
         }
         while (turbo_lockbusy(lock, bit_pos)) __builtin_ia32_pause();
@@ -519,7 +509,7 @@ static inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
 
 static inline void turbo_bit_spin_unlock(uint32_t *lock, int bit_pos)
 {
-    TURBO_BARRIER();
+    TURBO_PMEM_BARRIER();
     *lock &= ~(1 << bit_pos);
 }
 
@@ -585,7 +575,7 @@ public:
     }
 }; // end of class AtomicSpinLock
 
-}; // end of namespace turbo::util
+}; // end of namespace turbo_pmem::util
 
 // A thin wrapper around std::hash, performing an additional simple mixing step of the result.
 // from https://github.com/martinus/robin-hood-hashing
@@ -641,7 +631,7 @@ TURBO_HASH_INT(unsigned long long);
 #if defined(__GNUC__) && !defined(__clang__)
 #    pragma GCC diagnostic pop
 #endif
-// dummy hash, unsed as mixer when turbo::hash is already used
+// dummy hash, unsed as mixer when turbo_pmem::hash is already used
 template <typename T>
 struct identity_hash {
     constexpr size_t operator()(T const& obj) const noexcept {
@@ -995,7 +985,7 @@ public:
 
     using H2Tag = uint16_t;
     using H1Tag = typename std::conditional<is_key_flat, Key, uint64_t>::type;
-    using Entry = typename std::conditional<is_key_flat && is_value_flat, T, char*>::type;
+    using Entry = typename std::conditional<is_key_flat && is_value_flat, T, pptr<char> >::type;
     
     template<typename T1, bool flat_key>
     struct H1Convert {};
@@ -1178,8 +1168,8 @@ public:
     */
     class ProbeWithinBucket {
     public:
-        static const int MAX_PROBE_LEN  = kTurboMaxProbeLen;
-        static const int PROBE_STEP     = kTurboProbeStep;
+        static const int MAX_PROBE_LEN  = kTurboPmemMaxProbeLen;
+        static const int PROBE_STEP     = kTurboPmemProbeStep;
         ProbeWithinBucket(uint64_t initial_hash, uint32_t cell_count_mask, uint32_t bucket_i) {
             h_               = initial_hash;
             cell_count_mask_  = cell_count_mask;
@@ -1223,7 +1213,6 @@ public:
     static_assert(__builtin_popcount(kCellCountLimit) == 1, "kCellCountLimit should be power of two");
     static_assert(kCellCountLimit <= 32768, "kCellCountLimit needs to be <= 32768");
     
-    using CellMeta  = CellMeta256V2;
     using WHash     = WrapHash<Hash>;
     using WKeyEqual = WrapKeyEqual<KeyEqual>;
 
@@ -1272,11 +1261,11 @@ public:
         public:
             inline char* Allocate(size_t cell_count) {
                 size_t size = cell_count * kCellSize;
-                return static_cast<char*>(aligned_alloc(kCellSize, size));
+                return static_cast<char*>(RP_malloc(size));
             }
 
             inline void Release(char* addr) {
-                free(addr);
+                RP_free(addr);
             }
     };
 
@@ -1286,11 +1275,11 @@ public:
     class RecordAllocator {
         public:
             inline char* Allocate(size_t size) {
-                return reinterpret_cast<char*>(malloc(size));
+                return reinterpret_cast<char*>(RP_malloc(size));
             }
 
             inline void Release(char* addr) {
-                free(addr);
+                RP_free((void*)addr);
             }
     };
 
@@ -1447,19 +1436,19 @@ public:
 
     using value_type = DataRecord<Key, is_key_flat, is_value_flat>;
 
-    /** BucketMeta
+    /** BucketMetaDram
      *  @note: a 8-byte 
     */
-    class BucketMeta {
+    class BucketMetaDram {
     public:
-        explicit BucketMeta(char* addr, uint16_t cell_count) {
+        explicit BucketMetaDram(char* addr, uint16_t cell_count) {
             data_ = (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 12);
         }
 
-        BucketMeta():
+        BucketMetaDram():
             data_(0) {}
 
-        BucketMeta(const BucketMeta& a) {
+        BucketMetaDram(const BucketMetaDram& a) {
             data_ = a.data_;
         }
 
@@ -1497,8 +1486,66 @@ public:
 
         // LSB
         // | 8 bit lock | 4 bit reserved | 4 bit cell mask | 48 bit address |
-        uint64_t data_;
-        
+        uint64_t data_;        
+    };
+
+    class BucketMetaPmem {
+    public:        
+        // Initialize the bucket meta in pmem
+        void Init(BucketMetaDram bucket_meta) {
+            cur_ver_ = 1;
+            bucket1_ptr_ = bucket_meta.Address();
+            cell_count_leftshit_1_ = __builtin_ctz(bucket_meta.CellCount());
+            FLUSH(this);
+            FLUSHFENCE;
+        }
+
+        // store the newest version of bucket meta and then commit
+        void Store(BucketMetaDram bucket_meta) {
+            if (cur_ver_ == 2) {
+            // if current version is on 2, commit to 1
+                bucket1_ptr_ = bucket_meta.Address();
+                cell_count_leftshit_1_ = __builtin_ctz(bucket_meta.CellCount());
+            } else if (cur_ver_ == 1) {
+            // if current version if on 1, commit to 2
+                bucket1_ptr_ = bucket_meta.Address();
+                cell_count_leftshit_2_ = __builtin_ctz(bucket_meta.CellCount());
+            } else {
+                TURBO_PMEM_ERROR("The version is wrong. cur_ver: " << cur_ver_);
+                printf("The version is wrong. cur_ver: %u\n", cur_ver_);
+                exit(1);                
+            }
+            FLUSH(this);
+            FLUSHFENCE;
+
+            // Switch the version
+            cur_ver_ = 3 - cur_ver_;
+            FLUSH(this);
+            FLUSHFENCE;
+        }
+
+        // Obtain the right version of BucketMetaDram
+        BucketMetaDram Extract(void) {
+            BucketMetaDram bucket_meta;
+            if (cur_ver_ == 1) {
+                bucket_meta.Reset(bucket1_ptr_, 1 << cell_count_leftshit_1_);
+                return bucket_meta;
+            } else if (cur_ver_ ==2 ) {
+                bucket_meta.Reset(bucket2_ptr_, 1 << cell_count_leftshit_2_);
+                return bucket_meta;
+            }
+            TURBO_PMEM_ERROR("The version is wrong. cur_ver: " << cur_ver_);
+            exit(1);
+        }
+
+    private:
+        BucketMetaPmem() {}
+
+        uint8_t       cur_ver_;
+        uint8_t       cell_count_leftshit_1_;
+        uint8_t       cell_count_leftshit_2_;
+        pptr<char>    bucket1_ptr_;
+        pptr<char>    bucket2_ptr_;
     };
 
     /** Usage: iterator every slot in the bucket, return the pointer in the slot
@@ -1601,31 +1648,129 @@ public:
 
 public:
     static constexpr int kSizeVecCount = 1 << 4;
-    explicit TurboHashTable(uint32_t bucket_count = 128 << 10, uint32_t cell_count = 32):
-        bucket_count_(bucket_count),
-        bucket_mask_(bucket_count - 1),
-        capacity_( bucket_count * cell_count * (CellMeta256V2::SlotCount() - 1) ),
-        size_(0) {
+
+
+    TurboHashTable() {
+        // Do nothing
+    }
+
+    ~TurboHashTable() {
+        RP_close();
+    }
+
+    struct TurboRoot{
+        size_t bucket_count_;
+        pptr<BucketMetaPmem> buckets_pmem_;
+    };
+
+    /**
+     * @brief initialize the pmem hashtable. return the pointer of pmem bucket meta list
+     * 
+     * @param bucket_count 
+     * @param cell_count 
+     * @return pptr<BucketMetaPmem> 
+     */
+    pptr<BucketMetaPmem> Initialize(uint32_t bucket_count, uint32_t cell_count) {
+        // Step1. Initialize pmem library
+        bool res = RP_init("turbo_hash_pmem", TURBO_PMEM_LOG_SIZE);
+        TurboRoot* turbo_root = nullptr;
+        if (res) {
+            TURBO_PMEM_INFO("Prepare to recover");
+            turbo_root = RP_get_root<TurboRoot>(0);
+            int recover_res = RP_recover();
+            if (recover_res == 1) {
+                TURBO_PMEM_INFO("Dirty open, recover");
+            } else {                
+                TURBO_PMEM_INFO("Clean restart");
+            }
+        } else {
+            TURBO_PMEM_INFO("Clean create");
+        }
+        turbo_root = (TurboRoot*)RP_malloc(sizeof(TurboRoot));
+        RP_set_root(turbo_root, 0);        
+
+        // Step2. Initialize members
+        bucket_count_ = bucket_count;
+        bucket_mask_  = bucket_count - 1;
         if (!util::isPowerOfTwo(bucket_count) || !util::isPowerOfTwo(cell_count)) {
             printf("the hash table size setting is wrong. bucket: %u, cell: %u\n", bucket_count, cell_count);
             exit(1);
         }
 
-        size_t bucket_meta_space = bucket_count * sizeof(BucketMeta);             
-        BucketMeta* buckets_addr = nullptr;
-        buckets_addr = (BucketMeta* ) aligned_alloc(sizeof(BucketMeta), bucket_meta_space);
+        // Step3. Allocate BucketMetaDram space
+        size_t bucket_meta_space = bucket_count * sizeof(BucketMetaDram);             
+        BucketMetaDram* buckets_addr = (BucketMetaDram* )malloc(bucket_meta_space);
         if (buckets_addr == nullptr) {
             fprintf(stderr, "malloc %lu space fail.\n", bucket_meta_space);
             exit(1);
         }
-        TURBO_INFO("BucketMeta Allocated: " << bucket_meta_space);
+        TURBO_PMEM_INFO("BucketMetaDram Allocated: " << bucket_meta_space);
         memset((char*)buckets_addr, 0, bucket_meta_space);
-
         buckets_ = buckets_addr;
-        for (size_t i = 0; i < bucket_count; ++i) {
+
+        // Step4. Allocate BucketMetaPmem space
+        BucketMetaPmem* buckets_pmem_addr = reinterpret_cast<BucketMetaPmem*>( RP_malloc(bucket_count * sizeof(BucketMetaPmem)) );
+        if (buckets_pmem_addr == nullptr) {
+            fprintf(stderr, "malloc %lu space fail.\n", bucket_meta_space);
+            exit(1);
+        }
+        TURBO_PMEM_INFO("BucketMetaPmem Allocated: " << RP_malloc_size(buckets_pmem_addr));
+        buckets_pmem_ = buckets_pmem_addr;
+
+        // Step5. Allocate space of cells, then set the bucket meta (cell count and pointer)        
+        for (size_t i = 0; i < bucket_count_; ++i) {
+            // Allocate pmem space for cells
             char* addr = cell_allocator_.Allocate(cell_count);
+
+            // Reset the cell content to zero
             memset(addr, 0, cell_count * kCellSize);
+
+            // Initialize the dram bucket meta
             buckets_[i].Reset(addr, cell_count);
+
+            // Initialzie the pmem bucket meta
+            buckets_pmem_[i].Init(buckets_[i]);
+        }
+
+        // Step6. Set the TurboRoot
+        turbo_root->bucket_count_ = bucket_count_;
+        turbo_root->buckets_pmem_ = buckets_pmem_;
+        FLUSH(turbo_root);
+        FLUSHFENCE;
+
+        return buckets_pmem_addr;
+    }
+
+    void Recover() {
+        // Step1. Open the pmem file
+        bool res = RP_init("turbo_hash_pmem", TURBO_PMEM_LOG_SIZE);
+        if (res) {
+            TURBO_PMEM_INFO("Prepare to recover");
+            TurboRoot* turbo_root = RP_get_root<TurboRoot>(0);
+            int recover_res = RP_recover();
+            if (recover_res == 1) {
+                TURBO_PMEM_INFO("Dirty open, recover");
+            } else {                
+                TURBO_PMEM_INFO("Clean restart");
+            }
+        } else {
+            TURBO_PMEM_ERROR("Nothing to recover");
+            printf("There is nothing to recover.");
+            exit(1);
+        }
+
+        // Step2. Obtain the bucket_count and buckets meta from pmem
+        TurboRoot* turbo_root = RP_get_root<TurboRoot>(0);
+        bucket_count_ = turbo_root->bucket_count_;
+        bucket_mask_  = bucket_count_ - 1;
+        buckets_pmem_ = turbo_root->buckets_pmem_;
+        buckets_      = (BucketMetaDram*)malloc(bucket_count_ * sizeof(BucketMetaDram));
+        TURBO_PMEM_INFO("Turbo Root bucket count: " << bucket_count_);
+
+        // Step3. Recover the BucketMetaDram
+        for (size_t i = 0; i < bucket_count_; ++i) {
+            buckets_[i] = buckets_pmem_[i].Extract();
+            TURBO_PMEM_INFO("Recovered bucket cell count: " << buckets_[i].CellCount());
         }
     }
 
@@ -1678,7 +1823,7 @@ public:
             // because we use linear probe, if this cell is full, we go to next cell
             ai += ProbeWithinBucket::PROBE_STEP; 
             loop_count++;
-            if (TURBO_UNLIKELY(loop_count > ProbeWithinBucket::MAX_PROBE_LEN)) {
+            if (TURBO_PMEM_UNLIKELY(loop_count > ProbeWithinBucket::MAX_PROBE_LEN)) {
                 printf("ERROR!!! Even we rehash this bucket, we cannot find a valid slot within %d probe\n", ProbeWithinBucket::MAX_PROBE_LEN);
                 exit(1);
             }
@@ -1692,7 +1837,7 @@ public:
     
     size_t MinorRehash(int bi) {
         size_t count = 0;
-        BucketMeta* bucket_meta = locateBucket(bi);
+        BucketMetaDram* bucket_meta = locateBucket(bi);
 
         // Step 1. Create new bucket and initialize its meta
         uint32_t old_cell_count      = bucket_meta->CellCount();
@@ -1700,12 +1845,11 @@ public:
         uint32_t new_cell_count_mask = new_cell_count - 1;
         char*    new_bucket_addr     = cell_allocator_.Allocate(new_cell_count);
         
-        
         if (new_bucket_addr == nullptr) {
             perror("rehash alloc memory fail\n");
             exit(1);
         }
-        BucketMeta new_bucket_meta(new_bucket_addr, new_cell_count);     
+        BucketMetaDram new_bucket_meta(new_bucket_addr, new_cell_count);     
         // Reset all cell's meta data
         for (size_t i = 0; i < new_cell_count; ++i) {
             char* des_cell_addr = new_bucket_addr + (i << kCellSizeLeftShift);
@@ -1737,7 +1881,7 @@ public:
             char* des_cell_addr = new_bucket_addr + (valid_slot.cell_index << kCellSizeLeftShift);            
             if (valid_slot.slot_index >= CellMeta256V2::SlotMaxRange()) {                
                 printf("rehash fail: %s\n", res.slot_info.ToString().c_str());
-                TURBO_ERROR("Rehash fail: " << res.slot_info.ToString());
+                TURBO_PMEM_ERROR("Rehash fail: " << res.slot_info.ToString());
                 printf("%s\n", PrintBucketMeta(res.slot_info.bucket).c_str());
                 exit(1);
             }
@@ -1760,6 +1904,9 @@ public:
         // Step 3. Reset bucket meta in buckets_
         bucket_meta->Reset(new_bucket_addr, new_cell_count);
         
+        // Step 4. commit the changed bucket meta to pmem meta
+        buckets_pmem_[bi].Store(*bucket_meta);
+
         TURBO_DEBUG("Rehash bucket: " << bi <<
              ", old cell count: " << old_cell_count <<
              ", loadfactor: " << (double)count / ( old_cell_count * (CellMeta256V2::SlotCount() - 1) ) << 
@@ -1768,16 +1915,12 @@ public:
         return count;
     }
 
-    ~TurboHashTable() {
-
-    }
-
     template<typename HashKey>
     inline size_t KeyToHash(HashKey& key) {
         using Mix =
-            typename std::conditional<std::is_same<::turbo::hash<Key>, hasher>::value,
-                                      ::turbo::identity_hash<size_t>,
-                                      ::turbo::hash<size_t>>::type;
+            typename std::conditional<std::is_same<::turbo_pmem::hash<Key>, hasher>::value,
+                                      ::turbo_pmem::identity_hash<size_t>,
+                                      ::turbo_pmem::hash<size_t>>::type;
         return Mix{}(WHash::operator()(key));
     }
 
@@ -1793,7 +1936,7 @@ public:
     // If key is flat (store the real key), we need to hash h1.    
     inline size_t H1ToHash(H1Tag h1) {
         using ToHash = typename std::conditional<is_key_flat,
-                                        ::turbo::hash<size_t>,
+                                        ::turbo_pmem::hash<size_t>,
                                         IdenticalReturn<H1Tag> >::type;
         return ToHash{}(h1);
     }
@@ -1856,12 +1999,6 @@ public:
         deleteSlot(key, hash_value);
     }
 
-    double LoadFactor()  {
-        return (double) size_.load(std::memory_order_relaxed) / capacity_.load(std::memory_order_relaxed);
-    }
-
-    size_t Size()  { return size_.load(std::memory_order_relaxed);}
-
     void IterateValidBucket() {
         printf("Iterate Valid Bucket\n");
         for (size_t i = 0; i < bucket_count_; ++i) {
@@ -1882,7 +2019,7 @@ public:
             info.bucket = i;
             HashSlot& slot = res.second;
             value_type* record = &slot;
-            std::cout << info.ToString() << ", addr: " << slot.entry << ". key: " << record->first() << ", value: " << record->second() << std::endl;
+            std::cout << info.ToString() << ", H1: " << slot.H1 << ". key: " << record->first() << ", value: " << record->second() << std::endl;
             ++iter;
         }
     }
@@ -1890,19 +2027,19 @@ public:
     void IterateAll() {
         size_t count = 0;
         for (size_t i = 0; i < bucket_count_; ++i) {
-            BucketMeta* bucket_meta = locateBucket(i);
+            BucketMetaDram* bucket_meta = locateBucket(i);
             BucketIterator iter(i, bucket_meta->Address(), bucket_meta->CellCount());
             while (iter.valid()) {
                 auto res = (*iter);
                 SlotInfo& info = res.slot_info;
                 HashSlot& slot = res.hash_slot;
                 value_type* record = reinterpret_cast<value_type*>(&slot);
-                std::cout << info.ToString() << ", addr: " << slot.entry << ". key: " << record->first() << ", value: " << record->second() << std::endl;
+                std::cout << info.ToString() << ", H1: " << slot.H1 << ". key: " << record->first() << ", value: " << record->second() << std::endl;
                 ++iter;
                 count++;
             }
         }
-        printf("iterato %lu entries. total size: %lu\n", count, Size());
+        printf("iterato %lu entries. \n", count);
     }
 
     std::string ProbeStrategyName()  {
@@ -1912,7 +2049,7 @@ public:
     std::string PrintBucketMeta(uint32_t bucket_i) {
         std::string res;
         char buffer[1024];
-        BucketMeta* bucket_meta = locateBucket(bucket_i);
+        BucketMetaDram* bucket_meta = locateBucket(bucket_i);
         sprintf(buffer, "----- bucket %10u -----\n", bucket_i);
         res += buffer;
         ProbeWithinBucket probe(0, bucket_meta->CellCountMask(), bucket_i);
@@ -1957,7 +2094,7 @@ private:
         return hash & bucket_mask_;
     }
 
-    inline BucketMeta* locateBucket(uint32_t bi) const {
+    inline BucketMetaDram* locateBucket(uint32_t bi) const {
         return &buckets_[bi];
     }
 
@@ -2027,7 +2164,7 @@ private:
         // Make sure the bitmap is updated after H2
         // https://www.modernescpp.com/index.php/fences-as-memory-barriers
         // https://preshing.com/20130922/acquire-and-release-fences/
-        TURBO_COMPILER_FENCE();
+        TURBO_PMEM_COMPILER_FENCE();
         *bitmap = new_bitmap;
     }
 
@@ -2037,10 +2174,10 @@ private:
 
     after_rehash:
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
-        BucketMeta* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
+        BucketMetaDram* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
         // BucketLockScope meta_lock(bucket_meta);
         while (bucket_meta->IsLocked()) {
-            TURBO_CPU_RELAX();
+            TURBO_PMEM_CPU_RELAX();
         }
 
         bool retry_find = false;
@@ -2056,7 +2193,7 @@ private:
 
                 CellMeta256V2 meta(cell_addr);   // obtain the meta part
 
-                if (TURBO_LIKELY( !meta.Occupy(res.target_slot.slot) )) { 
+                if (TURBO_PMEM_LIKELY( !meta.Occupy(res.target_slot.slot) )) { 
                     // If the new slot from 'findSlotForInsert' is not occupied, insert directly
 
                     insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot); // update slot content (including pointer and H1), H2 and bitmap
@@ -2072,8 +2209,8 @@ private:
                     // it means the backup slot has changed in current cell. So we 
                     // update the slot location.
                     util::BitSet empty_bitset = meta.EmptyBitSet(); 
-                    if (TURBO_UNLIKELY(!empty_bitset)) {
-                        TURBO_ERROR(" Cannot update.");
+                    if (TURBO_PMEM_UNLIKELY(!empty_bitset)) {
+                        TURBO_PMEM_ERROR(" Cannot update.");
                         printf("Cannot update.\n");
                         exit(1);
                     }
@@ -2094,7 +2231,7 @@ private:
 
                     // Current cell has no empty slot for insertion, we retry 'findSlotForInsert'
                     // This unlikely happens with all previous effort.
-                    TURBO_INFO("retry find slot in Bucket " << res.target_slot.bucket <<
+                    TURBO_PMEM_INFO("retry find slot in Bucket " << res.target_slot.bucket <<
                                ". Cell " << res.target_slot.cell <<
                                ". Slot " << res.target_slot.slot <<
                                ". Key: " << key );
@@ -2112,7 +2249,7 @@ private:
                 }
 
                 // While the other thread is rehashing, we can start from beginning
-                TURBO_INFO("Concurrent rehash happens.");                
+                TURBO_PMEM_INFO("Concurrent rehash happens.");                
                 goto after_rehash;            
             }
         } while (retry_find);
@@ -2151,7 +2288,7 @@ private:
     */
     inline FindSlotForInsertResult findSlotForInsert(const Key& key, PartialHash& partial_hash) {        
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        BucketMeta* bucket_meta = locateBucket(bucket_i);
+        BucketMetaDram* bucket_meta = locateBucket(bucket_i);
         ProbeWithinBucket probe(H1ToHash(partial_hash.H1_), bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
@@ -2166,7 +2303,7 @@ private:
                 // locate the slot reference
                 HashSlot* slot = locateSlot(cell_addr, i);
 
-                if (TURBO_LIKELY(slot->H1 == partial_hash.H1_)) // compare if the H1 partial hash is equal
+                if (TURBO_PMEM_LIKELY(slot->H1 == partial_hash.H1_)) // compare if the H1 partial hash is equal
                 {  
                     // Obtain record pointer
                     value_type* record = (value_type*)(slot);
@@ -2218,8 +2355,8 @@ private:
         }
 
         #ifdef LTHASH_DEBUG_OUT
-        TURBO_INFO("Fail to find one empty slot");
-        TURBO_INFO(PrintBucketMeta(bucket_i));
+        TURBO_PMEM_INFO("Fail to find one empty slot");
+        TURBO_PMEM_INFO(PrintBucketMeta(bucket_i));
         #endif
 
         // only when all the probes fail and there is no empty slot
@@ -2243,7 +2380,7 @@ private:
     inline FindSlotResult findSlot(const Key& key, size_t hash_value) {
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        BucketMeta* bucket_meta = locateBucket(bucket_i);
+        BucketMetaDram* bucket_meta = locateBucket(bucket_i);
         ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
@@ -2256,7 +2393,7 @@ private:
                 
                 HashSlot* slot = locateSlot(cell_addr, i); // locate the slot reference
 
-                if (TURBO_LIKELY(slot->H1 == partial_hash.H1_)) { // Compare if the H1 partial hash is equal.
+                if (TURBO_PMEM_LIKELY(slot->H1 == partial_hash.H1_)) { // Compare if the H1 partial hash is equal.
 
                     value_type* record = (value_type*)slot;
 
@@ -2283,7 +2420,7 @@ private:
     inline void deleteSlot(const Key& key, size_t hash_value) {
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        BucketMeta* bucket_meta = locateBucket(bucket_i);
+        BucketMetaDram* bucket_meta = locateBucket(bucket_i);
         ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
@@ -2297,7 +2434,7 @@ private:
                 
                 HashSlot* slot = locateSlot(cell_addr, i); // locate the slot reference
 
-                if (TURBO_LIKELY(slot->H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
+                if (TURBO_PMEM_LIKELY(slot->H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
                 {
                     value_type* record = (value_type*)slot;
                 
@@ -2324,7 +2461,7 @@ private:
     inline FindSlotResult probeFirstSlot(const Key& key, size_t hash_value) {
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
-        BucketMeta* bucket_meta = locateBucket(bucket_i);
+        BucketMetaDram* bucket_meta = locateBucket(bucket_i);
         ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
@@ -2337,7 +2474,7 @@ private:
                 
                 HashSlot* slot = locateSlot(cell_addr, i); // locate the slot reference
 
-                if (TURBO_LIKELY(slot->H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
+                if (TURBO_PMEM_LIKELY(slot->H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
                 {
                     return {slot, true};
                 }
@@ -2359,17 +2496,16 @@ private:
 private:
     CellAllocator       cell_allocator_;
     RecordAllocator     record_allocator_;
-    BucketMeta*         buckets_;
-    const size_t        bucket_count_ = 0;
-    const size_t        bucket_mask_  = 0;
-    std::atomic<size_t> capacity_;
-    std::atomic<size_t> size_;
+    BucketMetaDram*     buckets_;
+    BucketMetaPmem*     buckets_pmem_;
+    size_t        bucket_count_ = 0;
+    size_t        bucket_mask_  = 0;
 
     static constexpr int       kCellSize           = CellMeta256V2::CellSize();
     static constexpr int       kCellSizeLeftShift  = CellMeta256V2::CellSizeLeftShift;
 };
 
-}; // end of namespace turbo::detail
+}; // end of namespace turbo_pmem::detail
 
 // When using std::string for Key, the KeyEqual uses std::equal_to<util::Slice>
 template <typename Key, typename T, typename Hash = hash<Key>,
@@ -2380,6 +2516,6 @@ using unordered_map = detail::TurboHashTable<
                                                                                         KeyEqual, 
                                                                                         std::equal_to<util::Slice> >::type, 
                                             32768>;
-}; // end of namespace turbo
+}; // end of namespace turbo_pmem
 
 #endif
