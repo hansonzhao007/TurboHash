@@ -70,7 +70,7 @@ DEFINE_string(type, "fillrandomNT", "");
 DEFINE_string(mode, "row_thread", "");
 
 DEFINE_bool(pmdk, false, "use pmdk lib or not");
-DEFINE_string(path, "/mnt/pmem0/test.data", "default file path");
+DEFINE_string(path, "/mnt/pmem/test.data", "default file path");
 DEFINE_int64(filesize, 2ULL << 30, "default file size");
 DEFINE_int32(block_size, 256, "unit size");
 DEFINE_int32(offset_interval, -1, "offset set interval unit, if not set, will equal to block_size");

@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
                 std::string key = "key" + std::to_string(i);
                 succ = hashtable->Get(key, &value);
                 if (i < 10 || (i & 0x7FF) == 0) {
-                    INFO("Get key: %s. value: %s\n", key.c_str(), value.c_str());
+                    INFO("Recover Get key: %s. value: %s\n", key.c_str(), value.c_str());
                 }
                 if ((succ)) find++;
             }

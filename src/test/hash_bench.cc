@@ -377,7 +377,7 @@ public:
     int value_size_;
     size_t reads_;
     size_t writes_;
-    Hashtable* hashtable_;
+    Hashtable* hashtable_ = nullptr;
     RandomKeyTrace* key_trace_;
     size_t trace_size_;
     size_t initial_capacity_;
@@ -389,7 +389,11 @@ public:
         key_trace_(nullptr) {
 
         }
-
+    ~Benchmark() {
+        if (hashtable_ != nullptr) {
+            delete hashtable_;
+        }
+    }
     void Run() {
         initial_capacity_ = FLAGS_bucket_count * FLAGS_cell_count * (Hashtable::CellMeta::SlotCount() - 1) ;
         size_t rehash_threshold = initial_capacity_ * FLAGS_loadfactor;
@@ -731,10 +735,10 @@ private:
                    INFO("Key type:              %s\n", type_name<Hashtable::key_type>().c_str());
         fprintf(stdout, "Val type:              %s\n", type_name<Hashtable::mapped_type>().c_str());
                    INFO("Val type:              %s\n", type_name<Hashtable::mapped_type>().c_str());
-        fprintf(stdout, "Keys:                  %d bytes each\n", sizeof(Hashtable::key_type));
-                   INFO("Keys:                  %d bytes each\n", sizeof(Hashtable::key_type));
-        fprintf(stdout, "Values:                %d bytes each\n", Hashtable::is_value_flat ? sizeof(Hashtable::mapped_type) :(int)FLAGS_value_size);
-                   INFO("Values:                %d bytes each\n", Hashtable::is_value_flat ? sizeof(Hashtable::mapped_type) :(int)FLAGS_value_size);
+        fprintf(stdout, "Keys:                  %lu bytes each\n", sizeof(Hashtable::key_type));
+                   INFO("Keys:                  %lu bytes each\n", sizeof(Hashtable::key_type));
+        fprintf(stdout, "Values:                %lu bytes each\n", Hashtable::is_value_flat ? sizeof(Hashtable::mapped_type) :(int)FLAGS_value_size);
+                   INFO("Values:                %lu bytes each\n", Hashtable::is_value_flat ? sizeof(Hashtable::mapped_type) :(int)FLAGS_value_size);
         fprintf(stdout, "Entries:               %lu\n", (uint64_t)num_);
                    INFO("Entries:               %lu\n", (uint64_t)num_);
         fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);   

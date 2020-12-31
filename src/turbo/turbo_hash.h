@@ -64,7 +64,7 @@
 #include <jemalloc/jemalloc.h>
 
 // un-comment this to disable logging, log is saved at robin_hood.log
-#define TURBO_ENABLE_LOGGING
+// #define TURBO_ENABLE_LOGGING
 
 // #define LTHASH_DEBUG_OUT
 
@@ -156,7 +156,11 @@ do {\
     sprintf(buffer + 8, "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
     TURBO_LOG(buffer, x);\
 } while(0);
-#endif 
+#else
+#define TURBO_ERROR(x)\
+  do {\
+  } while(0);
+#endif
 
 #if defined TURBO_ENABLE_LOGGING
 #define TURBO_WARNING(x)\
@@ -165,6 +169,10 @@ do {\
     sprintf(buffer + strlen(buffer), "[%s %s:%d] ", __FILENAME__, __FUNCTION__, __LINE__);\
     TURBO_LOG(buffer, x);\
 } while(0);
+#else
+#define TURBO_WARNING(x)\
+  do {\
+  } while(0);
 #endif
 
 }; // end of namespace for logging
