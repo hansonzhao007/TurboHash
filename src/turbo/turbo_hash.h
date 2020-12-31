@@ -1706,6 +1706,7 @@ public:
         uint32_t old_cell_count      = bucket_meta->CellCount();
         uint32_t new_cell_count      = old_cell_count << 1;
         uint32_t new_cell_count_mask = new_cell_count - 1;
+        char*    old_bucket_addr     = bucket_meta->Address();
         char*    new_bucket_addr     = cell_allocator_.Allocate(new_cell_count);
         
         
@@ -1767,6 +1768,10 @@ public:
 
         // Step 3. Reset bucket meta in buckets_
         bucket_meta->Reset(new_bucket_addr, new_cell_count);
+        
+        // Step 4. Release old bucket addr
+        cell_allocator_.Release(old_bucket_addr);
+
         
         TURBO_DEBUG("Rehash bucket: " << bi <<
              ", old cell count: " << old_cell_count <<

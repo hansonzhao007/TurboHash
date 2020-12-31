@@ -1804,7 +1804,7 @@ public:
     */
    void MinorReHashAll()  {
         // rehash for all the buckets
-        int rehash_thread = 1;
+        int rehash_thread = 8;
         printf("Rehash threads: %d\n", rehash_thread);
         std::vector<std::thread> workers(rehash_thread);
         std::vector<size_t> add_capacity(rehash_thread, 0);
@@ -1862,28 +1862,29 @@ public:
     struct PptrToDramPptr {};
 
     /**
-     * @brief Covert pptr in ralloc space to dram, so later can be copied back
+     * @brief Covert pptr in ralloc space
      * 
      * @tparam for flat entry, copy old_entry to des_entry_dram directly
      */
     template<typename E>
     struct PptrToDramPptr<E, true> {
-        static inline void Convert(E& des_entry_dram, E& des_entry_pmem, E& old_entry) {
-            des_entry_dram = old_entry;
+        static inline void Convert(E& des_entry_dram, E& des_entry_pmem, HashSlot* old_slot_dram, HashSlot* old_slot_pmem) {
+            des_entry_dram = old_slot_dram->entry;
         }
     };
 
     /**
-     * @brief Covert pptr in ralloc space to dram, so later can be copied back
+     * @brief Covert pptr in ralloc space
      * 
      * @tparam E is pptr<char> type, we need to calculate real off in des_entry_pmem,
      *         then assign it to des_entry_dram
      */
     template<typename E>
     struct PptrToDramPptr<E, false> {
-        static inline void Convert(E& des_entry_dram, E& des_entry_pmem, E& old_entry) {
-            char* addr = static_cast<char*>(old_entry);
-            uint64_t off = to_pptr_off(addr, &des_entry_pmem);
+        static inline void Convert(E& des_entry_dram, E& des_entry_pmem, HashSlot* old_slot_dram, HashSlot* old_slot_pmem) {
+            E* old_slot_entry_addr = (E*)old_slot_pmem;
+            char* old_entry_addr = from_pptr_off(old_slot_dram->entry.off, old_slot_entry_addr);
+            uint64_t off = to_pptr_off(old_entry_addr, &des_entry_pmem);
             des_entry_dram.off = off;
         }
     };
@@ -1896,6 +1897,10 @@ public:
 
         // Step 1. Create new bucket and initialize its meta
         uint32_t old_cell_count       = bucket_meta->CellCount();
+        size_t   old_bucket_size      = old_cell_count * kCellSize;
+        char*    old_bucket_addr_pmem = bucket_meta->Address();
+        char*    old_bucket_addr_dram = (char*)aligned_alloc(kCellSize, old_bucket_size);
+        memcpy(old_bucket_addr_dram, old_bucket_addr_pmem, old_bucket_size);
         uint32_t new_cell_count       = old_cell_count << 1;
         uint32_t new_cell_count_mask  = new_cell_count - 1;
         size_t   new_bucket_size      = new_cell_count * kCellSize;
@@ -1909,12 +1914,6 @@ public:
             perror("rehash alloc pmem fail\n");
             exit(1);
         }
-    
-        // Reset all cell's meta data
-        for (size_t i = 0; i < new_cell_count; ++i) {
-            char* des_cell_addr = new_bucket_addr_dram + (i << kCellSizeLeftShift);
-            memset(des_cell_addr, 0, CellMeta256V2::size());
-        }
 
 // ----------------------------------------------------------------------------------
 // iterator old bucket and insert slots info to new bucket
@@ -1926,8 +1925,8 @@ public:
         // Step 2. Move the meta in old bucket to new bucket
         //      a) Record next avaliable slot position of each cell within new bucket for rehash
         uint8_t* slot_vec = (uint8_t*)malloc(new_cell_count);
-        memset(slot_vec, CellMeta256V2::StartSlotPos(), new_cell_count);   
-        BucketIterator iter(bi, bucket_meta->Address(), bucket_meta->CellCount()); 
+        memset(slot_vec, CellMeta256V2::StartSlotPos(), new_cell_count);
+        BucketIterator iter(bi, old_bucket_addr_dram, old_cell_count); 
         //      b) Iterate every slot in this bucket
         while (iter.valid()) { 
             count++;
@@ -1946,13 +1945,17 @@ public:
                 printf("%s\n", PrintBucketMeta(res.slot_info.bucket).c_str());
                 exit(1);
             }
-            //      c) move the slot meta to new bucket
-            const SlotInfo& old_info = res.slot_info;
-            HashSlot*       old_slot = res.hash_slot;
+            //      c) move the old slot to new slot
+            
+            const SlotInfo& old_info      = res.slot_info;
+            HashSlot*       old_slot_dram = res.hash_slot;
+            char* old_cell_addr_pmem      = old_bucket_addr_pmem + (old_info.cell << kCellSizeLeftShift);
+            HashSlot*       old_slot_pmem = locateSlot(old_cell_addr_pmem, old_info.slot);
+            
             // move slot content, including H1 and pointer
             HashSlot* des_slot_dram  = locateSlot(des_cell_addr_dram, des_slot_info.slot_index);
             HashSlot* des_slot_pmem  = locateSlot(des_cell_addr_pmem, des_slot_info.slot_index);
-            PptrToDramPptr<Entry, is_key_flat && is_value_flat>::Convert(des_slot_dram->entry, des_slot_pmem->entry, old_slot->entry);
+            PptrToDramPptr<Entry, is_key_flat && is_value_flat>::Convert(des_slot_dram->entry, des_slot_pmem->entry, old_slot_dram, old_slot_pmem);
             // des_slot_dram->entry     = old_slot.entry;
             des_slot_dram->H1        = old_info.H1;
             
@@ -1966,7 +1969,7 @@ public:
 
             // Step 3. to next old slot
             ++iter;
-        }        
+        }
         //      c) set remaining slots' slot pointer to 0 (including the backup slot)
         for (uint32_t ci = 0; ci < new_cell_count; ++ci) {
             char* des_cell_addr = new_bucket_addr_dram + (ci << kCellSizeLeftShift);
@@ -1986,6 +1989,9 @@ public:
         // Step 4. commit the changed bucket meta to pmem meta
         buckets_pmem_[bi].Store(*bucket_meta);
 
+        // Step 5. Release old_bucket_addr_pmem
+        cell_allocator_.Release(old_bucket_addr_pmem);
+
         TURBO_PMEM_DEBUG("Rehash bucket: " << bi <<
              ", old cell count: " << old_cell_count <<
              ", loadfactor: " << (double)count / ( old_cell_count * (CellMeta256V2::SlotCount() - 1) ) << 
@@ -1993,6 +1999,7 @@ public:
 
         free(slot_vec);
         free(new_bucket_addr_dram);
+        free(old_bucket_addr_dram);
         return count;
     }
 
