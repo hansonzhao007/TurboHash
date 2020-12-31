@@ -146,7 +146,7 @@ double FillRandomWB(uint64_t block_size, int thread_index, int thread_num) {
         exit(1);
     }
     // pin current thread to kThreadIDs[thread_index]
-    PinCore(kThreadIDs[thread_index]);
+    // PinCore(kThreadIDs[thread_index]);
 
     TraceUniform trace(999 * thread_index + 123, 0, FLAGS_filesize - block_size);
     // choose which store function we should use
@@ -192,7 +192,7 @@ double FillRandomWB(uint64_t block_size, int thread_index, int thread_num) {
     double time   = (time_end - time_start) / 1000000.0;
     double throughput = writes / time;
     printf("Avg Random Write(WB), Write: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", writes, time, thread_index, block_size, off_interval, throughput);
-    return throughput;
+    return writes;
 }
 
 void LatencyProfiling() {
@@ -202,7 +202,7 @@ void LatencyProfiling() {
 
 void XPBufferAssociateProfiler() {
     
-    PinCore(kThreadIDs[0]);
+    // PinCore(kThreadIDs[0]);
     char* pmemaddr = pmem_addrs_[0];
 
     uint64_t buffer_size = FLAGS_buffer << 10;
@@ -252,7 +252,7 @@ void XPBufferAssociateProfiler() {
 
 
 void ReadBufferProfiler() {
-    PinCore(kThreadIDs[0]);
+    // PinCore(kThreadIDs[0]);
     char* pmemaddr = pmem_addrs_[0];
     // use N number of continous 256-byte interval, 
     // construct 64 byte random write within the intervals
@@ -291,7 +291,6 @@ void ReadBufferProfiler() {
  
 
 void XPBufferTypeProfiler() {
-    PinCore(kThreadIDs[0]);
     char* pmemaddr = pmem_addrs_[0];
     // use N number of continous 256-byte interval, 
     // construct 64 byte random write within the intervals
@@ -321,7 +320,6 @@ void XPBufferTypeProfiler() {
 }
  
 void XPBufferSizeProfiler() {
-    PinCore(kThreadIDs[0]);
     char* pmemaddr = pmem_addrs_[0];
     // use N number of continous 256-byte interval
     // In the first round, update the first half 128 byte of the 256 byte
@@ -382,7 +380,7 @@ double FillSeqWB(uint64_t block_size, int thread_index, int thread_num) {
         exit(1);
     }
     // pin current thread to kThreadIDs[thread_index]
-    PinCore(kThreadIDs[thread_index]);
+    // PinCore(kThreadIDs[thread_index]);
 
     
     // choose which store function we should use
@@ -433,7 +431,7 @@ double FillSeqWB(uint64_t block_size, int thread_index, int thread_num) {
     double time   = (time_end - time_start) / 1000000.0;
     double throughput = writes / time;
     printf("Avg Seq Write(WB), Write: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", writes, time, thread_index, block_size, off_interval, throughput);
-    return throughput;
+    return writes;
 }
 
 // Return the throughput when using block_size to randomly write PMM
@@ -443,7 +441,7 @@ double FillSeqNT(uint64_t block_size, int thread_index, int thread_num) {
         exit(1);
     }
     // pin current thread to kThreadIDs[thread_index]
-    PinCore(kThreadIDs[thread_index]);
+    // PinCore(kThreadIDs[thread_index]);
 
     
     // choose which store function we should use
@@ -494,7 +492,7 @@ double FillSeqNT(uint64_t block_size, int thread_index, int thread_num) {
     double time   = (time_end - time_start) / 1000000.0;
     double throughput = writes / time;
     printf("Avg Seq Write(NT), Write: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", writes, time, thread_index, block_size, off_interval, throughput);
-    return throughput;
+    return writes;
 }
 
 // Return the throughput when using block_size to randomly write data to PMM
@@ -504,7 +502,7 @@ double FillRandomNT(uint64_t block_size, int thread_index, int thread_num) {
         exit(1);
     }
     // pin current thread to kThreadIDs[thread_index]
-    PinCore(kThreadIDs[thread_index]);
+    // PinCore(kThreadIDs[thread_index]);
 
     TraceUniform trace(999 * thread_index + 123, 0, FLAGS_filesize - block_size);
     // choose which store function we should use
@@ -553,7 +551,7 @@ double FillRandomNT(uint64_t block_size, int thread_index, int thread_num) {
     double time   = (time_end - time_start) / 1000000.0;
     double throughput = writes / time;
     printf("Avg Random Write(NT), Write: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", writes, time, thread_index, block_size, off_interval, throughput);
-    return throughput;
+    return writes;
 }
 
 
@@ -564,7 +562,7 @@ double ReadRandomNT(uint64_t block_size, int thread_index, int thread_num) {
         exit(1);
     }
     // pin current thread to kThreadIDs[thread_index]
-    PinCore(kThreadIDs[thread_index]);
+    // PinCore(kThreadIDs[thread_index]);
 
     TraceUniform trace(999 * thread_index + 123, 0, FLAGS_filesize - block_size);
     // choose which store function we should use
@@ -613,7 +611,7 @@ double ReadRandomNT(uint64_t block_size, int thread_index, int thread_num) {
     double time   = (time_end - time_start) / 1000000.0;
     double throughput = reads / time;
     printf("Avg Random Read(%s), Read: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", FLAGS_load ? "NT": "memcpy", reads, time, thread_index, block_size, off_interval, throughput);
-    return throughput;
+    return reads;
 }
 
 // Return the throughput when using block_size to sequentially read data from PMM
@@ -623,7 +621,7 @@ double ReadSeqNT(uint64_t block_size, int thread_index, int thread_num) {
         exit(1);
     }
     // pin current thread to kThreadIDs[thread_index]
-    PinCore(kThreadIDs[thread_index]);
+    // PinCore(kThreadIDs[thread_index]);
 
     
     // choose which store function we should use
@@ -675,7 +673,7 @@ double ReadSeqNT(uint64_t block_size, int thread_index, int thread_num) {
     double time   = (time_end - time_start) / 1000000.0;
     double throughput = reads / time;
     printf("Avg Seq Read(%s), Read: %6.2f MB, Time: %4.3fs, T:%2d, %7lu byte - %7lu off interval, %8.1f MB/s\n", FLAGS_load ? "NT": "memcpy", reads, time, thread_index, block_size, off_interval, throughput);
-    return throughput;
+    return reads;
 }
 
 int TheadCheck(int thread_index) {
@@ -784,6 +782,7 @@ void BenchSingle(BenchType bench_type) {
     int thread_num = FLAGS_thread;
     std::vector<std::thread> workers(thread_num);
     std::vector<double> tmp(thread_num);
+    auto time_start = Env::Default()->NowMicros();
     {
         PCMMetric pcm_monitor("single");
         // ------------------- benchmark function -------------------
@@ -799,7 +798,9 @@ void BenchSingle(BenchType bench_type) {
             t.join();
         });
     }
-    double final_throughput = std::accumulate(tmp.begin(), tmp.end(), 0);
+    auto time_duration = Env::Default()->NowMicros() - time_start;
+    double data_mb = std::accumulate(tmp.begin(), tmp.end(), 0);
+    double final_throughput = data_mb / ( time_duration / 1000000.0);
     printf("\033[32m\nMode: single\nResult (%s. PMDK: %s)\033[0m\n", DecodeTypeToString(bench_type).c_str(), FLAGS_pmdk ? "true": "false");
     printf("\033[34m");
     printf("Block Size: %8d, Thread: %2d, Throughput: %6.2f \033[0m\n", FLAGS_block_size, FLAGS_thread, final_throughput);
@@ -840,17 +841,24 @@ void BenchMatrix(BenchType bench_type) {
             auto time_end = Env::Default()->NowMicros();
             auto end = watcher.Profiler();
             auto duration = time_end - time_start;
-            IPMMetric metric(start[0], end[0]);
+            IPMMetric metric;
+            for (int i = 0; i < start.size(); ++i) {
+                IPMMetric tmp(start[i], end[i]);
+                metric.Merge(tmp);
+            }
             double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
             double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
             double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
             double app_write = metric.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
-            printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s APP Write: %8.1f MB/s Time: %6.2fs. --------\033[0m\n", 
+            double data_mb = std::accumulate(tmp.begin(), tmp.end(), 0);
+            double final_throughput = data_mb / duration * 1000000.0;
+            printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s APP Write: %8.1f MB/s. Total: %8.1f MB/s. Time: %6.2fs. --------\033[0m\n", 
                 dimm_read,
                 dimm_write,
                 app_read,
                 app_write,
-                duration/1000000.0);
+                final_throughput,
+                duration/1000000.0);        
             read_throughputs.push_back(app_read);    
             write_throughputs.push_back(app_write);
         }
@@ -944,7 +952,11 @@ void BenchReadAndWrite(uint64_t block_size) {
     auto time_end = Env::Default()->NowMicros();
     auto end = watcher.Profiler();
     auto duration = time_end - time_start;
-    IPMMetric metric(start[0], end[0]);
+    IPMMetric metric;
+    for (int i = 0; i < start.size(); ++i) {
+        IPMMetric tmp(start[i], end[i]);
+        metric.Merge(tmp);
+    }
     double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
     double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
     double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
@@ -986,16 +998,23 @@ void BenchAllThread(BenchType bench_type, uint64_t block_size) {
         auto time_end = Env::Default()->NowMicros();
         auto end = watcher.Profiler();
         auto duration = time_end - time_start;
-        IPMMetric metric(start[0], end[0]);
+        IPMMetric metric;
+        for (int i = 0; i < start.size(); ++i) {
+            IPMMetric tmp(start[i], end[i]);
+            metric.Merge(tmp);
+        }
         double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
         double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
         double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
         double app_write = metric.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
-        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s, APP Write: %8.1f MB/s Time: %6.2fs. --------\033[0m\n", 
+        double data_mb = std::accumulate(tmp.begin(), tmp.end(), 0);
+        double final_throughput = data_mb / duration * 1000000.0;
+        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s, APP Write: %8.1f MB/s, Total: %8.1f MB/s. Time: %6.2fs. --------\033[0m\n", 
             dimm_read,
             dimm_write,
             app_read,
             app_write,
+            final_throughput,
             duration/1000000.0);
         results_read.push_back(app_read);    
         results_write.push_back(app_write);
@@ -1048,16 +1067,23 @@ void BenchAllBlockSize(BenchType bench_type, int thread_num) {
         auto time_end = Env::Default()->NowMicros();
         auto end = watcher.Profiler();
         auto duration = time_end - time_start;
-        IPMMetric metric(start[0], end[0]);
+        IPMMetric metric;
+        for (int i = 0; i < start.size(); ++i) {
+            IPMMetric tmp(start[i], end[i]);
+            metric.Merge(tmp);
+        }
         double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
         double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
         double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
         double app_write = metric.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
-        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s APP Write: %8.1f MB/s Time: %6.2fs. --------\033[0m\n", 
+        double data_mb = std::accumulate(tmp.begin(), tmp.end(), 0);
+        double final_throughput = data_mb / duration * 1000000.0;
+        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s APP Write: %8.1f MB/s, Total: %8.1f MB/s. Time: %6.2fs. --------\033[0m\n", 
             dimm_read,
             dimm_write,
             app_read,
             app_write,
+            final_throughput,
             duration/1000000.0);
         throughputs_read.push_back(app_read);    
         throughputs_write.push_back(app_write);

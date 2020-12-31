@@ -363,13 +363,13 @@ struct IPMInfo{
     // Each operation transacts a 64byte operation. These operations includes 
     // commands transacted for maintenance as well as the commands transacted 
     // by the CPU.
-    uint64_t    read_64B_ops_received;
-    uint64_t    write_64B_ops_received;
+    uint64_t    read_64B_ops_received  = 0;
+    uint64_t    write_64B_ops_received = 0;
 
     // Number of read and write operations received from the CPU (memory controller)
     // unit: 64 byte
-    uint64_t    ddrt_read_ops;      
-    uint64_t    ddrt_write_ops;
+    uint64_t    ddrt_read_ops   = 0;      
+    uint64_t    ddrt_write_ops  = 0;
 
     // actual byte write/read to DIMM media
     // bytes_read (derived)   : number of bytes transacted by the read operations
@@ -380,14 +380,14 @@ struct IPMInfo{
     // Formula:
     // bytes_read   : (read_64B_ops_received - write_64B_ops_received) * 64
     // bytes_written: write_64B_ops_received * 64
-    uint64_t    bytes_read;
-    uint64_t    bytes_written;
+    uint64_t    bytes_read      = 0;
+    uint64_t    bytes_written   = 0;
 
     // Number of bytes received from the CPU (memory controller)
     // ddrt_read_bytes  : (ddrt_read_ops * 64)
     // ddrt_write_bytes : (ddrt_write_ops * 64)
-    uint64_t    ddrt_read_bytes;      
-    uint64_t    ddrt_write_bytes;
+    uint64_t    ddrt_read_bytes   = 0;      
+    uint64_t    ddrt_write_bytes  = 0;
 
     // DIMM ; read_64B_ops_received  ; write_64B_ops_received ; ddrt_read_ops  ; ddrt_write_ops;
     // DIMM0; 1292533678412          ; 643726680616           ; 508664958085   ; 560639638344;
@@ -440,11 +440,19 @@ struct IPMInfo{
 
 class IPMMetric {
 public:
+    IPMMetric(){}
     IPMMetric(const IPMInfo& before, const IPMInfo& after) {
         metric_.bytes_read = after.bytes_read - before.bytes_read;
         metric_.bytes_written = after.bytes_written - before.bytes_written;
         metric_.ddrt_read_bytes = after.ddrt_read_bytes - before.ddrt_read_bytes;
         metric_.ddrt_write_bytes = after.ddrt_write_bytes - before.ddrt_write_bytes;
+    }
+
+    void Merge(const IPMMetric& metric) {
+        metric_.bytes_read += metric.metric_.bytes_read;
+        metric_.bytes_written += metric.metric_.bytes_written;
+        metric_.ddrt_read_bytes += metric.metric_.ddrt_read_bytes;
+        metric_.ddrt_write_bytes += metric.metric_.ddrt_write_bytes;
     }
 
     uint64_t GetByteReadToDIMM() {
@@ -462,6 +470,8 @@ public:
     uint64_t GetByteWriteFromIMC() {
         return metric_.ddrt_write_bytes;
     }
+
+    
 private:
     IPMInfo metric_;
 };
@@ -520,7 +530,6 @@ public:
             tmp.Parse(res);
             infos.push_back(tmp);
         }
-        // uint64_t start_time_ = Env::Default()->NowMicros();
         return infos;
     }
 
