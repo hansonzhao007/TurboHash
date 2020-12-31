@@ -1,17 +1,26 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <libpmemobj.h>
+#include <libpmem.h>
+
 #include "util/pmm_util.h"
 
 int main()
 {
-    util::PCMMetric tmp("1");
-    char* buffer = (char*)malloc(1024*1024*1024);
-    memset(buffer, 1, 1024*1024*1024);
-    PMEMobjpool *pop = pmemobj_create("/mnt/pmem0/testobj1", "", 100*1024*1024, 0666);
-    if (pop == NULL)
-        perror("Fail\n");
-    else
-        printf("Successed\n");
+    
+    size_t file_size = 1LU << 30;
+    std::string filename = "/mnt/pmem/pmem_test.data";
+    char* pmem_addr = nullptr;
+    size_t mapped_len;
+    int   is_pmem;
+    if ((pmem_addr = (char *)pmem_map_file(filename.c_str(), file_size, PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
+        perror("pmem_map_file");
+        exit(1);
+    }
+    pmem_memset(pmem_addr, 0, file_size, PMEM_F_MEM_NONTEMPORAL);
+
+    {
+        util::IPMWatcher watcher("pmem");
+        pmem_memset(pmem_addr, 0, file_size, PMEM_F_MEM_NONTEMPORAL);
+    }
     return 0;
 }

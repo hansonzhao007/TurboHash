@@ -36,8 +36,8 @@ using namespace util;
 
 // For hash table 
 DEFINE_bool(no_rehash, true, "control hash table do not do rehashing during insertion");
-DEFINE_uint32(cell_count, 128, "");
-DEFINE_uint32(bucket_count, 128 << 10, "bucket count");
+DEFINE_uint64(cell_count, 128, "");
+DEFINE_uint64(bucket_count, 128 << 10, "bucket count");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
@@ -55,10 +55,10 @@ DEFINE_string(benchmarks, "load,overwrite,readrandom", "");
 
 
 #ifdef IS_PMEM
-typedef turbo_pmem::unordered_map<size_t, std::string> Hashtable;
+typedef turbo_pmem::unordered_map<size_t, size_t> Hashtable;
 static bool kIsPmem = true;
 #else
-typedef turbo::unordered_map<size_t, std::string> Hashtable;
+typedef turbo::unordered_map<size_t, size_t> Hashtable;
 static bool kIsPmem = false;
 #endif
 
@@ -126,7 +126,7 @@ public:
         int64_t usecs_since_last = now - last_report_finish_;
 
         std::string cur_time = TimeToString(now/1000000);
-        printf( "%s ... thread %d: (%lu,%lu) ops and "
+        printf( "%s ... thread %2d: (%lu,%lu) ops and "
                 "( %.1f,%.1f ) ops/second in (%.4f,%.4f) seconds\n",
                 cur_time.c_str(), 
                 tid_,
@@ -136,7 +136,7 @@ public:
                 done_ / ((now - start_) / 1000000.0),
                 (now - last_report_finish_) / 1000000.0,
                 (now - start_) / 1000000.0);
-        INFO( "%s ... thread %d: (%lu,%lu) ops and "
+        INFO( "%s ... thread %2d: (%lu,%lu) ops and "
                 "( %.1f,%.1f ) ops/second in (%.6f,%.6f) seconds\n",
                 cur_time.c_str(), 
                 tid_,
@@ -163,7 +163,7 @@ public:
         AppendWithSpace(&message_, msg);
     }
     
-    inline void FinishedBatchOp(int batch) {
+    inline void FinishedBatchOp(size_t batch) {
         double now = Env::Default()->NowNanos();
         last_op_finish_ = now;
         done_ += batch;
@@ -465,7 +465,9 @@ public:
             }
             #endif
 
+            #ifdef IS_PMEM
             IPMWatcher watcher(name);
+            #endif
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
         }
     }
@@ -480,7 +482,7 @@ public:
         thread->stats.Start();
         while (key_iterator.Valid()) {
             for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {
-                bool res = hashtable_->Put(key_iterator.Next(), val);
+                bool res = hashtable_->Put(key_iterator.Next(), 123456);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
                     printf("Hash Table Full!!!\n");
@@ -495,8 +497,10 @@ public:
     }
 
     void DoRehash(ThreadState* thread) {   
-        INFO("DoRehash. Thread %2d", thread->tid);   
-        hashtable_->MinorReHashAll();
+        INFO("DoRehash. Thread %2d", thread->tid);  
+        thread->stats.Start(); 
+        size_t rehash_count = hashtable_->MinorReHashAll();
+        thread->stats.FinishedBatchOp(rehash_count);
     }
 
     void DoProbe(ThreadState* thread) {
@@ -577,7 +581,7 @@ public:
         std::string val(value_size_, 'v');
         while (key_iterator.Valid()) {
             for (uint64_t j = 0; j < batch; j++) {   
-                bool res = hashtable_->Put(key_iterator.Next(), val);
+                bool res = hashtable_->Put(key_iterator.Next(), 31415926);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
                     printf("Hash Table Full!!!\n");
@@ -606,7 +610,7 @@ public:
         std::string val(value_size_, 'v');
         while(!duration.Done(batch)) {
             for (uint64_t j = 0; j < batch; j++) {   
-                bool res = hashtable_->Put(key_iterator.Next(), val);
+                bool res = hashtable_->Put(key_iterator.Next(), 56789);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
                     printf("Hash Table Full!!!\n");
@@ -763,6 +767,8 @@ private:
                    INFO("Hash Slot in Cell:     %u \n", Hashtable::CellMeta::SlotCount());
         fprintf(stdout, "Hash capacity:         %lu \n", (uint64_t)initial_capacity_);
                    INFO("Hash capacity:         %lu \n", (uint64_t)initial_capacity_);
+        fprintf(stdout, "Hash table size:       %lu MB\n", FLAGS_bucket_count * FLAGS_cell_count * Hashtable::CellMeta::CellSize() / 1024 / 1024);
+                   INFO("Hash table size:       %lu MB\n", FLAGS_bucket_count * FLAGS_cell_count * Hashtable::CellMeta::CellSize() / 1024 / 1024);
         fprintf(stdout, "Hash loadfactor:       %.2f \n", FLAGS_loadfactor);
                    INFO("Hash loadfactor:       %.2f \n", FLAGS_loadfactor);
         fprintf(stdout, "Cell Type:             %s \n", Hashtable::CellMeta::Name().c_str()); 

@@ -64,6 +64,8 @@
 // pmem library
 #include "ralloc.hpp"
 #include "pptr.hpp"
+#include "libpmem.h"
+
 #define TURBO_PMEM_LOG_SIZE ((100LU << 30))
 
 // un-comment this to disable logging, log is saved at robin_hood.log
@@ -1274,6 +1276,10 @@ public:
                 return static_cast<char*>(RP_malloc(size));
             }
 
+            inline char* Calloc(size_t num, size_t size) {
+                return static_cast<char*>(RP_calloc(num, size));
+            }
+
             inline void Release(char* addr) {
                 RP_free(addr);
             }
@@ -1747,7 +1753,7 @@ public:
             char* addr = cell_allocator_.Allocate(cell_count);
 
             // Reset the cell content to zero
-            memset(addr, 0, cell_count * kCellSize);
+            pmem_memset_persist(addr, 0, cell_count * kCellSize);
 
             // Initialize the dram bucket meta
             buckets_[i].Reset(addr, cell_count);
@@ -1802,7 +1808,7 @@ public:
      *  @note: not thread safe. This global rehashing will double the hash table capacity.
      *  ! 
     */
-   void MinorReHashAll()  {
+   size_t MinorReHashAll()  {
         // rehash for all the buckets
         int rehash_thread = 8;
         printf("Rehash threads: %d\n", rehash_thread);
@@ -1829,6 +1835,7 @@ public:
         });
         double rehash_duration = util::NowMicros() - rehash_start;
         printf("Real rehash speed: %f Mops/s. entries: %lu, duration: %.2f s.\n", (double)rehash_count / rehash_duration, rehash_count.load(), rehash_duration/1000000.0);
+        return rehash_count.load();
     }
 
     struct FindNextSlotInRehashResult {
@@ -1889,8 +1896,13 @@ public:
         }
     };
 
-
-
+    /**
+     * @brief Rehash bucket bi. 
+     *        This version copies the bucket to dram, then do rehashing on dram, then copy back to pmem
+     * 
+     * @param bi 
+     * @return size_t: amount of the rehashed iterms.
+     */
     size_t MinorRehash(int bi) {
         size_t count = 0;
         BucketMetaDram* bucket_meta = locateBucket(bi);
@@ -1900,12 +1912,13 @@ public:
         size_t   old_bucket_size      = old_cell_count * kCellSize;
         char*    old_bucket_addr_pmem = bucket_meta->Address();
         char*    old_bucket_addr_dram = (char*)aligned_alloc(kCellSize, old_bucket_size);
-        memcpy(old_bucket_addr_dram, old_bucket_addr_pmem, old_bucket_size);
+        memmove(old_bucket_addr_dram, old_bucket_addr_pmem, old_bucket_size);
         uint32_t new_cell_count       = old_cell_count << 1;
         uint32_t new_cell_count_mask  = new_cell_count - 1;
         size_t   new_bucket_size      = new_cell_count * kCellSize;
         char*    new_bucket_addr_dram = (char*)aligned_alloc(kCellSize, new_bucket_size);
         char*    new_bucket_addr_pmem = cell_allocator_.Allocate(new_cell_count);
+        
         if (new_bucket_addr_dram == nullptr) {
             perror("rehash alloc dram fail\n");
             exit(1);
@@ -1915,6 +1928,11 @@ public:
             exit(1);
         }
 
+        // // Reset all cell's meta data
+        // for (size_t i = 0; i < new_cell_count; ++i) {
+        //     char* des_cell_addr = new_bucket_addr_dram + (i << kCellSizeLeftShift);
+        //     memset(des_cell_addr, 0, CellMeta256V2::size());
+        // }
 // ----------------------------------------------------------------------------------
 // iterator old bucket and insert slots info to new bucket
 // old: |11111111|22222222|33333333|44444444|   
@@ -1956,7 +1974,6 @@ public:
             HashSlot* des_slot_dram  = locateSlot(des_cell_addr_dram, des_slot_info.slot_index);
             HashSlot* des_slot_pmem  = locateSlot(des_cell_addr_pmem, des_slot_info.slot_index);
             PptrToDramPptr<Entry, is_key_flat && is_value_flat>::Convert(des_slot_dram->entry, des_slot_pmem->entry, old_slot_dram, old_slot_pmem);
-            // des_slot_dram->entry     = old_slot.entry;
             des_slot_dram->H1        = old_info.H1;
             
             // locate H2 and set H2
@@ -1981,8 +1998,106 @@ public:
         }
 
         // Step 3. Copy content to pmem space
-        memcpy(new_bucket_addr_pmem, new_bucket_addr_dram, new_bucket_size);
+        pmem_memmove_persist(new_bucket_addr_pmem, new_bucket_addr_dram, new_bucket_size);
+        
+        // Step 4. Reset bucket meta in buckets_
+        bucket_meta->Reset(new_bucket_addr_pmem, new_cell_count);
+        
+        // Step 5. commit the changed bucket meta to pmem meta
+        buckets_pmem_[bi].Store(*bucket_meta);
 
+        // Step 6. Release old_bucket_addr_pmem
+        cell_allocator_.Release(old_bucket_addr_pmem);
+
+        TURBO_PMEM_DEBUG("Rehash bucket: " << bi <<
+             ", old cell count: " << old_cell_count <<
+             ", loadfactor: " << (double)count / ( old_cell_count * (CellMeta256V2::SlotCount() - 1) ) << 
+             ", new cell count: " << new_cell_count);
+
+        free(slot_vec);
+        free(new_bucket_addr_dram);
+        free(old_bucket_addr_dram);
+        return count;
+    }
+
+    /**
+     * @brief Rehash bucket bi.
+     *        This version rehash the bucket bi in-place.
+     * 
+     * @param bi 
+     * @return size_t: amount of rehashed iterms.
+     */
+    size_t MinorRehash2(int bi) {
+        size_t count = 0;
+        BucketMetaDram* bucket_meta = locateBucket(bi);
+
+        // Step 1. Create new bucket and initialize its meta
+        uint32_t old_cell_count       = bucket_meta->CellCount();
+        char*    old_bucket_addr_pmem = bucket_meta->Address();
+        uint32_t new_cell_count       = old_cell_count << 1;
+        uint32_t new_cell_count_mask  = new_cell_count - 1;
+        size_t   new_bucket_size      = new_cell_count * kCellSize;
+        char*    new_bucket_addr_pmem = cell_allocator_.Allocate(new_cell_count);
+        if (new_bucket_addr_pmem == nullptr) {
+            perror("rehash alloc pmem fail\n");
+            exit(1);
+        }
+
+// ----------------------------------------------------------------------------------
+// iterator old bucket and insert slots info to new bucket
+// old: |11111111|22222222|33333333|44444444|   
+//       ========>
+// new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444    |
+// ----------------------------------------------------------------------------------
+
+        // Step 2. Move the meta in old bucket to new bucket
+        //      a) Record next avaliable slot position of each cell within new bucket for rehash
+        uint8_t* slot_vec = (uint8_t*)malloc(new_cell_count);
+        memset(slot_vec, CellMeta256V2::StartSlotPos(), new_cell_count);
+        BucketIterator iter(bi, old_bucket_addr_pmem, old_cell_count); 
+        //      b) Iterate every slot in this bucket
+        while (iter.valid()) { 
+            count++;
+            // Step 1. obtain old slot info and slot content
+            typename BucketIterator::InfoPair res = *iter;
+
+            // Step 2. update bitmap, H2, H1 and slot pointer in new bucket
+            //      a) find valid slot in new bucket
+            FindNextSlotInRehashResult des_slot_info = findNextSlotInRehash(slot_vec, res.slot_info.H1, new_cell_count_mask);
+            //      b) obtain des cell addr
+            char* des_cell_addr_pmem = new_bucket_addr_pmem + (des_slot_info.cell_index << kCellSizeLeftShift);
+            if (des_slot_info.slot_index >= CellMeta256V2::SlotMaxRange()) {                
+                printf("rehash fail: %s\n", res.slot_info.ToString().c_str());
+                TURBO_PMEM_ERROR("Rehash fail: " << res.slot_info.ToString());
+                printf("%s\n", PrintBucketMeta(res.slot_info.bucket).c_str());
+                exit(1);
+            }
+            //      c) move the old slot to new slot            
+            HashSlot* old_slot_pmem  = res.hash_slot;
+            HashSlot* des_slot_pmem  = locateSlot(des_cell_addr_pmem, des_slot_info.slot_index);
+            des_slot_pmem->entry     = old_slot_pmem->entry;
+            des_slot_pmem->H1        = old_slot_pmem->H1;
+            
+            // locate H2 and set H2
+            H2Tag* h2_tag_ptr   = locateH2Tag(des_cell_addr_pmem, des_slot_info.slot_index);
+            *h2_tag_ptr         = res.slot_info.H2;
+
+            // obtain and set bitmap
+            decltype(CellMeta256V2::bitmap_)* bitmap = (decltype(CellMeta256V2::bitmap_) *)des_cell_addr_pmem;
+            *bitmap = (*bitmap) | (1 << des_slot_info.slot_index);
+
+            // Step 3. to next old slot
+            ++iter;
+        }
+        //      c) set remaining slots' slot pointer to 0 (including the backup slot)
+        for (uint32_t ci = 0; ci < new_cell_count; ++ci) {
+            char* des_cell_addr = new_bucket_addr_pmem + (ci << kCellSizeLeftShift);
+            for (uint8_t si = slot_vec[ci]; si <= CellMeta256V2::SlotMaxRange(); si++) {
+                HashSlot* des_slot  = locateSlot(des_cell_addr, si);
+                des_slot->entry = 0;
+                des_slot->H1    = 0;
+            }   
+        }
         // Step 3. Reset bucket meta in buckets_
         bucket_meta->Reset(new_bucket_addr_pmem, new_cell_count);
         
@@ -1998,8 +2113,7 @@ public:
              ", new cell count: " << new_cell_count);
 
         free(slot_vec);
-        free(new_bucket_addr_dram);
-        free(old_bucket_addr_dram);
+        
         return count;
     }
 
@@ -2243,13 +2357,11 @@ private:
         // Obtain the partial hash
         PartialHash partial_hash(key, hash_value);
 
-    // after_rehash:
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
         BucketMetaDram* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
+
+        // Obtain the bucket lock
         BucketLockScope meta_lock(bucket_meta);
-        // while (bucket_meta->IsLocked()) {
-        //     TURBO_PMEM_CPU_RELAX();
-        // }
 
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
@@ -2260,12 +2372,9 @@ private:
             if (res.find) { 
                 char* cell_addr = locateCell({res.target_slot.bucket, res.target_slot.cell});
 
-                // util::SpinLockScope<0> lock_scope(cell_addr); // Lock current cell
-
                 CellMeta256V2 meta(cell_addr);   // obtain the meta part
 
-                if (TURBO_PMEM_LIKELY( !meta.Occupy(res.target_slot.slot) )) { 
-                    // If the new slot from 'findSlotForInsert' is not occupied, insert directly
+                if (TURBO_PMEM_LIKELY( !meta.Occupy(res.target_slot.slot) )) { // If the new slot from 'findSlotForInsert' is not occupied, insert directly
 
                     insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot); // update slot content (including pointer and H1), H2 and bitmap
 
@@ -2275,10 +2384,22 @@ private:
                     // }
 
                     return true;
-                } else if (res.target_slot.equal_key) {
-                    // If this is an update request and the backup slot is occupied,
+                } 
+                else if (res.target_slot.equal_key) {   // If this is an update request and the backup slot is occupied,
+                                                        // it means the backup slot has changed in current cell. So we 
                     // it means the backup slot has changed in current cell. So we 
+                                                        // it means the backup slot has changed in current cell. So we 
+                    // it means the backup slot has changed in current cell. So we 
+                                                        // it means the backup slot has changed in current cell. So we 
+                    // it means the backup slot has changed in current cell. So we 
+                                                        // it means the backup slot has changed in current cell. So we 
+                                                        // update the slot location.                    
                     // update the slot location.
+                                                        // update the slot location.                    
+                    // update the slot location.
+                                                        // update the slot location.                    
+                    // update the slot location.
+                                                        // update the slot location.                    
                     util::BitSet empty_bitset = meta.EmptyBitSet(); 
                     if (TURBO_PMEM_UNLIKELY(!empty_bitset)) {
                         TURBO_PMEM_ERROR(" Cannot update.");
@@ -2289,8 +2410,8 @@ private:
                     res.target_slot.slot = *empty_bitset;
                     insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot);
                     return true;
-                } else { 
-                    // current new slot has been occupied by another concurrent thread.
+                } 
+                else { // current new slot has been occupied by another concurrent thread.
 
                     // Before retry 'findSlotForInsert', find if there is any empty slot for insertion
                     util::BitSet empty_bitset = meta.EmptyBitSet();
@@ -2310,19 +2431,9 @@ private:
                 }
             }
             else { // cannot find a valid slot for insertion, rehash current bucket then retry
-
-                // Obtain the Bucket lock, rehash if success. Otherwise, other thread is already rehashing. 
-                // if (bucket_meta->TryLock())
-                {
-                    MinorRehash(res.target_slot.bucket);
-                    // bucket_meta->Unlock();
-                    retry_find = true;
-                    continue;
-                }
-
-                // While the other thread is rehashing, we can start from beginning
-                // TURBO_PMEM_INFO("Concurrent rehash happens.");                
-                // goto after_rehash;            
+                MinorRehash(res.target_slot.bucket);
+                retry_find = true;
+                continue;
             }
         } while (retry_find);
         
@@ -2501,7 +2612,7 @@ private:
             char* cell_addr = locateCell(offset);
 
             CellMeta256V2 meta(cell_addr);
-            
+
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell
                 
                 HashSlot* slot = locateSlot(cell_addr, i); // locate the slot reference
@@ -2514,6 +2625,8 @@ private:
                         // If this key exsit, set the deleted bitmap
                         uint32_t* bitmap = (uint32_t*)cell_addr;
                         *bitmap = (*bitmap) | ( 1 << (16 + i) );
+                        FLUSH(cell_addr);
+                        FLUSHFENCE;
                         return;
                     }                                        
                 }

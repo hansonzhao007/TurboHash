@@ -7,6 +7,10 @@
 // ralloc
 #include "ralloc.hpp"
 #include "pptr.hpp"
+#include "libpmem.h"
+
+#include "util/pmm_util.h"
+using namespace util;
 
 #include "gflags/gflags.h"
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
