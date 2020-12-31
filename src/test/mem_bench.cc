@@ -360,16 +360,6 @@ void XPBufferSizeProfiler() {
             };
             left_byte -= 256 * N;
         }
-        // auto time_end = Env::Default()->NowMicros();
-        // auto end = watcher.Profiler();
-        // auto duration = time_end - time_start;
-        // IPMMetric metric(start[0], end[0]);
-        // double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-        // double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-        // printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s Time: %6.2fs--------\033[0m\n", 
-        //     dimm_read,
-        //     dimm_write,
-        //     duration/1000000.0);
     }
 }
 
@@ -823,8 +813,6 @@ void BenchMatrix(BenchType bench_type) {
             
             IPMWatcher watcher("bench_matrix");
             PCMMetric pcm_monitor("bench_matrix");
-            auto start = watcher.Profiler();
-            auto time_start = Env::Default()->NowMicros();
             // ------------------- benchmark function -------------------
             for (int t = 0; t < thread_num; t++) {
                 workers[t] = std::thread([&, t]
@@ -838,29 +826,9 @@ void BenchMatrix(BenchType bench_type) {
                 t.join();
             });
             _mm_sfence();
-            auto time_end = Env::Default()->NowMicros();
-            auto end = watcher.Profiler();
-            auto duration = time_end - time_start;
-            IPMMetric metric;
-            for (int i = 0; i < start.size(); ++i) {
-                IPMMetric tmp(start[i], end[i]);
-                metric.Merge(tmp);
-            }
-            double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-            double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-            double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
-            double app_write = metric.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
-            double data_mb = std::accumulate(tmp.begin(), tmp.end(), 0);
-            double final_throughput = data_mb / duration * 1000000.0;
-            printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s APP Write: %8.1f MB/s. Total: %8.1f MB/s. Time: %6.2fs. --------\033[0m\n", 
-                dimm_read,
-                dimm_write,
-                app_read,
-                app_write,
-                final_throughput,
-                duration/1000000.0);        
-            read_throughputs.push_back(app_read);    
-            write_throughputs.push_back(app_write);
+            watcher.Report();
+            read_throughputs.push_back(watcher.app_read_);    
+            write_throughputs.push_back(watcher.app_write_);
         }
 
         // print read result for all block size
@@ -928,8 +896,6 @@ void BenchReadAndWrite(uint64_t block_size) {
     
     IPMWatcher watcher("all_thread");        
     PCMMetric pcm_monitor("all_thread");
-    auto start = watcher.Profiler();
-    auto time_start = Env::Default()->NowMicros();
     // ------------------- benchmark function -------------------
     for (int t = 0; t < thread_num; t++) {
         workers[t] = std::thread([&, t]
@@ -948,25 +914,7 @@ void BenchReadAndWrite(uint64_t block_size) {
     {
         t.join();
     });
-    _mm_sfence();
-    auto time_end = Env::Default()->NowMicros();
-    auto end = watcher.Profiler();
-    auto duration = time_end - time_start;
-    IPMMetric metric;
-    for (int i = 0; i < start.size(); ++i) {
-        IPMMetric tmp(start[i], end[i]);
-        metric.Merge(tmp);
-    }
-    double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-    double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-    double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
-    double app_write = metric.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
-    printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s, APP Write: %8.1f MB/s Time: %6.2fs. --------\033[0m\n", 
-        dimm_read,
-        dimm_write,
-        app_read,
-        app_write,
-        duration/1000000.0);
+    _mm_sfence();    
 }
 
 void BenchAllThread(BenchType bench_type, uint64_t block_size) {
@@ -979,9 +927,7 @@ void BenchAllThread(BenchType bench_type, uint64_t block_size) {
         std::vector<double> tmp(thread_num);
         
         IPMWatcher watcher("all_thread");            
-        PCMMetric pcm_monitor("all_thread");
-        auto start = watcher.Profiler();
-        auto time_start = Env::Default()->NowMicros();
+        PCMMetric pcm_monitor("all_thread");        
         // ------------------- benchmark function -------------------
         for (int t = 0; t < thread_num; t++) {
             workers[t] = std::thread([&, t]
@@ -995,29 +941,9 @@ void BenchAllThread(BenchType bench_type, uint64_t block_size) {
             t.join();
         });
         _mm_sfence();
-        auto time_end = Env::Default()->NowMicros();
-        auto end = watcher.Profiler();
-        auto duration = time_end - time_start;
-        IPMMetric metric;
-        for (int i = 0; i < start.size(); ++i) {
-            IPMMetric tmp(start[i], end[i]);
-            metric.Merge(tmp);
-        }
-        double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-        double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-        double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
-        double app_write = metric.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
-        double data_mb = std::accumulate(tmp.begin(), tmp.end(), 0);
-        double final_throughput = data_mb / duration * 1000000.0;
-        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s, APP Write: %8.1f MB/s, Total: %8.1f MB/s. Time: %6.2fs. --------\033[0m\n", 
-            dimm_read,
-            dimm_write,
-            app_read,
-            app_write,
-            final_throughput,
-            duration/1000000.0);
-        results_read.push_back(app_read);    
-        results_write.push_back(app_write);
+        watcher.Report();
+        results_read.push_back(watcher.app_read_);    
+        results_write.push_back(watcher.app_write_);
     }
 
     // print result for all thread giving block_size
@@ -1048,9 +974,7 @@ void BenchAllBlockSize(BenchType bench_type, int thread_num) {
         std::vector<std::thread> workers(thread_num);
         std::vector<double> tmp(thread_num);
         IPMWatcher watcher("all_block");
-        PCMMetric pcm_monitor("all_block");
-        auto start = watcher.Profiler();
-        auto time_start = Env::Default()->NowMicros();
+        PCMMetric pcm_monitor("all_block");        
         // ------------------- benchmark function -------------------
         for (int t = 0; t < thread_num; t++) {
             workers[t] = std::thread([&, t]
@@ -1064,29 +988,9 @@ void BenchAllBlockSize(BenchType bench_type, int thread_num) {
             t.join();
         });
         _mm_sfence();
-        auto time_end = Env::Default()->NowMicros();
-        auto end = watcher.Profiler();
-        auto duration = time_end - time_start;
-        IPMMetric metric;
-        for (int i = 0; i < start.size(); ++i) {
-            IPMMetric tmp(start[i], end[i]);
-            metric.Merge(tmp);
-        }
-        double dimm_read = metric.GetByteReadToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-        double dimm_write = metric.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration / 1000000.0);
-        double app_read  = metric.GetByteReadFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
-        double app_write = metric.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration / 1000000.0);
-        double data_mb = std::accumulate(tmp.begin(), tmp.end(), 0);
-        double final_throughput = data_mb / duration * 1000000.0;
-        printf("\033[34m------- DIMM Read: %8.1f MB/s. DIMM Write: %8.1f MB/s, APP Read: %8.1f MB/s APP Write: %8.1f MB/s, Total: %8.1f MB/s. Time: %6.2fs. --------\033[0m\n", 
-            dimm_read,
-            dimm_write,
-            app_read,
-            app_write,
-            final_throughput,
-            duration/1000000.0);
-        throughputs_read.push_back(app_read);    
-        throughputs_write.push_back(app_write);
+        watcher.Report();
+        throughputs_read.push_back(watcher.app_read_);    
+        throughputs_write.push_back(watcher.app_write_);
     }
 
     // print result for all block size

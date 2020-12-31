@@ -19,6 +19,7 @@
 #include "util/perf_util.h"
 #include "util/histogram.h"
 #include "util/port_posix.h"
+#include "util/pmm_util.h"
 
 #include "absl/container/flat_hash_map.h"
 
@@ -464,6 +465,7 @@ public:
             }
             #endif
 
+            IPMWatcher watcher(name);
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
         }
     }

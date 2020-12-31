@@ -480,27 +480,36 @@ class IPMWatcher {
 public:
     
     IPMWatcher(const std::string& name): file_name_("ipm_" + name + ".txt") {
-        printf("\033[32mStart IPMWatcher.\n\033[0m");
+        printf("\033[32mStart IPMWatcher for %s\n\033[0m", name.c_str());
         metrics_before_ = Profiler();
-        // uint64_t start_time_ = Env::Default()->NowMicros();
+        start_time_ = Env::Default()->NowMicros();
     }
 
     ~IPMWatcher() {
-        // uint64_t end_time_ = Env::Default()->NowMicros();
+        if (!finished_) {
+            Report();
+        }
+    }
+
+    void Report() {
+        finished_ = true;
+        duration_ = (Env::Default()->NowMicros() - start_time_) / 1000000.0;
         metrics_after_ = Profiler();
+        IPMMetric metric_merge;
         for (size_t i = 0; i < metrics_before_.size(); ++i) {
             auto& info_before = metrics_before_[i];
             auto& info_after  = metrics_after_[i];
             IPMMetric metric(info_before, info_after);
+            metric_merge.Merge(metric);
             std::string res;
             char buffer[1024];
-            sprintf(buffer, "\033[34m%s | Read from IMC | Write from IMC | Read DIMM | Write DIMM |   RA   |   WA   |\n", info_before.dimm_name.c_str());
+            sprintf(buffer, "\033[34m%s | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |\n", info_before.dimm_name.c_str());
             res += buffer;
             // double duration = (end_time_ - start_time_) / 1000000.0;
             // printf("duration: %f s", duration);
             // double read_throughput = metric.GetByteReadToDIMM() / 1024.0 / 1024.0 / duration;
             // double write_throughput = metric.GetByteWriteToDIMM() / 1024.0 / 1024.0 / duration;
-            sprintf(buffer, "  MB  | %13.4f | %14.4f | %9.4f | %10.4f | %6.2f | %6.2f |", // Read: %6.2f MB/s, Write: %6.2f MB/s", 
+            sprintf(buffer, "  MB  | %13.2f | %14.2f | %11.2f | %12.2f | %6.2f | %6.2f |", // Read: %6.2f MB/s, Write: %6.2f MB/s", 
                     metric.GetByteReadFromIMC()/1024.0/1024.0,
                     metric.GetByteWriteFromIMC() /1024.0/1024.0,
                     metric.GetByteReadToDIMM() /1024.0/1024.0,
@@ -512,7 +521,17 @@ public:
             res += buffer;
             res += "\033[0m\n";
             printf("%s", res.c_str());
-        }   
+        }           
+        dimm_read_  = metric_merge.GetByteReadToDIMM() / 1024.0/1024.0/ (duration_);
+        dimm_write_ = metric_merge.GetByteWriteToDIMM() / 1024.0/1024.0/ (duration_);
+        app_read_   = metric_merge.GetByteReadFromIMC() / 1024.0/1024.0/ (duration_);
+        app_write_  = metric_merge.GetByteWriteFromIMC() / 1024.0/1024.0/ (duration_);
+        printf("\033[34m*SUM* | DIMM-R: %7.1f MB/s. User-R: %7.1f MB/s   | DIMM-W: %7.1f MB/s, User-W: %7.1f MB/s. Time: %6.2fs.\033[0m\n", 
+            dimm_read_,            
+            app_read_,
+            dimm_write_,
+            app_write_,
+            duration_);  
         printf("\033[32mDestroy IPMWatcher.\n\033[0m\n");
         fflush(nullptr);
     }
@@ -533,12 +552,16 @@ public:
         return infos;
     }
 
-private:
     const std::string file_name_;
     std::vector<IPMInfo> metrics_before_;
     std::vector<IPMInfo> metrics_after_;
-    // uint64_t start_time_;
-    // uint64_t end_time_;
+    double dimm_read_   = 0;
+    double dimm_write_  = 0;
+    double app_read_    = 0;
+    double app_write_   = 0;
+    double start_time_  = 0;
+    double duration_    = 0;
+    bool   finished_    = false;
 };
 
 class WriteAmplificationWatcher {
