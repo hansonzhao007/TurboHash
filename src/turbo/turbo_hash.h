@@ -67,7 +67,7 @@
 // ------------ Following is for debug -----------
 // #define TURBO_ENABLE_LOGGING
 // #define TURBO_DEBUG_OUT
-
+// #define TURBO_PRINT_PROBE_DISTANCE
 
 // Linear probing setting
 static const int kTurboMaxProbeLen = 15;
@@ -1632,7 +1632,7 @@ public:
 
         buckets_ = buckets_addr;
         for (size_t i = 0; i < bucket_count; ++i) {
-            uint32_t rnd_cell_count = cell_count << ( i & 3);
+            uint32_t rnd_cell_count = cell_count;
             char* addr = cell_allocator_.Allocate(rnd_cell_count);
             memset(addr, 0, rnd_cell_count * kCellSize);
             buckets_[i].Reset(addr, rnd_cell_count);
@@ -1712,6 +1712,7 @@ public:
         char*    old_bucket_addr     = bucket_meta->Address();
         char*    new_bucket_addr     = cell_allocator_.Allocate(new_cell_count);
         
+        capacity_.fetch_add(old_cell_count * (CellMeta256V2::SlotCount() - 1) );
         
         if (new_bucket_addr == nullptr) {
             perror("rehash alloc memory fail\n");
@@ -1874,6 +1875,10 @@ public:
 
     double LoadFactor()  {
         return (double) size_.load(std::memory_order_relaxed) / capacity_.load(std::memory_order_relaxed);
+    }
+
+    size_t Capacity() {
+        return capacity_.load();
     }
 
     size_t Size()  { return size_.load(std::memory_order_relaxed);}
@@ -2078,9 +2083,9 @@ private:
                     insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
-                    // if (!res.first.equal_key) {
-                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
-                    // }
+                    if (!res.target_slot.equal_key) {
+                        size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                    }
 
                     return true;
                 } else if (res.target_slot.equal_key) {
@@ -2278,6 +2283,9 @@ private:
 
                     if (SlotKeyEqual<Key, is_key_flat>{}(key, record)) 
                     {                                  
+                        #ifdef TURBO_PRINT_PROBE_DISTANCE
+                        std::cout << probe_count << std::endl;
+                        #endif
                         return {slot, !meta.IsDeleted(i)}; // check if the deleted bit is set
                     }                
                 }

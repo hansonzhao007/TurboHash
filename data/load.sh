@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-touch load.csv
+echo "" > load.csv
 for i in {0..7}
 do
     keyword="thread $i"

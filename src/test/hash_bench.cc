@@ -40,6 +40,7 @@ DEFINE_uint64(cell_count, 16, "");
 DEFINE_uint64(bucket_count, 256 << 10, "bucket count");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 
+DEFINE_uint32(batch, 1000000, "report batch");
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
 DEFINE_uint32(thread, 1, "");
 DEFINE_uint64(report_interval, 0, "Report interval in seconds");
@@ -406,8 +407,12 @@ public:
         } else {
             trace_size_ = FLAGS_num;
         }
-
+        printf("key trace size: %lu\n", trace_size_);
         key_trace_ = new RandomKeyTrace(trace_size_);
+        if (reads_ == 0) {
+            reads_ = key_trace_->count_;
+            FLAGS_read = key_trace_->count_;
+        }
         PrintHeader();
         bool fresh_db = true;
         // run benchmark
@@ -444,6 +449,10 @@ public:
                 fresh_db = false;
                 thread = 1;
                 method = &Benchmark::DoRehash;
+            } else if (name == "stats") {
+                fresh_db = false;
+                thread = 1;
+                method = &Benchmark::DoStats;
             } else if (name == "compare") {
                 fresh_db = true;
                 thread = 1;
@@ -477,7 +486,7 @@ public:
         auto key_iterator = trace.Begin();
         printf("Trace size: %lu\n", trace.keys_.size());
         printf("Iterator size: %lu\n", key_iterator.end_index_);
-        size_t batch = 100000;
+        size_t batch = FLAGS_batch;
         std::string val(value_size_, 'v');
         thread->stats.Start();
         while (key_iterator.Valid()) {
@@ -503,9 +512,18 @@ public:
         thread->stats.FinishedBatchOp(rehash_count);
     }
 
+    void DoStats(ThreadState* thread) {   
+        INFO("DoRehash. Thread %2d", thread->tid);  
+        thread->stats.Start(); 
+        double load_factor = hashtable_->LoadFactor();
+        char buf[100];
+        snprintf(buf, sizeof(buf), "load factor: %f", load_factor);
+        thread->stats.AddMessage(buf);
+    }
+
     void DoProbe(ThreadState* thread) {
         INFO("DoProbe");
-        uint64_t batch = 10000000;
+        uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             ERROR("DoProbe lack key_trace_ initialization.");
             return;
@@ -532,7 +550,7 @@ public:
 
     void DoRead(ThreadState* thread) {
         INFO("DoRead");
-        uint64_t batch = 1000000;
+        uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             ERROR("DoRead lack key_trace_ initialization.");
             return;
@@ -568,7 +586,7 @@ public:
 
     void DoWrite(ThreadState* thread) {
         INFO("DoWrite");
-        uint64_t batch = 100000;
+        uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             ERROR("DoWrite lack key_trace_ initialization.");
             return;
@@ -598,14 +616,14 @@ public:
 
     void DoOverWrite(ThreadState* thread) {
         INFO("DoOverWrite");
-        uint64_t batch = 100000;
+        uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             ERROR("DoOverWrite lack key_trace_ initialization.");
             return;
         }
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
-        Duration duration(FLAGS_readtime, FLAGS_write);
+        Duration duration(FLAGS_readtime, writes_);
         thread->stats.Start();
         std::string val(value_size_, 'v');
         while(!duration.Done(batch)) {

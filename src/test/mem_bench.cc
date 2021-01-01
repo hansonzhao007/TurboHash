@@ -69,7 +69,7 @@ DEFINE_string(type, "fillrandomNT", "");
 // rw: test throughput mixing read and write
 DEFINE_string(mode, "row_thread", "");
 
-DEFINE_bool(pmdk, false, "use pmdk lib or not");
+DEFINE_bool(pmdk, true, "use pmdk lib or not");
 DEFINE_string(path, "/mnt/pmem/test.data", "default file path");
 DEFINE_int64(filesize, 2ULL << 30, "default file size");
 DEFINE_int32(block_size, 256, "unit size");

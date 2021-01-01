@@ -66,7 +66,7 @@
 #include "pptr.hpp"
 #include "libpmem.h"
 
-#define TURBO_PMEM_LOG_SIZE ((100LU << 30))
+#define TURBO_PMEM_LOG_SIZE ((96LU << 30))
 
 // ------------ Following is for debug -----------
 // #define TURBO_ENABLE_LOGGING
@@ -1750,7 +1750,7 @@ public:
         // Step5. Allocate space of cells, then set the bucket meta (cell count and pointer)
         for (size_t i = 0; i < bucket_count_; ++i) {
             // Allocate pmem space for cells
-            uint32_t rnd_cell_count = cell_count << ( i & 3);
+            uint32_t rnd_cell_count = cell_count;
             char* addr = cell_allocator_.Allocate(rnd_cell_count);
 
             // Reset the cell content to zero
@@ -1803,6 +1803,11 @@ public:
             buckets_[i] = buckets_pmem_[i].Extract();
             TURBO_PMEM_INFO("Recovered bucket cell count: " << buckets_[i].CellCount());
         }
+    }
+
+    double LoadFactor() {
+        // TODO
+        return 0.0;
     }
 
     /** MinorReHashAll

@@ -49,7 +49,8 @@ int main(int argc, char *argv[])
 
     printf("Size of Node with pptr pointer: %lu\n", sizeof(Node));
 
-    bool res = RP_init("hanson", 10LU << 30);
+    size_t LOG_SIZE = 2LU << 30;
+    bool res = RP_init("hanson", LOG_SIZE);
 
     if (res) {
         printf("Rmapping, prepare to recover\n");
@@ -62,7 +63,15 @@ int main(int argc, char *argv[])
         }
     } else {
         printf("Clean create\n");
+        {
+            util::IPMWatcher watcher("ralloc");
+            size_t tmp_size = 512 << 20;
+            void* tmp = RP_malloc(tmp_size);
+            pmem_memset_persist(tmp, 0, tmp_size);
+        }
     }
+
+    
 
     if (FLAGS_op == "write") {        
         void* buf = RP_malloc(sizeof(Node));

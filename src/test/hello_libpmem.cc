@@ -12,14 +12,17 @@ int main()
     char* pmem_addr = nullptr;
     size_t mapped_len;
     int   is_pmem;
-    if ((pmem_addr = (char *)pmem_map_file(filename.c_str(), file_size, PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
-        perror("pmem_map_file");
-        exit(1);
-    }
-    pmem_memset(pmem_addr, 0, file_size, PMEM_F_MEM_NONTEMPORAL);
-
     {
         util::IPMWatcher watcher("pmem");
+        if ((pmem_addr = (char *)pmem_map_file(filename.c_str(), file_size, PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
+            perror("pmem_map_file");
+            exit(1);
+        }
+        pmem_memset(pmem_addr, 0, file_size, PMEM_F_MEM_NONTEMPORAL);
+    }
+
+    {
+        util::IPMWatcher watcher("pmem2");
         pmem_memset(pmem_addr, 0, file_size, PMEM_F_MEM_NONTEMPORAL);
     }
     return 0;

@@ -37,7 +37,7 @@ ax.yaxis.set_major_formatter(formatter_million)
 ax.set_ylabel('Throughput (Mops/s)', fontsize=20, color='k')
 ax.set_xlabel("Seconds", fontsize=20)
 ax.yaxis.grid(linewidth=1, linestyle='--')
-
+ax.set_title("Insert Performance")
 plt.savefig("load.pdf", bbox_inches='tight', pad_inches=0)
 
 

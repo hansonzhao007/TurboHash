@@ -13,6 +13,7 @@ int main() {
     const size_t COUNT = 100000;
     auto* hashtable = new turbo::unordered_map<std::string, std::string> (8, 128);
     printf("------- Iterate empty hash table ------\n");
+    printf("hashtable size: %lu, capacity: %lu, loadfactor: %f\n", hashtable->Size(), hashtable->Capacity(), hashtable->LoadFactor());
     hashtable->IterateAll();
 
     bool succ = true;
@@ -21,14 +22,14 @@ int main() {
         succ = hashtable->Put("key" + std::to_string(i), "value" + std::to_string(i));
         if ((succ)) find++;
     }
-    printf("inserted %lu kv, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());
+    printf("inserted %lu kv, hashtable size: %lu, capacity: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->Capacity(), hashtable->LoadFactor());
 
     find = 0;
     for (size_t i = 0 ; i < 100 && succ; i++) {
         succ = hashtable->Put("key" + std::to_string(i), "updat" + std::to_string(i));
         if ((succ)) find++;
     }
-    printf("update %lu kv, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());
+    printf("inserted %lu kv, hashtable size: %lu, capacity: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->Capacity(), hashtable->LoadFactor());
 
     auto read_fun = [&hashtable] {
         bool succ = true;
@@ -42,7 +43,7 @@ int main() {
             }
             if ((succ)) find++;
         }
-        printf("find %lu key, hashtable size: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->LoadFactor());
+        printf("inserted %lu kv, hashtable size: %lu, capacity: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->Capacity(), hashtable->LoadFactor());
     };
     read_fun();
     // printf("------- Iterate hash table with %lu entries ------\n", hashtable->Size());
