@@ -69,7 +69,7 @@
 // #define LTHASH_DEBUG_OUT
 
 // Linear probing setting
-static const int kTurboMaxProbeLen = 16;
+static const int kTurboMaxProbeLen = 15;
 static const int kTurboProbeStep   = 1;    
 
 #define TURBO_LIKELY(x)     (__builtin_expect(false || (x), true))

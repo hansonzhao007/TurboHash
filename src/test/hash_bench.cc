@@ -36,8 +36,8 @@ using namespace util;
 
 // For hash table 
 DEFINE_bool(no_rehash, true, "control hash table do not do rehashing during insertion");
-DEFINE_uint64(cell_count, 128, "");
-DEFINE_uint64(bucket_count, 128 << 10, "bucket count");
+DEFINE_uint64(cell_count, 16, "");
+DEFINE_uint64(bucket_count, 256 << 10, "bucket count");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
 
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");

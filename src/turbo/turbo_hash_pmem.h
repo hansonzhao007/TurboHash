@@ -74,7 +74,7 @@
 // #define LTHASH_DEBUG_OUT
 
 // Linear probing setting
-static const int kTurboPmemMaxProbeLen = 16;
+static const int kTurboPmemMaxProbeLen = 15;
 static const int kTurboPmemProbeStep   = 1;    
 
 #define TURBO_PMEM_LIKELY(x)     (__builtin_expect(false || (x), true))
@@ -1810,7 +1810,7 @@ public:
     */
    size_t MinorReHashAll()  {
         // rehash for all the buckets
-        int rehash_thread = 8;
+        int rehash_thread = 16;
         printf("Rehash threads: %d\n", rehash_thread);
         std::vector<std::thread> workers(rehash_thread);
         std::vector<size_t> add_capacity(rehash_thread, 0);
@@ -1928,11 +1928,11 @@ public:
             exit(1);
         }
 
-        // // Reset all cell's meta data
-        // for (size_t i = 0; i < new_cell_count; ++i) {
-        //     char* des_cell_addr = new_bucket_addr_dram + (i << kCellSizeLeftShift);
-        //     memset(des_cell_addr, 0, CellMeta256V2::size());
-        // }
+        // Reset all cell's meta data
+        for (size_t i = 0; i < new_cell_count; ++i) {
+            char* des_cell_addr = new_bucket_addr_dram + (i << kCellSizeLeftShift);
+            memset(des_cell_addr, 0, CellMeta256V2::size());
+        }
 // ----------------------------------------------------------------------------------
 // iterator old bucket and insert slots info to new bucket
 // old: |11111111|22222222|33333333|44444444|   
