@@ -68,10 +68,10 @@
 
 #define TURBO_PMEM_LOG_SIZE ((100LU << 30))
 
-// un-comment this to disable logging
-// #define TURBO_PMEM_ENABLE_LOGGING
+// ------------ Following is for debug -----------
+// #define TURBO_ENABLE_LOGGING
+// #define TURBO_DEBUG_OUT
 
-// #define LTHASH_DEBUG_OUT
 
 // Linear probing setting
 static const int kTurboPmemMaxProbeLen = 15;
@@ -2507,7 +2507,7 @@ private:
                                 true};
                     }
                     // else {                                  // two key is not equal, go to next slot
-                    //     #ifdef LTHASH_DEBUG_OUT
+                    //     #ifdef TURBO_DEBUG_OUT
                     //     std::cout << "H1 conflict. Slot (" << offset.first 
                     //                 << " - " << offset.second 
                     //                 << " - " << i
@@ -2538,7 +2538,7 @@ private:
             probe.next(); 
         }
 
-        #ifdef LTHASH_DEBUG_OUT
+        #ifdef TURBO_DEBUG_OUT
         TURBO_PMEM_INFO("Fail to find one empty slot");
         TURBO_PMEM_INFO(PrintBucketMeta(bucket_i));
         #endif

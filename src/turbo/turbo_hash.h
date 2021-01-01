@@ -63,10 +63,11 @@
 
 #include <jemalloc/jemalloc.h>
 
-// un-comment this to disable logging
-// #define TURBO_ENABLE_LOGGING
 
-// #define LTHASH_DEBUG_OUT
+// ------------ Following is for debug -----------
+// #define TURBO_ENABLE_LOGGING
+// #define TURBO_DEBUG_OUT
+
 
 // Linear probing setting
 static const int kTurboMaxProbeLen = 15;
@@ -2201,7 +2202,7 @@ private:
                                 true};
                     }
                     // else {                                  // two key is not equal, go to next slot
-                    //     #ifdef LTHASH_DEBUG_OUT
+                    //     #ifdef TURBO_DEBUG_OUT
                     //     std::cout << "H1 conflict. Slot (" << offset.first 
                     //                 << " - " << offset.second 
                     //                 << " - " << i
@@ -2232,7 +2233,7 @@ private:
             probe.next(); 
         }
 
-        #ifdef LTHASH_DEBUG_OUT
+        #ifdef TURBO_DEBUG_OUT
         TURBO_INFO("Fail to find one empty slot");
         TURBO_INFO(PrintBucketMeta(bucket_i));
         #endif
