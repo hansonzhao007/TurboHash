@@ -32,7 +32,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 using namespace util;
 
-#define IS_PMEM 1
+// #define IS_PMEM 1
 
 // For hash table 
 DEFINE_bool(no_rehash, true, "control hash table do not do rehashing during insertion");
@@ -126,7 +126,7 @@ public:
         int64_t usecs_since_last = now - last_report_finish_;
 
         std::string cur_time = TimeToString(now/1000000);
-        printf( "%s ... thread %2d: (%lu,%lu) ops and "
+        printf( "%s ... thread %d: (%lu,%lu) ops and "
                 "( %.1f,%.1f ) ops/second in (%.4f,%.4f) seconds\n",
                 cur_time.c_str(), 
                 tid_,
@@ -136,7 +136,7 @@ public:
                 done_ / ((now - start_) / 1000000.0),
                 (now - last_report_finish_) / 1000000.0,
                 (now - start_) / 1000000.0);
-        INFO( "%s ... thread %2d: (%lu,%lu) ops and "
+        INFO( "%s ... thread %d: (%lu,%lu) ops and "
                 "( %.1f,%.1f ) ops/second in (%.6f,%.6f) seconds\n",
                 cur_time.c_str(), 
                 tid_,

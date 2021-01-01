@@ -1631,9 +1631,10 @@ public:
 
         buckets_ = buckets_addr;
         for (size_t i = 0; i < bucket_count; ++i) {
-            char* addr = cell_allocator_.Allocate(cell_count);
-            memset(addr, 0, cell_count * kCellSize);
-            buckets_[i].Reset(addr, cell_count);
+            uint32_t rnd_cell_count = cell_count << ( i & 3);
+            char* addr = cell_allocator_.Allocate(rnd_cell_count);
+            memset(addr, 0, rnd_cell_count * kCellSize);
+            buckets_[i].Reset(addr, rnd_cell_count);
         }
     }
 

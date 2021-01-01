@@ -1747,16 +1747,17 @@ public:
         TURBO_PMEM_INFO("BucketMetaPmem Allocated: " << RP_malloc_size(buckets_pmem_addr));
         buckets_pmem_ = buckets_pmem_addr;
 
-        // Step5. Allocate space of cells, then set the bucket meta (cell count and pointer)        
+        // Step5. Allocate space of cells, then set the bucket meta (cell count and pointer)
         for (size_t i = 0; i < bucket_count_; ++i) {
             // Allocate pmem space for cells
-            char* addr = cell_allocator_.Allocate(cell_count);
+            uint32_t rnd_cell_count = cell_count << ( i & 3);
+            char* addr = cell_allocator_.Allocate(rnd_cell_count);
 
             // Reset the cell content to zero
-            pmem_memset_persist(addr, 0, cell_count * kCellSize);
+            pmem_memset_persist(addr, 0, rnd_cell_count * kCellSize);
 
             // Initialize the dram bucket meta
-            buckets_[i].Reset(addr, cell_count);
+            buckets_[i].Reset(addr, rnd_cell_count);
 
             // Initialzie the pmem bucket meta
             buckets_pmem_[i].Init(buckets_[i]);
