@@ -63,7 +63,7 @@
 
 #include <jemalloc/jemalloc.h>
 
-// un-comment this to disable logging, log is saved at robin_hood.log
+// un-comment this to disable logging
 // #define TURBO_ENABLE_LOGGING
 
 // #define LTHASH_DEBUG_OUT

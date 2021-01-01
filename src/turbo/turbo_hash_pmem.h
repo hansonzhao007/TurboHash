@@ -68,7 +68,7 @@
 
 #define TURBO_PMEM_LOG_SIZE ((100LU << 30))
 
-// un-comment this to disable logging, log is saved at robin_hood.log
+// un-comment this to disable logging
 // #define TURBO_PMEM_ENABLE_LOGGING
 
 // #define LTHASH_DEBUG_OUT
