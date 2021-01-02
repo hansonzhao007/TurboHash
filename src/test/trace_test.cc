@@ -58,7 +58,7 @@ int main() {
         RandomKeyTrace::Iterator key_iterator = keytrace.trace_at(0, KEY_COUNT);
         time_start = Env::Default()->NowMicros();
         size_t i;
-        
+
         for (i = 0; key_iterator.Valid(); i++) {
             size_t k = key_iterator.Next();
             if ((i & 0xFFFFF) == 0) {
@@ -68,24 +68,6 @@ int main() {
         time_end = Env::Default()->NowMicros();
         duration = (time_end - time_start);
         printf("RandomKeyTrace speed (%lu record): %f Mops/s\n", i, i / duration);
-    }
-
-    {
-        RandomKeyTrace2 keytrace(KEY_COUNT);
-        RandomKeyTrace2::Iterator key_iterator = keytrace.trace_at(0, KEY_COUNT);
-        time_start = Env::Default()->NowMicros();
-        size_t i;
-        
-        for (i = 0; key_iterator.Valid(); i++) {
-            key_iterator.Next();
-            if ((i & 0xFFFFF) == 0) {
-                fprintf(stderr, "iteration %*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
-            }
-        }
-        time_end = Env::Default()->NowMicros();
-        printf("string final: %s\n", key_iterator.Next().c_str());
-        duration = (time_end - time_start);
-        printf("RandomKeyTrace2 speed (%lu record): %f Mops/s\n", i, i / duration);
     }
 
     return 0;

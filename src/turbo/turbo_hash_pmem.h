@@ -1458,7 +1458,7 @@ public:
     class BucketMetaDram {
     public:
         explicit BucketMetaDram(char* addr, uint16_t cell_count) {
-            data_ = (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 12);
+            data_ = (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 8);
         }
 
         BucketMetaDram():
@@ -1477,11 +1477,11 @@ public:
         }
 
         inline uint16_t CellCount() {
-            return  ( 1 << ((data_ >> 12) & 0xF) );
+            return  ( 1 << ((data_ >> 8) & 0xFF) );
         }
 
         inline void Reset(char* addr, uint16_t cell_count) {
-            data_ = (data_ & 0x0000000000000FFF) | (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 12);
+            data_ = (data_ & 0x00000000000000FF) | (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 8);
         }
 
         inline bool TryLock(void) {
@@ -1501,7 +1501,7 @@ public:
         }
 
         // LSB
-        // | 8 bit lock | 4 bit reserved | 4 bit cell mask | 48 bit address |
+        // | 1 bit lock | 7 bit reserved | 8 bit cell mask | 48 bit address |
         uint64_t data_;        
     };
 
@@ -1933,6 +1933,11 @@ public:
             perror("rehash alloc pmem fail\n");
             exit(1);
         }
+        if (new_cell_count > kCellCountLimit) {
+            printf("Cannot rehash.\n");
+            exit(1);
+        }
+
 
         // Reset all cell's meta data
         for (size_t i = 0; i < new_cell_count; ++i) {
