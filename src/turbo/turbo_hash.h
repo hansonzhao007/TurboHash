@@ -70,8 +70,9 @@
 // #define TURBO_PRINT_PROBE_DISTANCE
 
 // Linear probing setting
-static const int kTurboMaxProbeLen = 15;
-static const int kTurboProbeStep   = 1;    
+static constexpr int kTurboCellCountLimit = 32768;
+static constexpr int kTurboMaxProbeLen = 16;
+static constexpr int kTurboProbeStep   = 1;    
 
 #define TURBO_LIKELY(x)     (__builtin_expect(false || (x), true))
 #define TURBO_UNLIKELY(x)   (__builtin_expect(x, 0))
@@ -685,7 +686,7 @@ struct WrapKeyEqual : public T {
  *           |    ...   |    ...   |     |          |
  *              
 */
-template <  typename Key, typename T, typename Hash, typename KeyEqual, int kCellCountLimit = 32768>
+template <  typename Key, typename T, typename Hash, typename KeyEqual, int kCellCountLimit = kTurboCellCountLimit>
 class TurboHashTable 
     : public WrapHash<Hash>, 
       public WrapKeyEqual<KeyEqual> {
@@ -1230,7 +1231,7 @@ public:
     };
 
     static_assert(__builtin_popcount(kCellCountLimit) == 1, "kCellCountLimit should be power of two");
-    static_assert(kCellCountLimit <= 32768, "kCellCountLimit needs to be <= 32768");
+    static_assert(kCellCountLimit <= kTurboCellCountLimit, "kCellCountLimit needs to be <= kTurboCellCountLimit");
     
     using CellMeta  = CellMeta256V2;
     using WHash     = WrapHash<Hash>;
@@ -1243,7 +1244,7 @@ public:
     class SlotInfo {
     public:
         uint32_t bucket;        // bucket index
-        uint16_t cell;          // cell index
+        uint32_t cell;          // cell index
         uint8_t  slot;          // slot index  
         uint8_t  old_slot;      // if equal_key, this save old slot position      
         H1Tag    H1;            // hash-tag in HashSlot
@@ -1461,7 +1462,7 @@ public:
     */
     class BucketMeta {
     public:
-        explicit BucketMeta(char* addr, uint16_t cell_count) {
+        explicit BucketMeta(char* addr, uint32_t cell_count) {
             data_ = (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 8);
         }
 
@@ -1476,15 +1477,15 @@ public:
             return (char*)(data_ >> 16);
         }
 
-        inline uint16_t CellCountMask() {
+        inline uint32_t CellCountMask() {
             return CellCount() - 1;
         }
 
-        inline uint16_t CellCount() {
+        inline uint32_t CellCount() {
             return  ( 1 << ((data_ >> 8) & 0xFF) );
         }
 
-        inline void Reset(char* addr, uint16_t cell_count) {
+        inline void Reset(char* addr, uint32_t cell_count) {
             data_ = (data_ & 0x00000000000000FF) | (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 8);
         }
 
@@ -1674,13 +1675,13 @@ public:
     }
 
     struct FindNextSlotInRehashResult {
-        uint16_t cell_index;
+        uint32_t cell_index;
         uint8_t  slot_index;
     };
 
     // return the cell index and slot index
-    inline FindNextSlotInRehashResult findNextSlotInRehash(uint8_t* slot_vec, H1Tag h1, uint16_t cell_count_mask) {
-        uint16_t ai = H1ToHash(h1) & cell_count_mask;
+    inline FindNextSlotInRehashResult findNextSlotInRehash(uint8_t* slot_vec, H1Tag h1, uint32_t cell_count_mask) {
+        uint32_t ai = H1ToHash(h1) & cell_count_mask;
         int loop_count = 0;
 
         // find next cell that is not full yet
@@ -1965,7 +1966,48 @@ public:
         res += buffer;
         return res;
     }
-    
+
+    std::string PrintLoadAndProbeLen(uint32_t bucket_i) {
+        std::string res;
+        char buffer[1024];
+        BucketMeta* bucket_meta = locateBucket(bucket_i);
+        ProbeWithinBucket probe(0, bucket_meta->CellCountMask(), bucket_i);
+        uint32_t i = 0;
+        int count_sum = 0;
+        size_t probe_sum = 0;
+        size_t cur_probe = 0;
+        while (probe) {
+            char* cell_addr = locateCell(probe.offset());
+            CellMeta256V2 meta(cell_addr);
+            int count = meta.OccupyCount();            
+            if (count < meta.SlotCount() - 1) {
+                // not full
+                cur_probe = 0;
+            } else {
+                cur_probe++;
+            }            
+            probe.next();
+            count_sum += count;
+            probe_sum += cur_probe + 1;
+        }
+        sprintf(buffer, "Bucket %u. Cell count: %d, valid slot count: %d. Load factor: %f Probe sum: %lu, Avg probe dis: %.2f", 
+                bucket_i, 
+                bucket_meta->CellCount(),
+                count_sum, 
+                (double)count_sum / ((CellMeta256V2::SlotCount() - 1) * bucket_meta->CellCount()),
+                probe_sum,
+                (double)probe_sum / bucket_meta->CellCount()
+                );
+        res += buffer;
+        return res;
+    }
+
+    void PrintAlProbeLen() {
+        for (size_t b = 0; b < bucket_count_; ++b) {
+            printf("%s\n", PrintLoadAndProbeLen(b).c_str());
+        }
+    }
+
     void PrintAllMeta() {
         for (size_t b = 0; b < bucket_count_; ++b) {
             printf("%s\n", PrintBucketMeta(b).c_str());
@@ -2131,6 +2173,7 @@ private:
 
                 // Obtain the Bucket lock, rehash if success. Otherwise, other thread is already rehashing. 
                 if (bucket_meta->TryLock()) {
+                    // PrintAlProbeLen();
                     MinorRehash(res.target_slot.bucket);
                     bucket_meta->Unlock();
                     retry_find = true;
@@ -2408,7 +2451,7 @@ using unordered_map = detail::TurboHashTable<
                                             typename std::conditional< std::is_same<Key, std::string>::value == false /* is numeric */, 
                                                                                         KeyEqual, 
                                                                                         std::equal_to<util::Slice> >::type, 
-                                            32768>;
+                                            kTurboCellCountLimit>;
 }; // end of namespace turbo
 
 #endif
