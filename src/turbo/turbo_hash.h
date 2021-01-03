@@ -2404,7 +2404,7 @@ private:
 template <typename Key, typename T, typename Hash = hash<Key>,
           typename KeyEqual = std::equal_to<Key> >
 using unordered_map = detail::TurboHashTable<
-                                            Key, T, Hash, 
+                                            Key, T, Hash,
                                             typename std::conditional< std::is_same<Key, std::string>::value == false /* is numeric */, 
                                                                                         KeyEqual, 
                                                                                         std::equal_to<util::Slice> >::type, 

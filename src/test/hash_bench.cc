@@ -35,7 +35,7 @@ using namespace util;
 // #define IS_PMEM 1
 
 // For hash table 
-DEFINE_bool(no_rehash, true, "control hash table do not do rehashing during insertion");
+DEFINE_bool(no_rehash, false, "control hash table do not do rehashing during insertion");
 DEFINE_uint64(cell_count, 16, "");
 DEFINE_uint64(bucket_count, 256 << 10, "bucket count");
 DEFINE_double(loadfactor, 0.7, "default loadfactor for turbohash.");
@@ -441,6 +441,10 @@ public:
                 fresh_db = false;
                 key_trace_->Randomize();
                 method = &Benchmark::DoRead;                
+            } else if (name == "readnon") {
+                fresh_db = false;
+                key_trace_->Randomize();
+                method = &Benchmark::DoReadNon;                
             } else if (name == "proberandom") {
                 fresh_db = false;
                 key_trace_->Randomize();
@@ -491,7 +495,8 @@ public:
         thread->stats.Start();
         while (key_iterator.Valid()) {
             for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {
-                bool res = hashtable_->Put(key_iterator.Next(), 123456);
+                size_t key = key_iterator.Next();
+                bool res = hashtable_->Put(key, key);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
                     printf("Hash Table Full!!!\n");
@@ -534,7 +539,7 @@ public:
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(batch)) {
-            for (uint64_t j = 0; j < batch; j++) {         
+            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {         
                 bool res = hashtable_->Probe(key_iterator.Next());
                 if (unlikely(!res)) {
                     not_find++;
@@ -562,10 +567,41 @@ public:
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
         while (!duration.Done(batch)) {
-            for (uint64_t j = 0; j < batch; j++) {                          
+            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {                          
                 auto record_ptr = hashtable_->Find(key_iterator.Next());
                 if (unlikely(record_ptr == nullptr)) {
                     not_find++;
+                }
+            }
+            thread->stats.FinishedBatchOp(batch);
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
+        INFO("DoRead thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
+        thread->stats.AddMessage(buf);
+    }
+
+    void DoReadNon(ThreadState* thread) {
+        INFO("DoReadNon");
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            ERROR("DoReadNon lack key_trace_ initialization.");
+            return;
+        }
+        size_t start_offset = random() % trace_size_;
+        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        size_t not_find = 0;
+        uint64_t data_offset;
+        Duration duration(FLAGS_readtime, reads_);
+        thread->stats.Start();        
+        while (!duration.Done(batch)) {
+            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {      
+                size_t key = key_iterator.Next() + num_;
+                auto record_ptr = hashtable_->Find(key);
+                if (likely(record_ptr == nullptr)) {
+                    not_find++;
+                } else{
+                    INFO("Find key %lu. record key: %lu, value: %lu", key, record_ptr->first(), record_ptr->second());
                 }
             }
             thread->stats.FinishedBatchOp(batch);
@@ -598,8 +634,9 @@ public:
         thread->stats.Start();
         std::string val(value_size_, 'v');
         while (key_iterator.Valid()) {
-            for (uint64_t j = 0; j < batch; j++) {   
-                bool res = hashtable_->Put(key_iterator.Next(), 31415926);
+            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {   
+                size_t key = key_iterator.Next();
+                bool res = hashtable_->Put(key, key);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
                     printf("Hash Table Full!!!\n");
@@ -627,9 +664,10 @@ public:
         Duration duration(FLAGS_readtime, writes_);
         thread->stats.Start();
         std::string val(value_size_, 'v');
-        while(!duration.Done(batch) && key_iterator.Valid()) {
-            for (uint64_t j = 0; j < batch; j++) {   
-                bool res = hashtable_->Put(key_iterator.Next(), 56789);
+        while(!duration.Done(batch)) {
+            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {  
+                size_t key = key_iterator.Next(); 
+                bool res = hashtable_->Put(key, key);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
                     printf("Hash Table Full!!!\n");
