@@ -621,12 +621,13 @@ public:
             ERROR("DoOverWrite lack key_trace_ initialization.");
             return;
         }
-        size_t start_offset = random() % trace_size_;
-        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
         Duration duration(FLAGS_readtime, writes_);
         thread->stats.Start();
         std::string val(value_size_, 'v');
-        while(!duration.Done(batch)) {
+        while(!duration.Done(batch) && key_iterator.Valid()) {
             for (uint64_t j = 0; j < batch; j++) {   
                 bool res = hashtable_->Put(key_iterator.Next(), 56789);
                 if (!res) {

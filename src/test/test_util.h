@@ -47,7 +47,11 @@ class RandomKeyTrace {
 public:
     RandomKeyTrace(size_t count, int seed = random()) {
         count_ = count;
-        GenerateRandomKeys(keys_, 0, 100000000000L, count_, seed);
+        keys_.resize(count);
+        for (size_t i = 0; i < count; i++) {
+            keys_[i] = i;
+        }
+        Randomize();
     }
 
     ~RandomKeyTrace() {
