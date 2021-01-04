@@ -32,7 +32,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 using namespace util;
 
-// #define IS_PMEM 1
+#define IS_PMEM 1
 
 // For hash table 
 DEFINE_bool(no_rehash, false, "control hash table do not do rehashing during insertion");

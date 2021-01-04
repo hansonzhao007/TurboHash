@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 cd ../release
 make -j32
 cd ../testbench
@@ -17,6 +18,7 @@ do
     echo " ========= $size ======= "
     rm perf.data.*
     perf record -e $evens --switch-out -- numactl -N 0 ../release/motivation  --filename=$filename --loop=$size
+    sleep 1
     i=0
     for file in perf.data.*;
     do
@@ -26,7 +28,7 @@ do
         else
             echo "---------- size $size result ----------"
             echo -n "      " >> $filename
-            perf report -i $file --stdio | tee tmp.txt | grep "Event count" | awk 'BEGIN { ORS=", " }; { print $5 }      ' >> $filename
+            perf report -i $file --stdio | tee tmp.txt | grep "Event count" | awk 'BEGIN { ORS=", " }; { print $5 }      ' >> $filename            
         fi
         i=$((i + 1))
     done
@@ -34,3 +36,7 @@ do
 done
 
 python3 motivation.py
+
+rm *.log
+rm *.txt
+rm perf.data.*

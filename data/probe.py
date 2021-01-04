@@ -16,50 +16,34 @@ markers= {
     32:'.', 
     16:'|', 
     8: '1', 
-    4: 'x', 
+    4: '2', 
     2: ''}
 
-# Plot load factor 
-fig, ax = plt.subplots(figsize=(6, 5))
-for i in (64, 32, 16, 8, 4, 2):
-    filename = "probe" + str(i) + ".data.parse"
-    df = pd.read_csv(filename, delimiter=' ' ,header=None)
-    df.index = np.arange(1, len(df) + 1)
-    df.columns = ["loadfactor", "probe_dis"]
-    
-    df[0:14]["loadfactor"].plot(
-        ax=ax, 
-        linewidth=1.5,
-        fontsize=18,
-        marker=markers[i],
-        markersize=12,
-        fillstyle='none')
+def Plot(c_name, ylable, is_legend):
+    # Plot Average Log Distance
+    fig, ax = plt.subplots(figsize=(4, 3.6))
+    for i in (64, 32, 16, 8, 4, 2):
+        filename = "probe" + str(i) + ".data.parse"
+        df = pd.read_csv(filename, delimiter=' ' ,header=None)
+        df=df[2:14]
+        df.index = np.arange(1, len(df) + 1)
+        df.columns = ["probe_loadfactor", "probe_log_dis"]
+        
+        df[c_name].plot(
+            ax=ax, 
+            linewidth=1.5,
+            fontsize=12,
+            marker=markers[i],
+            markersize=10,
+            fillstyle='none')
 
+    if (is_legend):
+        ax.legend([64, 32, 16, 8, 4, 2], fontsize=11)
 
-ax.legend([64, 32, 16, 8, 4, 2], fontsize=11)
-ax.set_ylabel('Load Factor', fontsize=22, color='k')
-ax.set_xlabel("Number of Rehash", fontsize=22)
-ax.yaxis.grid(linewidth=1, linestyle='--')
-plt.savefig("probe_loadfactor.pdf", bbox_inches='tight', pad_inches=0)
+    ax.set_ylabel(ylable, fontsize=16, color='k')
+    ax.set_xlabel("Number of Rehash", fontsize=16)
+    ax.yaxis.grid(linewidth=1, linestyle='--')
+    plt.savefig(c_name+".pdf", bbox_inches='tight', pad_inches=0)
 
-# Plot Average Log Distance
-fig, ax = plt.subplots(figsize=(6, 5))
-for i in (64, 32, 16, 8, 4, 2):
-    filename = "probe" + str(i) + ".data.parse"
-    df = pd.read_csv(filename, delimiter=' ' ,header=None)
-    df.index = np.arange(1, len(df) + 1)
-    df.columns = ["loadfactor", "probe_dis"]
-    
-    df[0:14]["probe_dis"].plot(
-        ax=ax, 
-        linewidth=1.5,
-        fontsize=18,
-        marker=markers[i],
-        markersize=12,
-        fillstyle='none')
-
-ax.legend([64, 32, 16, 8, 4, 2], fontsize=11)
-ax.set_ylabel('Average Log Length', fontsize=22, color='k')
-ax.set_xlabel("Number of Rehash", fontsize=22)
-ax.yaxis.grid(linewidth=1, linestyle='--')
-plt.savefig("probe_log_dis.pdf", bbox_inches='tight', pad_inches=0)
+Plot("probe_loadfactor", "Load Factor", False)
+Plot("probe_log_dis", "Average Log Length", True)
