@@ -192,12 +192,8 @@ public:
         }
     }
 
-    inline void FinishedSingleOp(bool is_hist=false) {
+    inline void FinishedSingleOp() {
         double now = Env::Default()->NowNanos();
-        if (is_hist) {
-            double nanos = now - last_op_finish_;
-            hist_.Add(nanos);
-        }
         last_op_finish_ = now;
 
         done_++;
@@ -416,7 +412,7 @@ public:
         PrintHeader();
         bool fresh_db = true;
         // run benchmark
-        bool print_hist = FLAGS_hist;
+        bool print_hist = false;
         const char* benchmarks = FLAGS_benchmarks.c_str();        
         while (benchmarks != nullptr) {
             int thread = FLAGS_thread;
@@ -445,6 +441,16 @@ public:
                 fresh_db = false;
                 key_trace_->Randomize();
                 method = &Benchmark::DoReadNon;                
+            } else if (name == "readlat") {
+                fresh_db = false;
+                print_hist = true;
+                key_trace_->Randomize();
+                method = &Benchmark::DoReadLat;                
+            } else if (name == "readnonlat") {
+                fresh_db = false;
+                print_hist = true;
+                key_trace_->Randomize();
+                method = &Benchmark::DoReadNonLat;                
             } else if (name == "proberandom") {
                 fresh_db = false;
                 key_trace_->Randomize();
@@ -600,15 +606,75 @@ public:
                 auto record_ptr = hashtable_->Find(key);
                 if (likely(record_ptr == nullptr)) {
                     not_find++;
-                } else{
-                    INFO("Find key %lu. record key: %lu, value: %lu", key, record_ptr->first(), record_ptr->second());
                 }
             }
             thread->stats.FinishedBatchOp(batch);
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
-        INFO("DoRead thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
+        INFO("DoReadNon thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
+        thread->stats.AddMessage(buf);
+    }
+
+    void DoReadLat(ThreadState* thread) {
+        INFO("DoReadLat");
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            ERROR("DoReadLat lack key_trace_ initialization.");
+            return;
+        }
+        size_t start_offset = random() % trace_size_;
+        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        size_t not_find = 0;
+        uint64_t data_offset;
+        Duration duration(FLAGS_readtime, reads_);
+        thread->stats.Start();
+        while (key_iterator.Valid()) {
+            size_t key = key_iterator.Next();
+
+            auto time_start = Env::Default()->NowNanos();
+            auto record_ptr = hashtable_->Find(key);
+            auto time_duration = Env::Default()->NowNanos() - time_start;
+            thread->stats.hist_.Add(time_duration);
+
+            if (unlikely(record_ptr == nullptr)) {
+                not_find++;
+            }       
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
+        INFO("DoReadLat thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
+        thread->stats.AddMessage(buf);
+    }
+
+    void DoReadNonLat(ThreadState* thread) {
+        INFO("DoReadNonLat");
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            ERROR("DoReadNonLat lack key_trace_ initialization.");
+            return;
+        }
+        size_t start_offset = random() % trace_size_;
+        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        size_t not_find = 0;
+        uint64_t data_offset;
+        Duration duration(FLAGS_readtime, reads_);
+        thread->stats.Start();
+        while (key_iterator.Valid()) {
+            size_t key = key_iterator.Next() + num_;
+            
+            auto time_start = Env::Default()->NowNanos();
+            auto record_ptr = hashtable_->Find(key);
+            auto time_duration = Env::Default()->NowNanos() - time_start;
+            thread->stats.hist_.Add(time_duration);
+
+            if (likely(record_ptr == nullptr)) {
+                not_find++;
+            }     
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
+        INFO("DoReadNonLat thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
         thread->stats.AddMessage(buf);
     }
 
