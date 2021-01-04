@@ -606,22 +606,30 @@ class PCMMetric {
 public:
     PCMMetric(const std::string name): name_(name) {
         before_sstate_ = getSystemCounterState();
+        start_time_ = Env::Default()->NowMicros();
     }
     ~PCMMetric() {
+        double duration = (Env::Default()->NowMicros() - start_time_) / 1000000.0;
         after_sstate_ = getSystemCounterState();
         std::cout 
-                << "PCM Metrics:"
+                << "PCM Metrics: " << name_
                 << "\n"
                 // << "\tL3 misses: " << getL3CacheMisses(*before_sstate, *after_sstate) << "\n"
-                << "\tDRAM Reads (bytes): " << getBytesReadFromMC(before_sstate_, after_sstate_) << "\n"
-                << "\tDRAM Writes (bytes): " << getBytesWrittenToMC(before_sstate_, after_sstate_) << "\n"
-                << "\tNVM Reads (bytes): " << getBytesReadFromPMM(before_sstate_, after_sstate_) << "\n"
-                << "\tNVM Writes (bytes): " << getBytesWrittenToPMM(before_sstate_, after_sstate_) << std::endl;
+                << "\tDRAM Read  (bytes): " << getBytesReadFromMC(before_sstate_, after_sstate_) << "\n"
+                << "\tDRAM Write (bytes): " << getBytesWrittenToMC(before_sstate_, after_sstate_) << "\n"
+                << "\tPMEM Read  (bytes): " << getBytesReadFromPMM(before_sstate_, after_sstate_) << "\n"
+                << "\tPMEM Write (bytes): " << getBytesWrittenToPMM(before_sstate_, after_sstate_) << "\n"
+                << "\tDRAM Read    Speed: " << getBytesReadFromMC(before_sstate_, after_sstate_) / 1024.0 / 1024.0 / duration << " MB/s" << "\n"
+                << "\tDRAM Write   Speed: " << getBytesWrittenToMC(before_sstate_, after_sstate_) / 1024.0 / 1024.0 / duration << " MB/s" << "\n"
+                << "\tPMEM Read    Speed: " << getBytesReadFromPMM(before_sstate_, after_sstate_) / 1024.0 / 1024.0 / duration << " MB/s" << "\n"
+                << "\tPMEM Write   Speed: " << getBytesWrittenToPMM(before_sstate_, after_sstate_) / 1024.0 / 1024.0 / duration << " MB/s" << "\n"
+                << "\tDuration: " << duration << " s" << std::endl;
     }
 private:
     SystemCounterState before_sstate_;
     SystemCounterState after_sstate_;
     const std::string name_;
+    uint64_t start_time_;
 };
 
 

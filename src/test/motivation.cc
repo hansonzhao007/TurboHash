@@ -93,8 +93,7 @@ void AccessCacheLineSize() {
     size_t mapped_len;
     int   is_pmem;
     {
-        util::IPMWatcher watcher("pmem");
-
+        util::IPMWatcher watcher("pmem");        
         if ((pmem_addr = (char *)pmem_map_file(filename.c_str(), file_size, PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
             perror("pmem_map file creation fail");
             exit(1);
@@ -113,6 +112,7 @@ void AccessCacheLineSize() {
     fprintf(file, "%d, ", FLAGS_loop);
     
     {
+        util::PCMMetric metric("rnd_read");
         #ifdef IS_PMEM
         IPMWatcher watcher("rnd_read");
         #endif
@@ -127,6 +127,7 @@ void AccessCacheLineSize() {
     }
     
     {
+        util::PCMMetric metric("seq_read");
         #ifdef IS_PMEM
         IPMWatcher watcher("seq_read");
         #endif
@@ -141,6 +142,7 @@ void AccessCacheLineSize() {
     }
 
     {
+        util::PCMMetric metric("rnd_write");
         #ifdef IS_PMEM
         IPMWatcher watcher("rnd_write");
         #endif
@@ -155,6 +157,7 @@ void AccessCacheLineSize() {
     }
 
     {
+        util::PCMMetric metric("seq_write");
         #ifdef IS_PMEM
         IPMWatcher watcher("seq_write");
         #endif
