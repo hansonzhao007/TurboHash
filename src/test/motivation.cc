@@ -60,8 +60,7 @@ RndWrite(char* addr, uint64_t size_mask) {
     int loop = FLAGS_loop;
     while (loop--) {
         uint64_t off = turbo::wyhash64() & size_mask;
-        volatile char tmp = *(addr + off);
-        memset(addr + off, 32, 8);
+        *(addr + off) = 'a';
         off += 64;
     }
 }
@@ -72,8 +71,7 @@ ConWrite(char* addr, uint64_t size_mask) {
     int loop = FLAGS_loop;
     while (loop--) {
         uint64_t off_tmp = turbo::wyhash64() & size_mask;
-        volatile char tmp = *(addr + off);
-        memset(addr + off, 32, 8);
+        *(addr + off) = 'a';
         off += 64;
     }
 }
@@ -81,34 +79,28 @@ ConWrite(char* addr, uint64_t size_mask) {
 
 void AccessCacheLineSize() {
     const uint64_t repeat = 5000000;
-    const uint64_t size = 4LU << 30;
+    const uint64_t size = 1LU << 30;
     const uint64_t size_mask = (size - 1) & MASK64;
     uint64_t size_mask2 = (size - 1) & (~(64 * FLAGS_loop - 1));
 
     char* addr = nullptr;
     #ifdef IS_PMEM
-    auto res = RP_init("motivation", size * 2);
-    if (res) {
-        printf("Rmapping, prepare to recover\n");
-        RP_get_root<PmemRoot>(0);
-        int recover_res = RP_recover();
-        if (recover_res == 1) {
-            printf("Dirty open, recover\n");
+    size_t file_size = size;
+    std::string filename = "/mnt/pmem/pmem_test.data";
+    char* pmem_addr = nullptr;
+    size_t mapped_len;
+    int   is_pmem;
+    {
+        util::IPMWatcher watcher("pmem");
+
+        if ((pmem_addr = (char *)pmem_map_file(filename.c_str(), file_size, PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
+            perror("pmem_map file creation fail");
+            exit(1);
         } else {
-            printf("Clean restart.\n");
-        }
-        PmemRoot* root = RP_get_root<PmemRoot>(0);
-        addr = root->addr;
-    } else {
-        printf("Clean create\n");
-        void* buf = RP_malloc(sizeof(PmemRoot));
-        PmemRoot* root = static_cast<PmemRoot*>(buf);
-        root->addr = (char*) RP_malloc(size);
-        addr = root->addr;
-        memset(addr, 0, size);
-        FLUSH(root);
-        FLUSHFENCE;
-        RP_set_root(buf, 0);
+            pmem_memset(pmem_addr, 0, file_size, PMEM_F_MEM_NONTEMPORAL);
+        }     
+        
+        addr = pmem_addr;
     }
     #else
     addr = (char*)aligned_alloc(64, size);
@@ -178,7 +170,7 @@ void AccessCacheLineSize() {
     fclose(file);
 
     #ifdef IS_PMEM
-    RP_close();
+    pmem_unmap(addr, file_size);
     #endif
 }
 
