@@ -25,7 +25,7 @@ def Plot(c_name, ylable, is_legend):
     for i in (64, 32, 16, 8, 4, 2):
         filename = "probe" + str(i) + ".data.parse"
         df = pd.read_csv(filename, delimiter=' ' ,header=None)
-        df=df[2:14]
+        df=df[1:14]
         df.index = np.arange(1, len(df) + 1)
         df.columns = ["probe_loadfactor", "probe_log_dis"]
         
