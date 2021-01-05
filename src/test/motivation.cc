@@ -61,7 +61,11 @@ RndWrite(char* addr, uint64_t size_mask) {
     while (loop--) {
         uint64_t off = turbo::wyhash64() & size_mask;
         volatile char tmp = *(addr + off);
-        memset(addr + off, 32, 8);
+        memset(addr + off, 32, 1);  
+        #ifdef IS_PMEM      
+        FLUSH(addr + off);
+        // FLUSHFENCE;
+        #endif
         off += 64;
     }
 }
@@ -73,15 +77,19 @@ ConWrite(char* addr, uint64_t size_mask) {
     while (loop--) {
         uint64_t off_tmp = turbo::wyhash64() & size_mask;
         volatile char tmp = *(addr + off);
-        memset(addr + off, 32, 8);
+        memset(addr + off, 32, 1);
+        #ifdef IS_PMEM      
+        FLUSH(addr + off);
+        // FLUSHFENCE;
+        #endif
         off += 64;
     }
 }
 #pragma GCC diagnostic pop
 
 void AccessCacheLineSize() {
-    const uint64_t repeat = 5000000;
-    const uint64_t size = 2LU << 30;
+    const uint64_t repeat = 10000000;
+    const uint64_t size = 4LU << 30;
     const uint64_t size_mask = (size - 1) & MASK64;
     uint64_t size_mask2 = (size - 1) & (~(64 * FLAGS_loop - 1));
 
