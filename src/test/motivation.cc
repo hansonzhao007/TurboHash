@@ -37,19 +37,20 @@ RndAccess(char* addr, uint64_t size_mask) {
     uint64_t off = turbo::wyhash64() & size_mask;
     int loop = FLAGS_loop;
     while (loop--) {
-        uint64_t off = turbo::wyhash64() & size_mask;
-        volatile char tmp = *(addr + off);
-        off += 64;
+        // uint64_t off = turbo::wyhash64() & size_mask;
+        volatile uint64_t tmp = *(uint64_t*)(addr + off);
+        off += 24576;
+        off &= size_mask;
     }
 }
 
-inline void  // __attribute__((optimize("O0"),always_inline))
+inline void __attribute__((optimize("O0"),always_inline))
 ConAccess(char* addr, uint64_t size_mask) {
     uint64_t off = turbo::wyhash64() & size_mask;
     int loop = FLAGS_loop;
     while (loop--) {
-        uint64_t off_tmp = turbo::wyhash64() & size_mask;
-        volatile char tmp = *(addr + off);
+        // uint64_t off_tmp = turbo::wyhash64() & size_mask;
+        volatile uint64_t tmp = *(uint64_t*)(addr + off);
         off += 64;
     }
 }
@@ -59,25 +60,26 @@ RndWrite(char* addr, uint64_t size_mask) {
     uint64_t off = turbo::wyhash64() & size_mask;
     int loop = FLAGS_loop;
     while (loop--) {
-        uint64_t off = turbo::wyhash64() & size_mask;
+        // uint64_t off = turbo::wyhash64() & size_mask;
         volatile char tmp = *(addr + off);
-        memset(addr + off, 32, 1);  
+        memset(addr + off, 32, 8);
         #ifdef IS_PMEM      
         FLUSH(addr + off);
         // FLUSHFENCE;
         #endif
-        off += 64;
+        off += 24576;
+        off &= size_mask;
     }
 }
 
-inline void  // __attribute__((optimize("O0"),always_inline))
+inline void __attribute__((optimize("O0"),always_inline))
 ConWrite(char* addr, uint64_t size_mask) {
     uint64_t off = turbo::wyhash64() & size_mask;
     int loop = FLAGS_loop;
     while (loop--) {
-        uint64_t off_tmp = turbo::wyhash64() & size_mask;
+        // uint64_t off_tmp = turbo::wyhash64() & size_mask;
         volatile char tmp = *(addr + off);
-        memset(addr + off, 32, 1);
+        memset(addr + off, 32, 8);
         #ifdef IS_PMEM      
         FLUSH(addr + off);
         // FLUSHFENCE;

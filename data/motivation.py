@@ -8,7 +8,7 @@ from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
 # import matplotlib as mpl
 plt.rcParams["font.family"] = "serif"
-plt.rcParams['axes.linewidth'] = 1.2
+# plt.rcParams['axes.linewidth'] = 1.2
 
 def PlotMiss(data, lines, latency, filename, islog):
     markers = ['x', '+', '.', 'o']
@@ -20,19 +20,20 @@ def PlotMiss(data, lines, latency, filename, islog):
     # plot bar
     data[latency].plot.bar(ax=ax2, alpha=0.8, color=("white", "white"), edgecolor='k', fontsize=9)
     bars = ax2.patches
-    hatches = ''.join(h*len(data) for h in 'x .')
+    hatches = ''.join(h*len(data) for h in ' x .')
     for bar, hatch in zip(bars, hatches):
         bar.set_hatch(hatch)
-    ax2.text(0.05, 0.97, "ns", 
-        horizontalalignment='center',
-        verticalalignment='center',
-        transform = ax2.transAxes,
-        fontsize=12)
+    # ax2.text(0.05, 0.97, "ns", 
+    #     horizontalalignment='center',
+    #     verticalalignment='center',
+    #     transform = ax2.transAxes,
+    #     fontsize=12)
     ticks_loc = ax2.get_yticks().tolist()
     ax2.yaxis.set_major_locator(mticker.FixedLocator(ticks_loc))
     ax2.yaxis.set_major_formatter(FormatStrFormatter('%d'))
     # For the minor ticks, use no labels; default NullFormatter.
     # ax2.yaxis.set_minor_locator(MultipleLocator(100))
+    ax2.set_ylabel("Latency (ns)", fontsize=16)
     ax2.set_xticklabels(data.access_size.values, fontsize=16, rotation=0)
     ax2.tick_params(axis="y", direction="inout", pad=-28)
     ax2.legend(loc="upper center", fontsize=10, edgecolor='none')
