@@ -1,32 +1,32 @@
-[  3%] Built target absl_strerror
-[  5%] Built target gflags_nothreads_static
+[  1%] Built target absl_strerror
 [  5%] Built target absl_spinlock_wait
-[  5%] Built target absl_log_severity
-[  6%] Built target absl_exponential_biased
+[  5%] Built target gflags_nothreads_static
+[  7%] Built target absl_log_severity
+[  7%] Built target absl_exponential_biased
 [  7%] Built target absl_dynamic_annotations
-[  8%] Built target absl_civil_time
-[  9%] Generating libPCM.a
-[ 11%] Built target absl_int128
+[  8%] Built target absl_int128
+[  9%] Built target absl_civil_time
+[ 11%] Built target absl_leak_check
 [ 11%] Built target absl_leak_check_disable
-[ 12%] Built target absl_leak_check
 [ 13%] Built target absl_random_internal_platform
-[ 16%] Built target absl_city
+[ 13%] Built target absl_city
 [ 16%] Built target absl_random_seed_gen_exception
 [ 20%] Built target absl_time_zone
+[ 20%] Generating libPCM.a
+[ 21%] Built target absl_periodic_sampler
 [ 22%] Built target absl_raw_logging_internal
-[ 22%] Built target absl_periodic_sampler
-[ 23%] Built target absl_random_internal_randen_slow
-[ 24%] Built target absl_random_internal_randen_hwaes_impl
+[ 23%] Built target absl_random_internal_randen_hwaes_impl
+[ 24%] Built target absl_random_internal_randen_slow
 [ 24%] Built target pcm
-[ 27%] Built target absl_throw_delegate
-[ 27%] Built target absl_scoped_set_env
+[ 25%] Built target absl_throw_delegate
+[ 26%] Built target absl_scoped_set_env
 [ 27%] Built target absl_bad_optional_access
-[ 28%] Built target absl_bad_variant_access
+[ 28%] Built target absl_bad_any_cast_impl
 [ 31%] Built target absl_debugging_internal
-[ 33%] Built target absl_bad_any_cast_impl
-[ 33%] Built target absl_base
-[ 37%] Built target absl_random_internal_randen_hwaes
-[ 37%] Built target absl_strings_internal
+[ 32%] Built target absl_base
+[ 33%] Built target absl_bad_variant_access
+[ 34%] Built target absl_random_internal_randen_hwaes
+[ 36%] Built target absl_strings_internal
 [ 43%] Built target util
 [ 43%] Built target absl_stacktrace
 [ 44%] Built target absl_demangle_internal
@@ -38,7 +38,7 @@
 [ 55%] Built target absl_hash
 [ 57%] Built target absl_random_distributions
 [ 58%] Built target absl_random_internal_seed_material
-[ 62%] Built target absl_time
+[ 61%] Built target absl_time
 [ 62%] Built target absl_cord
 [ 65%] Built target absl_str_format_internal
 [ 66%] Built target absl_examine_stack
@@ -56,20 +56,20 @@
 [ 81%] Built target absl_flags_config
 [ 82%] Built target absl_raw_hash_set
 Scanning dependencies of target motivation
-[ 82%] Built target test_spinlock_test
-[ 83%] Built target test_loadfactor_probe_dis
-[ 84%] Built target test_trace_test
-[ 85%] Built target test_ralloc_test
-[ 87%] Built target absl_flags_registry
-[ 88%] Built target turbo_hash_test
-[ 90%] Built target mem_bench
-[ 91%] Built target test_hash_test
+[ 84%] Built target absl_flags_registry
+[ 85%] Built target test_loadfactor_probe_dis
+[ 87%] Built target test_trace_test
+[ 87%] Built target test_hash_test
+[ 88%] Built target mem_bench
+[ 89%] Built target turbo_hash_test
+[ 89%] Built target test_spinlock_test
+[ 90%] Built target test_hello_libpmem
+[ 92%] Built target test_ralloc_test
 [ 92%] Built target test_pmem_hash_recover_test
 [ 93%] Built target test_bitset_test
-[ 93%] Built target test_pmem_hash_test
-[ 94%] Built target hash_bench
-[ 96%] Built target test_hello_libpmem
-[ 96%] Built target hash_bench_old
+[ 94%] Built target test_pmem_hash_test
+[ 95%] Built target hash_bench_old
+[ 96%] Built target hash_bench
 [ 96%] Building CXX object src/test/CMakeFiles/motivation.dir/motivation.cc.o
 [ 97%] Built target absl_flags_internal
 [ 98%] Built target absl_flags
@@ -81,105 +81,105 @@ Scanning dependencies of target motivation
  ========= 1 ======= 
 [32mStart IPMWatcher for pmem
 [0m[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.79 |        1024.13 |        5.71 |      1027.93 |   7.23 |   1.00 |[0m
+  MB  |          0.64 |        1024.07 |        5.88 |      1028.28 |   9.23 |   1.00 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.79 |        1024.12 |       10.06 |      1029.90 |  12.76 |   1.01 |[0m
+  MB  |          0.64 |        1024.07 |        9.05 |      1029.18 |  14.21 |   1.00 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.78 |        1024.12 |        5.76 |      1028.02 |   7.40 |   1.00 |[0m
+  MB  |          0.64 |        1024.06 |        5.88 |      1028.15 |   9.23 |   1.00 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.79 |        1024.12 |        4.91 |      1028.42 |   6.23 |   1.00 |[0m
-[34m*SUM* | DIMM-R:    26.9 MB/s. User-R:     3.2 MB/s   | DIMM-W:  4184.6 MB/s, User-W:  4166.5 MB/s. Time:   0.98s.[0m
+  MB  |          0.63 |        1024.07 |        9.45 |      1033.04 |  14.98 |   1.01 |[0m
+[34m*SUM* | DIMM-R:    31.5 MB/s. User-R:     2.6 MB/s   | DIMM-W:  4285.4 MB/s, User-W:  4262.2 MB/s. Time:   0.96s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_read
 [0mPCM Metrics: rnd_read
-	DRAM Read  (bytes): 53550080
-	DRAM Write (bytes): 50879552
-	PMEM Read  (bytes): 639308800
+	DRAM Read  (bytes): 58668416
+	DRAM Write (bytes): 60315264
+	PMEM Read  (bytes): 639377280
 	PMEM Write (bytes): 0
-	DRAM Read    Speed: 88.6222 MB/s
-	DRAM Write   Speed: 84.2026 MB/s
-	PMEM Read    Speed: 1058.02 MB/s
+	DRAM Read    Speed: 86.4697 MB/s
+	DRAM Write   Speed: 88.8969 MB/s
+	PMEM Read    Speed: 942.36 MB/s
 	PMEM Write   Speed: 0 MB/s
-	Duration: 0.576259 s
+	Duration: 0.647054 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.39 |           0.02 |      609.41 |         0.83 |   4.00 |  46.55 |[0m
+  MB  |        152.53 |           0.02 |      610.02 |         0.89 |   4.00 |  50.16 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.55 |           0.02 |      610.11 |         0.85 |   4.00 |  47.71 |[0m
+  MB  |        152.33 |           0.02 |      609.23 |         0.89 |   4.00 |  50.15 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.55 |           0.02 |      610.05 |         0.84 |   4.00 |  46.95 |[0m
+  MB  |        152.59 |           0.02 |      610.26 |         0.89 |   4.00 |  50.10 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.40 |           0.02 |      609.48 |         0.84 |   4.00 |  47.03 |[0m
-[34m*SUM* | DIMM-R:  3373.1 MB/s. User-R:   843.4 MB/s   | DIMM-W:     4.6 MB/s, User-W:     0.1 MB/s. Time:   0.72s.[0m
+  MB  |        152.48 |           0.02 |      609.84 |         0.91 |   4.00 |  51.01 |[0m
+[34m*SUM* | DIMM-R:  3067.4 MB/s. User-R:   767.0 MB/s   | DIMM-W:     4.5 MB/s, User-W:     0.1 MB/s. Time:   0.80s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_read
 [0mPCM Metrics: seq_read
-	DRAM Read  (bytes): 88019968
-	DRAM Write (bytes): 80500352
-	PMEM Read  (bytes): 639417280
+	DRAM Read  (bytes): 260330880
+	DRAM Write (bytes): 133643968
+	PMEM Read  (bytes): 639448832
 	PMEM Write (bytes): 0
-	DRAM Read    Speed: 129.312 MB/s
-	DRAM Write   Speed: 118.264 MB/s
-	PMEM Read    Speed: 939.379 MB/s
+	DRAM Read    Speed: 333.041 MB/s
+	DRAM Write   Speed: 170.971 MB/s
+	PMEM Read    Speed: 818.047 MB/s
 	PMEM Write   Speed: 0 MB/s
-	Duration: 0.649148 s
+	Duration: 0.745466 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.63 |           0.02 |      610.39 |         0.80 |   4.00 |  44.73 |[0m
+  MB  |        152.50 |           0.02 |      609.90 |         0.88 |   4.00 |  49.30 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.40 |           0.02 |      609.50 |         0.82 |   4.00 |  45.95 |[0m
+  MB  |        152.43 |           0.02 |      609.63 |         0.89 |   4.00 |  49.89 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.42 |           0.02 |      609.54 |         0.81 |   4.00 |  45.19 |[0m
+  MB  |        152.63 |           0.02 |      610.42 |         0.88 |   4.00 |  49.41 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.53 |           0.02 |      610.01 |         0.81 |   4.00 |  45.51 |[0m
-[34m*SUM* | DIMM-R:  3621.6 MB/s. User-R:   905.6 MB/s   | DIMM-W:     4.8 MB/s, User-W:     0.1 MB/s. Time:   0.67s.[0m
+  MB  |        152.44 |           0.02 |      609.70 |         0.90 |   4.00 |  50.52 |[0m
+[34m*SUM* | DIMM-R:  3163.0 MB/s. User-R:   790.9 MB/s   | DIMM-W:     4.6 MB/s, User-W:     0.1 MB/s. Time:   0.77s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_write
 [0mPCM Metrics: rnd_write
-	DRAM Read  (bytes): 46939072
-	DRAM Write (bytes): 37831424
-	PMEM Read  (bytes): 640089856
+	DRAM Read  (bytes): 98315200
+	DRAM Write (bytes): 81845824
+	PMEM Read  (bytes): 640127936
 	PMEM Write (bytes): 640000000
-	DRAM Read    Speed: 40.7302 MB/s
-	DRAM Write   Speed: 32.8273 MB/s
-	PMEM Read    Speed: 555.422 MB/s
-	PMEM Write   Speed: 555.344 MB/s
-	Duration: 1.09905 s
+	DRAM Read    Speed: 85.6771 MB/s
+	DRAM Write   Speed: 71.3248 MB/s
+	PMEM Read    Speed: 557.841 MB/s
+	PMEM Write   Speed: 557.73 MB/s
+	Duration: 1.09435 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.65 |         152.60 |      613.18 |       612.73 |   4.02 |   4.02 |[0m
+  MB  |        152.61 |         152.55 |      614.17 |       613.10 |   4.02 |   4.02 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.67 |         152.62 |      616.29 |       614.29 |   4.04 |   4.03 |[0m
+  MB  |        152.76 |         152.70 |      615.92 |       614.20 |   4.03 |   4.02 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.65 |         152.60 |      613.05 |       612.67 |   4.02 |   4.01 |[0m
+  MB  |        152.65 |         152.59 |      614.12 |       613.13 |   4.02 |   4.02 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.65 |         152.60 |      613.06 |       612.80 |   4.02 |   4.02 |[0m
-[34m*SUM* | DIMM-R:  2186.0 MB/s. User-R:   543.6 MB/s   | DIMM-W:  2183.3 MB/s, User-W:   543.4 MB/s. Time:   1.12s.[0m
+  MB  |        152.63 |         152.58 |      619.57 |       616.07 |   4.06 |   4.04 |[0m
+[34m*SUM* | DIMM-R:  2201.4 MB/s. User-R:   545.6 MB/s   | DIMM-W:  2194.9 MB/s, User-W:   545.4 MB/s. Time:   1.12s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_write
 [0mPCM Metrics: seq_write
-	DRAM Read  (bytes): 355994240
-	DRAM Write (bytes): 342630080
-	PMEM Read  (bytes): 640100672
-	PMEM Write (bytes): 640012864
-	DRAM Read    Speed: 304.181 MB/s
-	DRAM Write   Speed: 292.762 MB/s
-	PMEM Read    Speed: 546.937 MB/s
-	PMEM Write   Speed: 546.862 MB/s
-	Duration: 1.11612 s
+	DRAM Read  (bytes): 116748928
+	DRAM Write (bytes): 116546560
+	PMEM Read  (bytes): 640085632
+	PMEM Write (bytes): 640000000
+	DRAM Read    Speed: 94.5664 MB/s
+	DRAM Write   Speed: 94.4024 MB/s
+	PMEM Read    Speed: 518.468 MB/s
+	PMEM Write   Speed: 518.399 MB/s
+	Duration: 1.17738 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.50 |         152.45 |      612.50 |       612.10 |   4.02 |   4.02 |[0m
+  MB  |        152.74 |         152.70 |      614.59 |       613.67 |   4.02 |   4.02 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.52 |         152.47 |      615.70 |       613.73 |   4.04 |   4.03 |[0m
+  MB  |        152.59 |         152.54 |      615.37 |       613.63 |   4.03 |   4.02 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.85 |         152.80 |      613.95 |       613.54 |   4.02 |   4.02 |[0m
+  MB  |        152.64 |         152.59 |      613.94 |       613.11 |   4.02 |   4.02 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        152.75 |         152.71 |      613.47 |       613.23 |   4.02 |   4.02 |[0m
-[34m*SUM* | DIMM-R:  2129.7 MB/s. User-R:   529.6 MB/s   | DIMM-W:  2127.0 MB/s, User-W:   529.4 MB/s. Time:   1.15s.[0m
+  MB  |        152.65 |         152.60 |      619.53 |       616.13 |   4.06 |   4.04 |[0m
+[34m*SUM* | DIMM-R:  2047.5 MB/s. User-R:   507.5 MB/s   | DIMM-W:  2041.8 MB/s, User-W:   507.4 MB/s. Time:   1.20s.[0m
 [32mDestroy IPMWatcher.
 [0m
-jump perf.data.2021010510394090
+jump perf.data.2021010514071275
 ---------- size 1 result ----------
 ---------- size 1 result ----------
 ---------- size 1 result ----------
@@ -187,105 +187,105 @@ jump perf.data.2021010510394090
  ========= 2 ======= 
 [32mStart IPMWatcher for pmem
 [0m[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.66 |        1024.08 |        5.34 |      1027.80 |   8.04 |   1.00 |[0m
+  MB  |          0.65 |        1024.08 |        5.81 |      1028.19 |   8.89 |   1.00 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.67 |        1024.08 |        9.68 |      1029.82 |  14.47 |   1.01 |[0m
+  MB  |          0.65 |        1024.07 |        9.24 |      1029.34 |  14.32 |   1.01 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.66 |        1024.08 |        5.37 |      1027.87 |   8.08 |   1.00 |[0m
+  MB  |          0.65 |        1024.07 |        5.72 |      1028.04 |   8.76 |   1.00 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.66 |        1024.08 |        4.54 |      1028.28 |   6.93 |   1.00 |[0m
-[34m*SUM* | DIMM-R:    25.9 MB/s. User-R:     2.8 MB/s   | DIMM-W:  4276.7 MB/s, User-W:  4258.5 MB/s. Time:   0.96s.[0m
+  MB  |          0.65 |        1024.08 |        9.42 |      1033.00 |  14.44 |   1.01 |[0m
+[34m*SUM* | DIMM-R:    31.0 MB/s. User-R:     2.7 MB/s   | DIMM-W:  4228.3 MB/s, User-W:  4205.4 MB/s. Time:   0.97s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_read
 [0mPCM Metrics: rnd_read
-	DRAM Read  (bytes): 379331328
-	DRAM Write (bytes): 392482368
-	PMEM Read  (bytes): 1278516160
-	PMEM Write (bytes): 0
-	DRAM Read    Speed: 441.534 MB/s
-	DRAM Write   Speed: 456.842 MB/s
-	PMEM Read    Speed: 1488.17 MB/s
-	PMEM Write   Speed: 0 MB/s
-	Duration: 0.819322 s
+	DRAM Read  (bytes): 240479488
+	DRAM Write (bytes): 125258816
+	PMEM Read  (bytes): 1278192448
+	PMEM Write (bytes): 64
+	DRAM Read    Speed: 215.636 MB/s
+	DRAM Write   Speed: 112.318 MB/s
+	PMEM Read    Speed: 1146.14 MB/s
+	PMEM Write   Speed: 5.73882e-05 MB/s
+	Duration: 1.06355 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        304.87 |           0.02 |     1219.39 |         1.15 |   4.00 |  64.32 |[0m
+  MB  |        304.89 |           0.02 |     1219.49 |         1.34 |   4.00 |  75.45 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        304.86 |           0.02 |     1219.42 |         1.18 |   4.00 |  66.03 |[0m
+  MB  |        304.50 |           0.02 |     1217.96 |         1.36 |   4.00 |  76.27 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        304.86 |           0.02 |     1219.34 |         1.14 |   4.00 |  64.22 |[0m
+  MB  |        304.99 |           0.02 |     1219.91 |         1.34 |   4.00 |  75.14 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        304.87 |           0.02 |     1219.41 |         1.16 |   4.00 |  65.22 |[0m
-[34m*SUM* | DIMM-R:  5051.5 MB/s. User-R:  1262.9 MB/s   | DIMM-W:     4.8 MB/s, User-W:     0.1 MB/s. Time:   0.97s.[0m
+  MB  |        304.78 |           0.02 |     1219.14 |         1.40 |   4.00 |  78.75 |[0m
+[34m*SUM* | DIMM-R:  4032.7 MB/s. User-R:  1008.2 MB/s   | DIMM-W:     4.5 MB/s, User-W:     0.1 MB/s. Time:   1.21s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_read
 [0mPCM Metrics: seq_read
-	DRAM Read  (bytes): 49027456
-	DRAM Write (bytes): 42909952
-	PMEM Read  (bytes): 1288221440
+	DRAM Read  (bytes): 229653632
+	DRAM Write (bytes): 188546560
+	PMEM Read  (bytes): 1298926528
 	PMEM Write (bytes): 0
-	DRAM Read    Speed: 56.9895 MB/s
-	DRAM Write   Speed: 49.8785 MB/s
-	PMEM Read    Speed: 1497.43 MB/s
+	DRAM Read    Speed: 232.304 MB/s
+	DRAM Write   Speed: 190.723 MB/s
+	PMEM Read    Speed: 1313.92 MB/s
 	PMEM Write   Speed: 0 MB/s
-	Duration: 0.820436 s
+	Duration: 0.942793 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        307.43 |           0.02 |      619.59 |         0.94 |   2.02 |  52.67 |[0m
+  MB  |        309.71 |           0.02 |      628.88 |         1.04 |   2.03 |  58.21 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        307.01 |           0.02 |      618.84 |         0.95 |   2.02 |  53.47 |[0m
+  MB  |        309.59 |           0.02 |      628.79 |         1.06 |   2.03 |  59.66 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        307.04 |           0.02 |      618.87 |         0.94 |   2.02 |  52.85 |[0m
+  MB  |        310.00 |           0.02 |      629.53 |         1.04 |   2.03 |  58.45 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        307.24 |           0.02 |      619.16 |         0.95 |   2.02 |  53.18 |[0m
-[34m*SUM* | DIMM-R:  2926.3 MB/s. User-R:  1451.9 MB/s   | DIMM-W:     4.5 MB/s, User-W:     0.1 MB/s. Time:   0.85s.[0m
+  MB  |        309.63 |           0.02 |      628.78 |         1.06 |   2.03 |  59.68 |[0m
+[34m*SUM* | DIMM-R:  2598.1 MB/s. User-R:  1279.4 MB/s   | DIMM-W:     4.3 MB/s, User-W:     0.1 MB/s. Time:   0.97s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_write
 [0mPCM Metrics: rnd_write
-	DRAM Read  (bytes): 146542528
-	DRAM Write (bytes): 112755200
-	PMEM Read  (bytes): 1280551680
-	PMEM Write (bytes): 1280012672
-	DRAM Read    Speed: 75.1955 MB/s
-	DRAM Write   Speed: 57.8581 MB/s
-	PMEM Read    Speed: 657.09 MB/s
-	PMEM Write   Speed: 656.814 MB/s
-	Duration: 1.85854 s
+	DRAM Read  (bytes): 261753024
+	DRAM Write (bytes): 131357952
+	PMEM Read  (bytes): 1280115136
+	PMEM Write (bytes): 1280132864
+	DRAM Read    Speed: 112.493 MB/s
+	DRAM Write   Speed: 56.4535 MB/s
+	PMEM Read    Speed: 550.153 MB/s
+	PMEM Write   Speed: 550.161 MB/s
+	Duration: 2.21904 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        305.34 |         305.20 |     1226.90 |      1225.27 |   4.02 |   4.01 |[0m
+  MB  |        305.13 |         305.09 |     1227.72 |      1225.84 |   4.02 |   4.02 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        305.38 |         305.21 |     1232.56 |      1227.95 |   4.04 |   4.02 |[0m
+  MB  |        305.44 |         305.39 |     1231.80 |      1228.35 |   4.03 |   4.02 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        305.35 |         305.19 |     1226.96 |      1225.19 |   4.02 |   4.01 |[0m
+  MB  |        305.22 |         305.17 |     1227.66 |      1225.96 |   4.02 |   4.02 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        305.33 |         305.19 |     1226.97 |      1225.50 |   4.02 |   4.02 |[0m
-[34m*SUM* | DIMM-R:  2608.4 MB/s. User-R:   648.4 MB/s   | DIMM-W:  2603.3 MB/s, User-W:   648.1 MB/s. Time:   1.88s.[0m
+  MB  |        305.18 |         305.14 |     1238.82 |      1231.90 |   4.06 |   4.04 |[0m
+[34m*SUM* | DIMM-R:  2194.3 MB/s. User-R:   543.9 MB/s   | DIMM-W:  2188.1 MB/s, User-W:   543.8 MB/s. Time:   2.24s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_write
 [0mPCM Metrics: seq_write
-	DRAM Read  (bytes): 362190464
-	DRAM Write (bytes): 352637888
-	PMEM Read  (bytes): 1287134976
+	DRAM Read  (bytes): 236972352
+	DRAM Write (bytes): 193056512
+	PMEM Read  (bytes): 1285213632
 	PMEM Write (bytes): 1280000000
-	DRAM Read    Speed: 238.531 MB/s
-	DRAM Write   Speed: 232.24 MB/s
-	PMEM Read    Speed: 847.68 MB/s
-	PMEM Write   Speed: 842.981 MB/s
-	Duration: 1.44808 s
+	DRAM Read    Speed: 155.92 MB/s
+	DRAM Write   Speed: 127.025 MB/s
+	PMEM Read    Speed: 845.631 MB/s
+	PMEM Write   Speed: 842.201 MB/s
+	Duration: 1.44942 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        306.56 |         304.88 |      618.41 |       612.31 |   2.02 |   2.01 |[0m
+  MB  |        306.63 |         305.37 |      618.82 |       613.79 |   2.02 |   2.01 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        306.64 |         304.92 |      621.90 |       614.04 |   2.03 |   2.01 |[0m
+  MB  |        306.33 |         305.06 |      619.70 |       613.85 |   2.02 |   2.01 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        307.35 |         305.59 |      620.01 |       613.72 |   2.02 |   2.01 |[0m
+  MB  |        306.44 |         305.16 |      618.20 |       613.25 |   2.02 |   2.01 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        307.11 |         305.39 |      619.52 |       613.46 |   2.02 |   2.01 |[0m
-[34m*SUM* | DIMM-R:  1683.5 MB/s. User-R:   833.4 MB/s   | DIMM-W:  1665.7 MB/s, User-W:   828.8 MB/s. Time:   1.47s.[0m
+  MB  |        306.44 |         305.18 |      623.87 |       616.35 |   2.04 |   2.02 |[0m
+[34m*SUM* | DIMM-R:  1682.4 MB/s. User-R:   831.4 MB/s   | DIMM-W:  1666.6 MB/s, User-W:   828.0 MB/s. Time:   1.47s.[0m
 [32mDestroy IPMWatcher.
 [0m
-jump perf.data.2021010510395032
+jump perf.data.2021010514072221
 ---------- size 2 result ----------
 ---------- size 2 result ----------
 ---------- size 2 result ----------
@@ -293,105 +293,105 @@ jump perf.data.2021010510395032
  ========= 4 ======= 
 [32mStart IPMWatcher for pmem
 [0m[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.65 |        1024.07 |        5.21 |      1027.74 |   8.05 |   1.00 |[0m
+  MB  |          0.63 |        1024.07 |        5.85 |      1028.18 |   9.24 |   1.00 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.65 |        1024.07 |        9.74 |      1029.82 |  15.05 |   1.01 |[0m
+  MB  |          0.64 |        1024.07 |        9.08 |      1029.18 |  14.20 |   1.00 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.64 |        1024.07 |        5.16 |      1027.69 |   8.04 |   1.00 |[0m
+  MB  |          0.64 |        1024.06 |        5.41 |      1027.82 |   8.52 |   1.00 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.63 |        1024.07 |        4.34 |      1028.10 |   6.84 |   1.00 |[0m
-[34m*SUM* | DIMM-R:    25.3 MB/s. User-R:     2.7 MB/s   | DIMM-W:  4254.1 MB/s, User-W:  4236.4 MB/s. Time:   0.97s.[0m
+  MB  |          0.63 |        1024.07 |        9.25 |      1032.82 |  14.60 |   1.01 |[0m
+[34m*SUM* | DIMM-R:    30.8 MB/s. User-R:     2.6 MB/s   | DIMM-W:  4283.3 MB/s, User-W:  4260.6 MB/s. Time:   0.96s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_read
 [0mPCM Metrics: rnd_read
-	DRAM Read  (bytes): 445789120
-	DRAM Write (bytes): 392625600
-	PMEM Read  (bytes): 2557324864
+	DRAM Read  (bytes): 480138688
+	DRAM Write (bytes): 311062016
+	PMEM Read  (bytes): 2555924864
 	PMEM Write (bytes): 0
-	DRAM Read    Speed: 265.27 MB/s
-	DRAM Write   Speed: 233.635 MB/s
-	PMEM Read    Speed: 1521.76 MB/s
+	DRAM Read    Speed: 196.789 MB/s
+	DRAM Write   Speed: 127.491 MB/s
+	PMEM Read    Speed: 1047.57 MB/s
 	PMEM Write   Speed: 0 MB/s
-	Duration: 1.60266 s
+	Duration: 2.32684 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        609.76 |           0.02 |     2439.00 |         2.01 |   4.00 | 113.05 |[0m
+  MB  |        609.63 |           0.02 |     2438.57 |         2.58 |   4.00 | 144.88 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        609.77 |           0.02 |     2439.10 |         2.08 |   4.00 | 116.56 |[0m
+  MB  |        608.82 |           0.02 |     2435.41 |         2.64 |   4.00 | 147.95 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        609.76 |           0.02 |     2438.96 |         2.02 |   4.00 | 113.21 |[0m
+  MB  |        609.87 |           0.02 |     2439.48 |         2.58 |   4.00 | 144.49 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        609.76 |           0.02 |     2439.01 |         2.03 |   4.00 | 113.95 |[0m
-[34m*SUM* | DIMM-R:  5572.3 MB/s. User-R:  1393.1 MB/s   | DIMM-W:     4.6 MB/s, User-W:     0.0 MB/s. Time:   1.75s.[0m
+  MB  |        609.39 |           0.02 |     2437.78 |         2.69 |   4.00 | 150.84 |[0m
+[34m*SUM* | DIMM-R:  3944.0 MB/s. User-R:   986.0 MB/s   | DIMM-W:     4.2 MB/s, User-W:     0.0 MB/s. Time:   2.47s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_read
 [0mPCM Metrics: seq_read
-	DRAM Read  (bytes): 429680832
-	DRAM Write (bytes): 140519936
-	PMEM Read  (bytes): 2569924224
-	PMEM Write (bytes): 0
-	DRAM Read    Speed: 314.727 MB/s
-	DRAM Write   Speed: 102.926 MB/s
-	PMEM Read    Speed: 1882.39 MB/s
-	PMEM Write   Speed: 0 MB/s
-	Duration: 1.302 s
+	DRAM Read  (bytes): 119101312
+	DRAM Write (bytes): 97502656
+	PMEM Read  (bytes): 2652706176
+	PMEM Write (bytes): 43328
+	DRAM Read    Speed: 78.698 MB/s
+	DRAM Write   Speed: 64.4264 MB/s
+	PMEM Read    Speed: 1752.82 MB/s
+	PMEM Write   Speed: 0.0286296 MB/s
+	Duration: 1.44329 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        613.32 |           0.02 |      625.49 |         1.29 |   1.02 |  72.59 |[0m
+  MB  |        632.19 |           0.03 |      703.17 |         1.44 |   1.11 |  56.12 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        612.39 |           0.02 |      624.53 |         1.30 |   1.02 |  73.15 |[0m
+  MB  |        631.94 |           0.03 |      703.30 |         1.45 |   1.11 |  56.64 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        612.43 |           0.02 |      624.67 |         1.30 |   1.02 |  72.99 |[0m
+  MB  |        633.40 |           0.03 |      706.67 |         1.45 |   1.12 |  56.10 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        612.92 |           0.02 |      625.08 |         1.31 |   1.02 |  73.59 |[0m
-[34m*SUM* | DIMM-R:  1881.3 MB/s. User-R:  1844.6 MB/s   | DIMM-W:     3.9 MB/s, User-W:     0.1 MB/s. Time:   1.33s.[0m
+  MB  |        632.47 |           0.02 |      705.14 |         1.47 |   1.11 |  82.64 |[0m
+[34m*SUM* | DIMM-R:  1919.2 MB/s. User-R:  1722.9 MB/s   | DIMM-W:     4.0 MB/s, User-W:     0.1 MB/s. Time:   1.47s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_write
 [0mPCM Metrics: rnd_write
-	DRAM Read  (bytes): 507052096
-	DRAM Write (bytes): 466565120
-	PMEM Read  (bytes): 2560329792
-	PMEM Write (bytes): 2560013632
-	DRAM Read    Speed: 128.005 MB/s
-	DRAM Write   Speed: 117.784 MB/s
-	PMEM Read    Speed: 646.356 MB/s
-	PMEM Write   Speed: 646.276 MB/s
-	Duration: 3.77767 s
+	DRAM Read  (bytes): 891012160
+	DRAM Write (bytes): 383107712
+	PMEM Read  (bytes): 2560510208
+	PMEM Write (bytes): 2560000000
+	DRAM Read    Speed: 183.819 MB/s
+	DRAM Write   Speed: 79.0365 MB/s
+	PMEM Read    Speed: 528.243 MB/s
+	PMEM Write   Speed: 528.137 MB/s
+	Duration: 4.62267 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        610.49 |         610.39 |     2453.60 |      2450.60 |   4.02 |   4.01 |[0m
+  MB  |        610.26 |         610.16 |     2455.17 |      2451.52 |   4.02 |   4.02 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        610.50 |         610.39 |     2464.85 |      2456.22 |   4.04 |   4.02 |[0m
+  MB  |        610.85 |         610.75 |     2463.77 |      2456.80 |   4.03 |   4.02 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        610.45 |         610.36 |     2453.29 |      2450.40 |   4.02 |   4.01 |[0m
+  MB  |        610.42 |         610.32 |     2454.61 |      2451.53 |   4.02 |   4.02 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        610.45 |         610.35 |     2453.69 |      2451.12 |   4.02 |   4.02 |[0m
-[34m*SUM* | DIMM-R:  2583.5 MB/s. User-R:   642.1 MB/s   | DIMM-W:  2579.0 MB/s, User-W:   642.0 MB/s. Time:   3.80s.[0m
+  MB  |        610.35 |         610.25 |     2477.54 |      2463.72 |   4.06 |   4.04 |[0m
+[34m*SUM* | DIMM-R:  2118.7 MB/s. User-R:   525.2 MB/s   | DIMM-W:  2112.8 MB/s, User-W:   525.1 MB/s. Time:   4.65s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_write
 [0mPCM Metrics: seq_write
-	DRAM Read  (bytes): 412414848
-	DRAM Write (bytes): 387473408
-	PMEM Read  (bytes): 2771553984
+	DRAM Read  (bytes): 254661184
+	DRAM Write (bytes): 201704128
+	PMEM Read  (bytes): 2691247552
 	PMEM Write (bytes): 2560000000
-	DRAM Read    Speed: 196.573 MB/s
-	DRAM Write   Speed: 184.685 MB/s
-	PMEM Read    Speed: 1321.03 MB/s
-	PMEM Write   Speed: 1220.2 MB/s
-	Duration: 2.00083 s
+	DRAM Read    Speed: 123.377 MB/s
+	DRAM Write   Speed: 97.7208 MB/s
+	PMEM Read    Speed: 1303.84 MB/s
+	PMEM Write   Speed: 1240.26 MB/s
+	Duration: 1.96847 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        657.74 |         609.74 |      788.18 |       612.94 |   1.20 |   1.01 |[0m
+  MB  |        640.93 |         610.73 |      727.41 |       614.30 |   1.13 |   1.01 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        658.28 |         609.82 |      792.81 |       614.64 |   1.20 |   1.01 |[0m
+  MB  |        640.68 |         610.09 |      729.58 |       614.50 |   1.14 |   1.01 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        660.10 |         611.16 |      791.88 |       614.31 |   1.20 |   1.01 |[0m
+  MB  |        641.02 |         610.31 |      728.52 |       613.78 |   1.14 |   1.01 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |        659.21 |         610.76 |      790.34 |       614.01 |   1.20 |   1.01 |[0m
-[34m*SUM* | DIMM-R:  1561.4 MB/s. User-R:  1300.8 MB/s   | DIMM-W:  1212.3 MB/s, User-W:  1205.2 MB/s. Time:   2.03s.[0m
+  MB  |        640.58 |         610.35 |      733.18 |       617.04 |   1.14 |   1.01 |[0m
+[34m*SUM* | DIMM-R:  1463.6 MB/s. User-R:  1285.3 MB/s   | DIMM-W:  1233.4 MB/s, User-W:  1224.3 MB/s. Time:   1.99s.[0m
 [32mDestroy IPMWatcher.
 [0m
-jump perf.data.2021010510400178
+jump perf.data.2021010514073364
 ---------- size 4 result ----------
 ---------- size 4 result ----------
 ---------- size 4 result ----------
@@ -399,105 +399,105 @@ jump perf.data.2021010510400178
  ========= 8 ======= 
 [32mStart IPMWatcher for pmem
 [0m[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.66 |        1024.08 |        5.05 |      1027.65 |   7.66 |   1.00 |[0m
+  MB  |          0.62 |        1024.06 |        5.57 |      1027.96 |   8.93 |   1.00 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.65 |        1024.07 |        9.72 |      1029.78 |  14.98 |   1.01 |[0m
+  MB  |          0.62 |        1024.06 |        9.17 |      1029.28 |  14.75 |   1.01 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.64 |        1024.07 |        5.20 |      1027.77 |   8.10 |   1.00 |[0m
+  MB  |          0.62 |        1024.06 |        5.24 |      1027.67 |   8.40 |   1.00 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.65 |        1024.07 |        4.19 |      1028.01 |   6.48 |   1.00 |[0m
-[34m*SUM* | DIMM-R:    24.8 MB/s. User-R:     2.7 MB/s   | DIMM-W:  4230.1 MB/s, User-W:  4212.7 MB/s. Time:   0.97s.[0m
+  MB  |          0.63 |        1024.06 |        9.39 |      1032.98 |  14.96 |   1.01 |[0m
+[34m*SUM* | DIMM-R:    30.4 MB/s. User-R:     2.6 MB/s   | DIMM-W:  4268.6 MB/s, User-W:  4246.1 MB/s. Time:   0.96s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_read
 [0mPCM Metrics: rnd_read
-	DRAM Read  (bytes): 294715264
-	DRAM Write (bytes): 226490816
-	PMEM Read  (bytes): 5112209280
-	PMEM Write (bytes): 0
-	DRAM Read    Speed: 82.2563 MB/s
-	DRAM Write   Speed: 63.2145 MB/s
-	PMEM Read    Speed: 1426.84 MB/s
-	PMEM Write   Speed: 0 MB/s
-	Duration: 3.41691 s
+	DRAM Read  (bytes): 717988928
+	DRAM Write (bytes): 409625792
+	PMEM Read  (bytes): 5108744640
+	PMEM Write (bytes): 24960
+	DRAM Read    Speed: 134.352 MB/s
+	DRAM Write   Speed: 76.6504 MB/s
+	PMEM Read    Speed: 955.964 MB/s
+	PMEM Write   Speed: 0.00467059 MB/s
+	Duration: 5.09651 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1218.93 |           0.02 |     4875.85 |         3.96 |   4.00 | 222.18 |[0m
+  MB  |       1218.52 |           0.03 |     4874.32 |         5.25 |   4.00 | 204.70 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1218.86 |           0.02 |     4875.76 |         4.07 |   4.00 | 228.22 |[0m
+  MB  |       1216.85 |           0.02 |     4867.78 |         5.29 |   4.00 | 296.82 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1218.88 |           0.02 |     4875.66 |         3.97 |   4.00 | 222.73 |[0m
+  MB  |       1218.93 |           0.03 |     4875.93 |         5.25 |   4.00 | 204.62 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1218.89 |           0.02 |     4875.72 |         3.99 |   4.00 | 223.79 |[0m
-[34m*SUM* | DIMM-R:  5472.5 MB/s. User-R:  1368.1 MB/s   | DIMM-W:     4.5 MB/s, User-W:     0.0 MB/s. Time:   3.56s.[0m
+  MB  |       1217.97 |           0.03 |     4872.52 |         5.45 |   4.00 | 211.73 |[0m
+[34m*SUM* | DIMM-R:  3716.9 MB/s. User-R:   929.2 MB/s   | DIMM-W:     4.0 MB/s, User-W:     0.0 MB/s. Time:   5.24s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_read
 [0mPCM Metrics: seq_read
-	DRAM Read  (bytes): 417356160
-	DRAM Write (bytes): 396406912
-	PMEM Read  (bytes): 5150501888
-	PMEM Write (bytes): 12672
-	DRAM Read    Speed: 189.007 MB/s
-	DRAM Write   Speed: 179.52 MB/s
-	PMEM Read    Speed: 2332.5 MB/s
-	PMEM Write   Speed: 0.00573875 MB/s
-	Duration: 2.10585 s
+	DRAM Read  (bytes): 272407040
+	DRAM Write (bytes): 211123392
+	PMEM Read  (bytes): 5164270400
+	PMEM Write (bytes): 0
+	DRAM Read    Speed: 113.988 MB/s
+	DRAM Write   Speed: 88.3443 MB/s
+	PMEM Read    Speed: 2160.98 MB/s
+	PMEM Write   Speed: 0 MB/s
+	Duration: 2.27907 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1229.07 |           0.02 |     1257.70 |         2.05 |   1.02 |  94.38 |[0m
+  MB  |       1231.40 |           0.02 |     1272.81 |         2.20 |   1.03 | 123.63 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1227.13 |           0.02 |     1255.75 |         2.07 |   1.02 | 115.99 |[0m
+  MB  |       1230.55 |           0.02 |     1271.96 |         2.21 |   1.03 | 124.21 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1227.47 |           0.02 |     1256.16 |         2.05 |   1.02 |  94.24 |[0m
+  MB  |       1232.36 |           0.02 |     1273.92 |         2.20 |   1.03 | 123.63 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1228.42 |           0.02 |     1257.13 |         2.06 |   1.02 |  94.61 |[0m
-[34m*SUM* | DIMM-R:  2358.8 MB/s. User-R:  2305.0 MB/s   | DIMM-W:     3.9 MB/s, User-W:     0.0 MB/s. Time:   2.13s.[0m
+  MB  |       1230.91 |           0.02 |     1272.48 |         2.26 |   1.03 | 126.62 |[0m
+[34m*SUM* | DIMM-R:  2208.8 MB/s. User-R:  2136.8 MB/s   | DIMM-W:     3.9 MB/s, User-W:     0.0 MB/s. Time:   2.30s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_write
 [0mPCM Metrics: rnd_write
-	DRAM Read  (bytes): 680929088
-	DRAM Write (bytes): 578313920
-	PMEM Read  (bytes): 5120088960
+	DRAM Read  (bytes): 1319427904
+	DRAM Write (bytes): 766024640
+	PMEM Read  (bytes): 5120538880
 	PMEM Write (bytes): 5120000000
-	DRAM Read    Speed: 85.8276 MB/s
-	DRAM Write   Speed: 72.8935 MB/s
-	PMEM Read    Speed: 645.361 MB/s
-	PMEM Write   Speed: 645.349 MB/s
-	Duration: 7.56615 s
+	DRAM Read    Speed: 119.487 MB/s
+	DRAM Write   Speed: 69.3707 MB/s
+	PMEM Read    Speed: 463.713 MB/s
+	PMEM Write   Speed: 463.664 MB/s
+	Duration: 10.5309 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1220.79 |        1220.76 |     4906.11 |      4900.72 |   4.02 |   4.01 |[0m
+  MB  |       1220.44 |        1220.30 |     4908.28 |      4902.77 |   4.02 |   4.02 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1220.81 |        1220.76 |     4929.35 |      4912.33 |   4.04 |   4.02 |[0m
+  MB  |       1221.65 |        1221.48 |     4928.31 |      4914.64 |   4.03 |   4.02 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1220.72 |        1220.68 |     4905.70 |      4900.48 |   4.02 |   4.01 |[0m
+  MB  |       1220.78 |        1220.61 |     4908.15 |      4903.20 |   4.02 |   4.02 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1220.74 |        1220.68 |     4906.15 |      4901.74 |   4.02 |   4.02 |[0m
-[34m*SUM* | DIMM-R:  2587.8 MB/s. User-R:   643.2 MB/s   | DIMM-W:  2583.6 MB/s, User-W:   643.1 MB/s. Time:   7.59s.[0m
+  MB  |       1220.63 |        1220.49 |     4955.62 |      4928.47 |   4.06 |   4.04 |[0m
+[34m*SUM* | DIMM-R:  1865.0 MB/s. User-R:   462.3 MB/s   | DIMM-W:  1860.1 MB/s, User-W:   462.2 MB/s. Time:  10.56s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_write
 [0mPCM Metrics: seq_write
-	DRAM Read  (bytes): 421278528
-	DRAM Write (bytes): 397174848
-	PMEM Read  (bytes): 5368975552
+	DRAM Read  (bytes): 522452160
+	DRAM Write (bytes): 321987712
+	PMEM Read  (bytes): 5365264896
 	PMEM Write (bytes): 5120000000
-	DRAM Read    Speed: 112.549 MB/s
-	DRAM Write   Speed: 106.11 MB/s
-	PMEM Read    Speed: 1434.38 MB/s
-	PMEM Write   Speed: 1367.86 MB/s
-	Duration: 3.56966 s
+	DRAM Read    Speed: 141.626 MB/s
+	DRAM Write   Speed: 87.2842 MB/s
+	PMEM Read    Speed: 1454.41 MB/s
+	PMEM Write   Speed: 1387.93 MB/s
+	Duration: 3.51806 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1274.23 |        1219.45 |     1379.59 |      1225.22 |   1.08 |   1.00 |[0m
+  MB  |       1277.15 |        1221.44 |     1377.53 |      1227.84 |   1.08 |   1.01 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1274.61 |        1219.62 |     1388.27 |      1228.97 |   1.09 |   1.01 |[0m
+  MB  |       1275.96 |        1220.17 |     1380.59 |      1228.44 |   1.08 |   1.01 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1280.11 |        1222.30 |     1389.93 |      1228.20 |   1.09 |   1.00 |[0m
+  MB  |       1277.04 |        1220.59 |     1378.98 |      1226.80 |   1.08 |   1.01 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       1279.04 |        1221.51 |     1387.52 |      1227.38 |   1.08 |   1.00 |[0m
-[34m*SUM* | DIMM-R:  1542.6 MB/s. User-R:  1420.9 MB/s   | DIMM-W:  1365.8 MB/s, User-W:  1358.3 MB/s. Time:   3.59s.[0m
+  MB  |       1276.73 |        1220.68 |     1389.89 |      1233.44 |   1.09 |   1.01 |[0m
+[34m*SUM* | DIMM-R:  1559.5 MB/s. User-R:  1441.0 MB/s   | DIMM-W:  1387.3 MB/s, User-W:  1377.8 MB/s. Time:   3.54s.[0m
 [32mDestroy IPMWatcher.
 [0m
-jump perf.data.2021010510401629
+jump perf.data.2021010514075014
 ---------- size 8 result ----------
 ---------- size 8 result ----------
 ---------- size 8 result ----------
@@ -505,105 +505,105 @@ jump perf.data.2021010510401629
  ========= 16 ======= 
 [32mStart IPMWatcher for pmem
 [0m[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.65 |        1024.08 |        4.90 |      1027.47 |   7.51 |   1.00 |[0m
+  MB  |          0.64 |        1024.07 |        5.32 |      1027.69 |   8.27 |   1.00 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.64 |        1024.07 |        9.86 |      1029.84 |  15.42 |   1.01 |[0m
+  MB  |          0.65 |        1024.07 |        9.20 |      1029.23 |  14.20 |   1.01 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.64 |        1024.07 |        4.90 |      1027.51 |   7.68 |   1.00 |[0m
+  MB  |          0.64 |        1024.07 |        5.02 |      1027.45 |   7.79 |   1.00 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.64 |        1024.07 |        3.85 |      1027.69 |   6.05 |   1.00 |[0m
-[34m*SUM* | DIMM-R:    24.3 MB/s. User-R:     2.7 MB/s   | DIMM-W:  4258.8 MB/s, User-W:  4242.0 MB/s. Time:   0.97s.[0m
+  MB  |          0.64 |        1024.07 |        9.40 |      1032.97 |  14.78 |   1.01 |[0m
+[34m*SUM* | DIMM-R:    30.0 MB/s. User-R:     2.7 MB/s   | DIMM-W:  4263.5 MB/s, User-W:  4241.7 MB/s. Time:   0.97s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_read
 [0mPCM Metrics: rnd_read
-	DRAM Read  (bytes): 793651520
-	DRAM Write (bytes): 659723136
-	PMEM Read  (bytes): 10219447296
-	PMEM Write (bytes): 12672
-	DRAM Read    Speed: 98.6508 MB/s
-	DRAM Write   Speed: 82.0035 MB/s
-	PMEM Read    Speed: 1270.28 MB/s
-	PMEM Write   Speed: 0.00157513 MB/s
-	Duration: 7.67237 s
+	DRAM Read  (bytes): 1587500608
+	DRAM Write (bytes): 892193664
+	PMEM Read  (bytes): 10225030592
+	PMEM Write (bytes): 29696
+	DRAM Read    Speed: 117.015 MB/s
+	DRAM Write   Speed: 65.7639 MB/s
+	PMEM Read    Speed: 753.691 MB/s
+	PMEM Write   Speed: 0.0021889 MB/s
+	Duration: 12.9381 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       2436.66 |           0.02 |     9747.17 |         8.32 |   4.00 | 381.95 |[0m
+  MB  |       2438.70 |           0.03 |     9755.59 |        12.31 |   4.00 | 414.85 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       2436.48 |           0.02 |     9746.84 |         8.52 |   4.00 | 392.16 |[0m
+  MB  |       2435.29 |           0.03 |     9742.27 |        12.44 |   4.00 | 482.91 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       2436.51 |           0.02 |     9746.52 |         8.34 |   4.00 | 467.78 |[0m
+  MB  |       2439.78 |           0.02 |     9759.85 |        12.30 |   4.00 | 690.04 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       2436.55 |           0.02 |     9746.65 |         8.34 |   4.00 | 382.77 |[0m
-[34m*SUM* | DIMM-R:  4986.6 MB/s. User-R:  1246.6 MB/s   | DIMM-W:     4.3 MB/s, User-W:     0.0 MB/s. Time:   7.82s.[0m
+  MB  |       2437.76 |           0.03 |     9752.73 |        12.77 |   4.00 | 495.90 |[0m
+[34m*SUM* | DIMM-R:  2981.4 MB/s. User-R:   745.3 MB/s   | DIMM-W:     3.8 MB/s, User-W:     0.0 MB/s. Time:  13.08s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_read
 [0mPCM Metrics: seq_read
-	DRAM Read  (bytes): 597636224
-	DRAM Write (bytes): 507640512
-	PMEM Read  (bytes): 18065504384
-	PMEM Write (bytes): 8576
-	DRAM Read    Speed: 155.8 MB/s
-	DRAM Write   Speed: 132.339 MB/s
-	PMEM Read    Speed: 4709.56 MB/s
-	PMEM Write   Speed: 0.00223571 MB/s
-	Duration: 3.65822 s
+	DRAM Read  (bytes): 598746752
+	DRAM Write (bytes): 375509888
+	PMEM Read  (bytes): 18259659776
+	PMEM Write (bytes): 0
+	DRAM Read    Speed: 130.708 MB/s
+	DRAM Write   Speed: 81.9747 MB/s
+	PMEM Read    Speed: 3986.13 MB/s
+	PMEM Write   Speed: 0 MB/s
+	Duration: 4.3686 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4311.71 |           0.03 |     4609.07 |         3.98 |   1.07 | 154.27 |[0m
+  MB  |       4353.43 |           0.02 |     4635.40 |         4.52 |   1.06 | 253.56 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4305.79 |           0.02 |     4602.77 |         4.08 |   1.07 | 228.73 |[0m
+  MB  |       4350.61 |           0.02 |     4632.70 |         4.62 |   1.06 | 259.38 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4304.20 |           0.02 |     4601.17 |         3.98 |   1.07 | 223.38 |[0m
+  MB  |       4357.47 |           0.02 |     4639.89 |         4.52 |   1.06 | 253.89 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4307.09 |           0.02 |     4604.10 |         3.98 |   1.07 | 223.48 |[0m
-[34m*SUM* | DIMM-R:  4999.6 MB/s. User-R:  4677.1 MB/s   | DIMM-W:     4.3 MB/s, User-W:     0.0 MB/s. Time:   3.68s.[0m
+  MB  |       4352.44 |           0.02 |     4635.02 |         4.73 |   1.06 | 265.48 |[0m
+[34m*SUM* | DIMM-R:  4220.4 MB/s. User-R:  3963.5 MB/s   | DIMM-W:     4.2 MB/s, User-W:     0.0 MB/s. Time:   4.39s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_write
 [0mPCM Metrics: rnd_write
-	DRAM Read  (bytes): 1312957888
-	DRAM Write (bytes): 1055508864
-	PMEM Read  (bytes): 10240357760
-	PMEM Write (bytes): 10240000000
-	DRAM Read    Speed: 75.8894 MB/s
-	DRAM Write   Speed: 61.0088 MB/s
-	PMEM Read    Speed: 591.896 MB/s
-	PMEM Write   Speed: 591.876 MB/s
-	Duration: 16.4995 s
+	DRAM Read  (bytes): 2585814528
+	DRAM Write (bytes): 1516724800
+	PMEM Read  (bytes): 10244656256
+	PMEM Write (bytes): 10240007744
+	DRAM Read    Speed: 95.71 MB/s
+	DRAM Write   Speed: 56.1393 MB/s
+	PMEM Read    Speed: 379.191 MB/s
+	PMEM Write   Speed: 379.018 MB/s
+	Duration: 25.7656 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       2441.56 |        2441.50 |     9808.64 |      9800.68 |   4.02 |   4.01 |[0m
+  MB  |       2441.42 |        2440.58 |     9813.27 |      9806.09 |   4.02 |   4.02 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       2441.57 |        2441.50 |     9860.36 |      9826.96 |   4.04 |   4.02 |[0m
+  MB  |       2443.89 |        2442.95 |     9860.61 |      9833.41 |   4.03 |   4.03 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       2441.39 |        2441.35 |     9808.55 |      9800.54 |   4.02 |   4.01 |[0m
+  MB  |       2442.35 |        2441.21 |     9814.53 |      9807.49 |   4.02 |   4.02 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       2441.41 |        2441.35 |     9806.30 |      9801.40 |   4.02 |   4.01 |[0m
-[34m*SUM* | DIMM-R:  2377.3 MB/s. User-R:   591.0 MB/s   | DIMM-W:  2374.0 MB/s, User-W:   591.0 MB/s. Time:  16.52s.[0m
+  MB  |       2441.94 |        2440.96 |     9914.81 |      9860.43 |   4.06 |   4.04 |[0m
+[34m*SUM* | DIMM-R:  1527.7 MB/s. User-R:   378.8 MB/s   | DIMM-W:  1524.0 MB/s, User-W:   378.6 MB/s. Time:  25.79s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_write
 [0mPCM Metrics: seq_write
-	DRAM Read  (bytes): 730056256
-	DRAM Write (bytes): 600809216
-	PMEM Read  (bytes): 19688610752
+	DRAM Read  (bytes): 880010048
+	DRAM Write (bytes): 496470848
+	PMEM Read  (bytes): 20000711232
 	PMEM Write (bytes): 10240000000
-	DRAM Read    Speed: 108.17 MB/s
-	DRAM Write   Speed: 89.02 MB/s
-	PMEM Read    Speed: 2917.2 MB/s
-	PMEM Write   Speed: 1517.23 MB/s
-	Duration: 6.43649 s
+	DRAM Read    Speed: 130.115 MB/s
+	DRAM Write   Speed: 73.4064 MB/s
+	PMEM Read    Speed: 2957.23 MB/s
+	PMEM Write   Speed: 1514.05 MB/s
+	Duration: 6.45 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4648.29 |        2438.89 |     4949.89 |      2450.07 |   1.06 |   1.00 |[0m
+  MB  |       4717.08 |        2442.87 |     5031.02 |      2454.69 |   1.07 |   1.00 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4647.30 |        2439.22 |     4964.18 |      2457.87 |   1.07 |   1.01 |[0m
+  MB  |       4712.14 |        2440.32 |     5036.87 |      2456.95 |   1.07 |   1.01 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4664.85 |        2444.59 |     4967.53 |      2455.82 |   1.06 |   1.00 |[0m
+  MB  |       4717.96 |        2441.17 |     5032.32 |      2452.70 |   1.07 |   1.00 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4660.77 |        2443.00 |     4961.91 |      2454.26 |   1.06 |   1.00 |[0m
-[34m*SUM* | DIMM-R:  3070.6 MB/s. User-R:  2881.4 MB/s   | DIMM-W:  1519.2 MB/s, User-W:  1511.1 MB/s. Time:   6.46s.[0m
+  MB  |       4718.68 |        2441.34 |     5057.09 |      2466.78 |   1.07 |   1.01 |[0m
+[34m*SUM* | DIMM-R:  3108.3 MB/s. User-R:  2909.1 MB/s   | DIMM-W:  1516.0 MB/s, User-W:  1505.9 MB/s. Time:   6.49s.[0m
 [32mDestroy IPMWatcher.
 [0m
-jump perf.data.2021010510403879
+jump perf.data.2021010514081768
 ---------- size 16 result ----------
 ---------- size 16 result ----------
 ---------- size 16 result ----------
@@ -611,105 +611,105 @@ jump perf.data.2021010510403879
  ========= 32 ======= 
 [32mStart IPMWatcher for pmem
 [0m[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.65 |        1024.07 |        4.57 |      1027.24 |   7.07 |   1.00 |[0m
+  MB  |          1.50 |        1024.43 |        6.83 |      1027.94 |   4.56 |   1.00 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.65 |        1024.07 |       10.00 |      1029.96 |  15.47 |   1.01 |[0m
+  MB  |          1.50 |        1024.43 |       11.46 |      1030.04 |   7.63 |   1.01 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.63 |        1024.07 |        4.51 |      1027.21 |   7.11 |   1.00 |[0m
+  MB  |          1.48 |        1024.42 |        6.61 |      1027.87 |   4.47 |   1.00 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |          0.64 |        1024.07 |        3.45 |      1027.27 |   5.42 |   1.00 |[0m
-[34m*SUM* | DIMM-R:    23.4 MB/s. User-R:     2.7 MB/s   | DIMM-W:  4265.8 MB/s, User-W:  4249.8 MB/s. Time:   0.96s.[0m
+  MB  |          1.49 |        1024.42 |       11.44 |      1033.67 |   7.65 |   1.01 |[0m
+[34m*SUM* | DIMM-R:    36.7 MB/s. User-R:     6.0 MB/s   | DIMM-W:  4155.0 MB/s, User-W:  4133.0 MB/s. Time:   0.99s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_read
 [0mPCM Metrics: rnd_read
-	DRAM Read  (bytes): 1540032384
-	DRAM Write (bytes): 1159097984
-	PMEM Read  (bytes): 20431820224
-	PMEM Write (bytes): 12672
-	DRAM Read    Speed: 77.5398 MB/s
-	DRAM Write   Speed: 58.36 MB/s
-	PMEM Read    Speed: 1028.73 MB/s
-	PMEM Write   Speed: 0.000638029 MB/s
-	Duration: 18.9411 s
+	DRAM Read  (bytes): 3542845888
+	DRAM Write (bytes): 1945071616
+	PMEM Read  (bytes): 20475257920
+	PMEM Write (bytes): 33856
+	DRAM Read    Speed: 104.179 MB/s
+	DRAM Write   Speed: 57.1957 MB/s
+	PMEM Read    Speed: 602.084 MB/s
+	PMEM Write   Speed: 0.000995551 MB/s
+	Duration: 32.4319 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4871.60 |           0.02 |    19487.66 |        19.01 |   4.00 | 1066.84 |[0m
+  MB  |       4883.77 |           0.03 |    19537.10 |        29.35 |   4.00 | 1134.08 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4871.41 |           0.02 |    19487.91 |        19.55 |   4.00 | 897.04 |[0m
+  MB  |       4874.66 |           0.03 |    19501.55 |        29.70 |   4.00 | 1153.15 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4871.34 |           0.02 |    19486.60 |        19.07 |   4.00 | 877.43 |[0m
+  MB  |       4884.98 |           0.03 |    19541.79 |        29.31 |   4.00 | 1138.10 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4871.13 |           0.02 |    19485.63 |        19.12 |   4.00 | 877.57 |[0m
-[34m*SUM* | DIMM-R:  4083.9 MB/s. User-R:  1020.9 MB/s   | DIMM-W:     4.0 MB/s, User-W:     0.0 MB/s. Time:  19.09s.[0m
+  MB  |       4883.50 |           0.03 |    19537.89 |        30.32 |   4.00 | 1182.58 |[0m
+[34m*SUM* | DIMM-R:  2397.8 MB/s. User-R:   599.4 MB/s   | DIMM-W:     3.6 MB/s, User-W:     0.0 MB/s. Time:  32.58s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_read
 [0mPCM Metrics: seq_read
-	DRAM Read  (bytes): 706459008
-	DRAM Write (bytes): 557790528
-	PMEM Read  (bytes): 26825289088
+	DRAM Read  (bytes): 910159616
+	DRAM Write (bytes): 515282176
+	PMEM Read  (bytes): 28120566208
 	PMEM Write (bytes): 0
-	DRAM Read    Speed: 110.842 MB/s
-	DRAM Write   Speed: 87.5166 MB/s
-	PMEM Read    Speed: 4208.85 MB/s
+	DRAM Read    Speed: 125.315 MB/s
+	DRAM Write   Speed: 70.9466 MB/s
+	PMEM Read    Speed: 3871.78 MB/s
 	PMEM Write   Speed: 0 MB/s
-	Duration: 6.07828 s
+	Duration: 6.9265 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       6399.70 |           0.02 |     6705.97 |         6.29 |   1.05 | 352.96 |[0m
+  MB  |       6694.73 |           0.02 |     6999.48 |         6.99 |   1.05 | 392.30 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       6390.26 |           0.02 |     6696.44 |         6.47 |   1.05 | 362.78 |[0m
+  MB  |       6692.50 |           0.02 |     6997.53 |         7.11 |   1.05 | 399.01 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       6394.47 |           0.02 |     6701.39 |         6.28 |   1.05 | 352.44 |[0m
+  MB  |       6719.10 |           0.02 |     7024.49 |         7.01 |   1.05 | 393.53 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       6398.34 |           0.02 |     6705.25 |         6.31 |   1.05 | 354.25 |[0m
-[34m*SUM* | DIMM-R:  4392.5 MB/s. User-R:  4191.6 MB/s   | DIMM-W:     4.2 MB/s, User-W:     0.0 MB/s. Time:   6.10s.[0m
+  MB  |       6711.72 |           0.02 |     7016.88 |         7.33 |   1.05 | 411.41 |[0m
+[34m*SUM* | DIMM-R:  4032.4 MB/s. User-R:  3856.9 MB/s   | DIMM-W:     4.1 MB/s, User-W:     0.0 MB/s. Time:   6.95s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for rnd_write
 [0mPCM Metrics: rnd_write
-	DRAM Read  (bytes): 2467411072
-	DRAM Write (bytes): 1786279488
-	PMEM Read  (bytes): 20483598336
-	PMEM Write (bytes): 20480008576
-	DRAM Read    Speed: 60.9014 MB/s
-	DRAM Write   Speed: 44.0895 MB/s
-	PMEM Read    Speed: 505.582 MB/s
-	PMEM Write   Speed: 505.494 MB/s
-	Duration: 38.638 s
+	DRAM Read  (bytes): 6237693376
+	DRAM Write (bytes): 3439115200
+	PMEM Read  (bytes): 20603064512
+	PMEM Write (bytes): 20480000000
+	DRAM Read    Speed: 95.0414 MB/s
+	DRAM Write   Speed: 52.4005 MB/s
+	PMEM Read    Speed: 313.921 MB/s
+	PMEM Write   Speed: 312.046 MB/s
+	Duration: 62.5909 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4883.08 |        4882.98 |    19607.12 |     19600.51 |   4.02 |   4.01 |[0m
+  MB  |       4886.52 |        4881.14 |    19625.71 |     19614.04 |   4.02 |   4.02 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4883.11 |        4882.97 |    19725.01 |     19659.39 |   4.04 |   4.03 |[0m
+  MB  |       4889.33 |        4885.87 |    19728.80 |     19676.60 |   4.04 |   4.03 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4882.74 |        4882.69 |    19606.14 |     19600.02 |   4.02 |   4.01 |[0m
+  MB  |       4885.89 |        4882.41 |    19621.41 |     19618.34 |   4.02 |   4.02 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       4882.78 |        4882.69 |    19596.36 |     19598.86 |   4.01 |   4.01 |[0m
-[34m*SUM* | DIMM-R:  2031.2 MB/s. User-R:   505.2 MB/s   | DIMM-W:  2029.2 MB/s, User-W:   505.2 MB/s. Time:  38.66s.[0m
+  MB  |       4884.84 |        4881.90 |    19829.04 |     19728.13 |   4.06 |   4.04 |[0m
+[34m*SUM* | DIMM-R:  1258.5 MB/s. User-R:   312.2 MB/s   | DIMM-W:  1255.8 MB/s, User-W:   311.9 MB/s. Time:  62.62s.[0m
 [32mDestroy IPMWatcher.
 [0m
 [32mStart IPMWatcher for seq_write
 [0mPCM Metrics: seq_write
-	DRAM Read  (bytes): 832004992
-	DRAM Write (bytes): 536144320
-	PMEM Read  (bytes): 32270493120
+	DRAM Read  (bytes): 1202309312
+	DRAM Write (bytes): 639683392
+	PMEM Read  (bytes): 32425940800
 	PMEM Write (bytes): 20480000000
-	DRAM Read    Speed: 71.6716 MB/s
-	DRAM Write   Speed: 46.1852 MB/s
-	PMEM Read    Speed: 2779.89 MB/s
-	PMEM Write   Speed: 1764.21 MB/s
-	Duration: 11.0708 s
+	DRAM Read    Speed: 103.726 MB/s
+	DRAM Write   Speed: 55.1869 MB/s
+	PMEM Read    Speed: 2797.46 MB/s
+	PMEM Write   Speed: 1766.85 MB/s
+	Duration: 11.0543 s
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       7327.88 |        4877.76 |     7572.20 |      4896.97 |   1.03 |   1.00 |[0m
+  MB  |       7374.34 |        4885.71 |     7627.08 |      4905.32 |   1.03 |   1.00 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       7327.13 |        4878.42 |     7603.53 |      4913.72 |   1.04 |   1.01 |[0m
+  MB  |       7362.43 |        4880.62 |     7639.78 |      4912.71 |   1.04 |   1.01 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       7347.07 |        4889.16 |     7588.26 |      4908.56 |   1.03 |   1.00 |[0m
+  MB  |       7373.89 |        4882.32 |     7621.17 |      4901.69 |   1.03 |   1.00 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |       7344.14 |        4885.98 |     7581.83 |      4903.87 |   1.03 |   1.00 |[0m
-[34m*SUM* | DIMM-R:  2734.5 MB/s. User-R:  2644.5 MB/s   | DIMM-W:  1768.3 MB/s, User-W:  1760.0 MB/s. Time:  11.10s.[0m
+  MB  |       7378.47 |        4882.67 |     7675.89 |      4930.22 |   1.04 |   1.01 |[0m
+[34m*SUM* | DIMM-R:  2758.3 MB/s. User-R:  2661.3 MB/s   | DIMM-W:  1773.4 MB/s, User-W:  1762.7 MB/s. Time:  11.08s.[0m
 [32mDestroy IPMWatcher.
 [0m
-jump perf.data.2021010510411940
+jump perf.data.2021010514091346
 ---------- size 32 result ----------
 ---------- size 32 result ----------
 ---------- size 32 result ----------

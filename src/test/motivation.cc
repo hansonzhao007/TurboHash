@@ -28,58 +28,54 @@ const uint64_t MASK64 = (~(UINT64_C(63)));
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
 
-struct PmemRoot {
-    pptr<char> addr;
-};
+static uint64_t kBuff = 123;
 
 inline void // __attribute__((optimize("O0"),always_inline))
-RndAccess(char* addr, uint64_t size_mask) {
-    uint64_t off = turbo::wyhash64() & size_mask;
+RndAccess(char* addr, uint64_t size_mask, uint64_t interval) {
+    uint64_t off = turbo::wyhash32() & size_mask;
     int loop = FLAGS_loop;
     while (loop--) {
-        // uint64_t off = turbo::wyhash64() & size_mask;
         volatile uint64_t tmp = *(uint64_t*)(addr + off);
-        off += 24576;
+        kBuff = tmp;
+        off += interval;
         off &= size_mask;
     }
 }
 
-inline void __attribute__((optimize("O0"),always_inline))
+inline void // __attribute__((optimize("O0"),always_inline))
 ConAccess(char* addr, uint64_t size_mask) {
-    uint64_t off = turbo::wyhash64() & size_mask;
+    uint64_t off = turbo::wyhash32() & size_mask;
     int loop = FLAGS_loop;
     while (loop--) {
-        // uint64_t off_tmp = turbo::wyhash64() & size_mask;
         volatile uint64_t tmp = *(uint64_t*)(addr + off);
+        kBuff = tmp;
         off += 64;
     }
 }
 
 inline void  // __attribute__((optimize("O0"),always_inline))
-RndWrite(char* addr, uint64_t size_mask) {
-    uint64_t off = turbo::wyhash64() & size_mask;
+RndWrite(char* addr, uint64_t size_mask, uint64_t interval) {
+    uint64_t off = turbo::wyhash32() & size_mask;
     int loop = FLAGS_loop;
     while (loop--) {
-        // uint64_t off = turbo::wyhash64() & size_mask;
-        volatile char tmp = *(addr + off);
-        memset(addr + off, 32, 8);
+        uint64_t val = *(uint64_t*)(addr + off);
+        *(uint64_t*)(addr + off) = val + off;
         #ifdef IS_PMEM      
         FLUSH(addr + off);
         // FLUSHFENCE;
         #endif
-        off += 24576;
+        off += interval;
         off &= size_mask;
     }
 }
 
-inline void __attribute__((optimize("O0"),always_inline))
+inline void // __attribute__((optimize("O0"),always_inline))
 ConWrite(char* addr, uint64_t size_mask) {
-    uint64_t off = turbo::wyhash64() & size_mask;
+    uint64_t off = turbo::wyhash32() & size_mask;
     int loop = FLAGS_loop;
     while (loop--) {
-        // uint64_t off_tmp = turbo::wyhash64() & size_mask;
-        volatile char tmp = *(addr + off);
-        memset(addr + off, 32, 8);
+        uint64_t val = *(uint64_t*)(addr + off);
+        *(uint64_t*)(addr + off) = val + off;
         #ifdef IS_PMEM      
         FLUSH(addr + off);
         // FLUSHFENCE;
@@ -94,7 +90,7 @@ void AccessCacheLineSize() {
     const uint64_t size = 4LU << 30;
     const uint64_t size_mask = (size - 1) & MASK64;
     uint64_t size_mask2 = (size - 1) & (~(64 * FLAGS_loop - 1));
-
+    uint64_t interval   = size / FLAGS_loop;
     char* addr = nullptr;
     #ifdef IS_PMEM
     size_t file_size = size;
@@ -129,11 +125,12 @@ void AccessCacheLineSize() {
         debug_perf_switch();
         auto time_start = Env::Default()->NowNanos();
         for (uint64_t i = 0; i < repeat; i++) {
-            RndAccess(addr, size_mask);
+            RndAccess(addr, size_mask, interval);
         }
         auto time_end   = Env::Default()->NowNanos();
         double duration = time_end - time_start;
         fprintf(file, "%f, ", duration / repeat);
+        fprintf(stderr, "%lu\r", kBuff);
     }
     
     {
@@ -150,6 +147,7 @@ void AccessCacheLineSize() {
         auto time_end   = Env::Default()->NowNanos();
         double duration = time_end - time_start;
         fprintf(file, "%f, ", duration / repeat);
+        fprintf(stderr, "%lu\r", kBuff);
     }
 
     {        
@@ -160,11 +158,12 @@ void AccessCacheLineSize() {
         debug_perf_switch();
         auto time_start = Env::Default()->NowNanos();
         for (uint64_t i = 0; i < repeat; i++) {
-            RndWrite(addr, size_mask);
+            RndWrite(addr, size_mask, interval);
         }
         auto time_end   = Env::Default()->NowNanos();
         double duration = time_end - time_start;
         fprintf(file, "%f, ", duration / repeat);
+        fprintf(stderr, "%lu\r", kBuff);
     }
 
     {        
@@ -180,6 +179,7 @@ void AccessCacheLineSize() {
         auto time_end   = Env::Default()->NowNanos();
         double duration = time_end - time_start;
         fprintf(file, "%f, ", duration / repeat);
+        fprintf(stderr, "%lu\r", kBuff);
     }
     debug_perf_stop();
     fflush(file);
