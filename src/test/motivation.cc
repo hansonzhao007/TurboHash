@@ -112,10 +112,10 @@ void AccessCacheLineSize() {
     fprintf(file, "%d, ", FLAGS_loop);
     
     {
-        util::PCMMetric metric("rnd_read");
         #ifdef IS_PMEM
         IPMWatcher watcher("rnd_read");
         #endif
+        util::PCMMetric metric("rnd_read");
         debug_perf_switch();
         auto time_start = Env::Default()->NowNanos();
         for (uint64_t i = 0; i < repeat; i++) {
@@ -127,10 +127,11 @@ void AccessCacheLineSize() {
     }
     
     {
-        util::PCMMetric metric("seq_read");
+        
         #ifdef IS_PMEM
         IPMWatcher watcher("seq_read");
         #endif
+        util::PCMMetric metric("seq_read");
         debug_perf_switch();
         auto time_start = Env::Default()->NowNanos();
         for (uint64_t i = 0; i < repeat; i++) {
@@ -141,11 +142,11 @@ void AccessCacheLineSize() {
         fprintf(file, "%f, ", duration / repeat);
     }
 
-    {
-        util::PCMMetric metric("rnd_write");
+    {        
         #ifdef IS_PMEM
         IPMWatcher watcher("rnd_write");
         #endif
+        util::PCMMetric metric("rnd_write");
         debug_perf_switch();
         auto time_start = Env::Default()->NowNanos();
         for (uint64_t i = 0; i < repeat; i++) {
@@ -156,11 +157,11 @@ void AccessCacheLineSize() {
         fprintf(file, "%f, ", duration / repeat);
     }
 
-    {
-        util::PCMMetric metric("seq_write");
+    {        
         #ifdef IS_PMEM
         IPMWatcher watcher("seq_write");
         #endif
+        util::PCMMetric metric("seq_write");
         debug_perf_switch();
         auto time_start = Env::Default()->NowNanos();
         for (uint64_t i = 0; i < repeat; i++) {
