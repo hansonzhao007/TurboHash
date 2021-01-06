@@ -34,14 +34,14 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 using namespace util;
 
-// #define IS_PMEM 1
+#define IS_PMEM 1
 
 // For hash table 
+DEFINE_bool(use_existing_db, false, "");
 DEFINE_bool(no_rehash, false, "control hash table do not do rehashing during insertion");
 DEFINE_uint64(cell_count, 16, "");
-DEFINE_uint64(bucket_count, 256 << 10, "bucket count");
+DEFINE_uint64(bucket_count, 128 << 10, "bucket count");
 DEFINE_double(loadfactor, 0.72, "default loadfactor for turbohash.");
-
 DEFINE_uint32(batch, 1000000, "report batch");
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
 DEFINE_uint32(thread, 1, "");
@@ -304,11 +304,9 @@ struct ThreadState {
     // Random rand;         // Has different seeds for different threads
     Stats stats;
     SharedState* shared;
-    Trace* trace;
     ThreadState(int index) : 
         tid(index),
         stats(index) {
-        trace = new TraceUniform(1123);
     }
 };
 
@@ -465,20 +463,25 @@ public:
                 fresh_db = false;
                 thread = 1;
                 method = &Benchmark::DoStats;
-            } else if (name == "compare") {
-                fresh_db = true;
-                thread = 1;
-                method = &Benchmark::DoCompare;
-            } else if (name == "rehashspeed") {
-                fresh_db = true;
-                thread = 1;
-                method = &Benchmark::DoRehashSpeed;
             }
 
             #ifdef IS_PMEM
             if (fresh_db) {
-                hashtable_ = new Hashtable();
-                hashtable_->Initialize(FLAGS_bucket_count, FLAGS_cell_count);
+                if (FLAGS_use_existing_db) {
+                    fprintf(stdout, "%-12s : skipped (--use_existing_db is true)\n", name.c_str());
+                    method = nullptr;
+                } else {
+                    remove("/mnt/pmem/turbo_hash_pmem_basemd");
+                    remove("/mnt/pmem/turbo_hash_pmem_desc");
+                    remove("/mnt/pmem/turbo_hash_pmem_sb");
+                    hashtable_ = new Hashtable();
+                    hashtable_->Initialize(FLAGS_bucket_count, FLAGS_cell_count);
+                }
+            } else {
+                if (hashtable_ == nullptr && FLAGS_use_existing_db) {
+                    hashtable_ = new Hashtable();
+                    hashtable_->Recover();
+                }
             }
             #else
             if (fresh_db) {
@@ -491,31 +494,6 @@ public:
             #endif
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
         }
-    }
-
-    void DoRehashSpeed(ThreadState* thread) {
-        RandomKeyTrace trace(initial_capacity_ * FLAGS_loadfactor);
-        auto key_iterator = trace.Begin();
-        printf("Trace size: %lu\n", trace.keys_.size());
-        printf("Iterator size: %lu\n", key_iterator.end_index_);
-        size_t batch = FLAGS_batch;
-        std::string val(value_size_, 'v');
-        thread->stats.Start();
-        while (key_iterator.Valid()) {
-            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {
-                size_t key = key_iterator.Next();
-                bool res = hashtable_->Put(key, key);
-                if (!res) {
-                    INFO("Hash Table Full!!!\n");
-                    printf("Hash Table Full!!!\n");
-                    break;
-                }
-            }
-            thread->stats.FinishedBatchOp(batch);
-        }
-        thread->stats.Start();
-        hashtable_->MinorReHashAll();
-        thread->stats.FinishedBatchOp(trace.keys_.size());
     }
 
     void DoRehash(ThreadState* thread) {   
@@ -546,14 +524,15 @@ public:
         size_t not_find = 0;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
-        while (!duration.Done(batch)) {
-            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {         
+        while (!duration.Done(batch) && key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {         
                 bool res = hashtable_->Probe(key_iterator.Next());
                 if (unlikely(!res)) {
                     not_find++;
                 }
             }
-            thread->stats.FinishedBatchOp(batch);
+            thread->stats.FinishedBatchOp(j);
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not probed: %lu)", reads_, not_find);
@@ -574,14 +553,15 @@ public:
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
-        while (!duration.Done(batch)) {
-            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {                          
+        while (!duration.Done(batch) && key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {                          
                 auto record_ptr = hashtable_->Find(key_iterator.Next());
                 if (unlikely(record_ptr == nullptr)) {
                     not_find++;
                 }
             }
-            thread->stats.FinishedBatchOp(batch);
+            thread->stats.FinishedBatchOp(j);
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
@@ -602,15 +582,16 @@ public:
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
-        while (!duration.Done(batch)) {
-            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {      
+        while (!duration.Done(batch) && key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {      
                 size_t key = key_iterator.Next() + num_;
                 auto record_ptr = hashtable_->Find(key);
                 if (likely(record_ptr == nullptr)) {
                     not_find++;
                 }
             }
-            thread->stats.FinishedBatchOp(batch);
+            thread->stats.FinishedBatchOp(j);
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
@@ -633,7 +614,6 @@ public:
         thread->stats.Start();
         while (key_iterator.Valid()) {
             size_t key = key_iterator.Next();
-
             auto time_start = Env::Default()->NowNanos();
             auto record_ptr = hashtable_->Find(key);
             auto time_duration = Env::Default()->NowNanos() - time_start;
@@ -663,13 +643,11 @@ public:
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (key_iterator.Valid()) {
-            size_t key = key_iterator.Next() + num_;
-            
+            size_t key = key_iterator.Next() + num_;            
             auto time_start = Env::Default()->NowNanos();
             auto record_ptr = hashtable_->Find(key);
             auto time_duration = Env::Default()->NowNanos() - time_start;
             thread->stats.hist_.Add(time_duration);
-
             if (likely(record_ptr == nullptr)) {
                 not_find++;
             }     
@@ -678,14 +656,6 @@ public:
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
         INFO("DoReadNonLat thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
         thread->stats.AddMessage(buf);
-    }
-
-    /** DoCompare
-     *  @note: compare TurboHash with other Dram hash table in single thread write and multithread read
-    */
-    void DoCompare(ThreadState* thread) {
-        // TurboHash
-        
     }
 
     void DoWrite(ThreadState* thread) {
@@ -702,17 +672,17 @@ public:
         thread->stats.Start();
         std::string val(value_size_, 'v');
         while (key_iterator.Valid()) {
-            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {   
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
                 size_t key = key_iterator.Next();
                 bool res = hashtable_->Put(key, key);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
                     printf("Hash Table Full!!!\n");
                     goto write_end;
-                    
                 }
             }
-            thread->stats.FinishedBatchOp(batch);
+            thread->stats.FinishedBatchOp(j);
         }
         write_end:
         return;
@@ -733,7 +703,8 @@ public:
         thread->stats.Start();
         std::string val(value_size_, 'v');
         while (key_iterator.Valid()) {
-            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {   
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
                 size_t key = key_iterator.Next();
                 bool res = hashtable_->Put(key, key);
                 if (!res) {
@@ -743,7 +714,7 @@ public:
                     
                 }
             }
-            thread->stats.FinishedBatchOp(batch);
+            thread->stats.FinishedBatchOp(j);
         }
         write_end:
         return;
@@ -885,8 +856,8 @@ private:
                    INFO("Hash Cell in Bucket:   %lu \n", (uint64_t)FLAGS_cell_count);
         fprintf(stdout, "Hash Slot in Cell:     %u \n", Hashtable::CellMeta::SlotCount());
                    INFO("Hash Slot in Cell:     %u \n", Hashtable::CellMeta::SlotCount());
-        fprintf(stdout, "Hash capacity:         %lu \n", (uint64_t)initial_capacity_);
-                   INFO("Hash capacity:         %lu \n", (uint64_t)initial_capacity_);
+        fprintf(stdout, "Hash init capacity:    %lu \n", (uint64_t)initial_capacity_);
+                   INFO("Hash init capacity:    %lu \n", (uint64_t)initial_capacity_);
         fprintf(stdout, "Hash table size:       %lu MB\n", FLAGS_bucket_count * FLAGS_cell_count * Hashtable::CellMeta::CellSize() / 1024 / 1024);
                    INFO("Hash table size:       %lu MB\n", FLAGS_bucket_count * FLAGS_cell_count * Hashtable::CellMeta::CellSize() / 1024 / 1024);
         fprintf(stdout, "Hash loadfactor:       %.2f \n", FLAGS_loadfactor);
