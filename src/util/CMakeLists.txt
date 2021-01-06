@@ -6,8 +6,6 @@ set(UTIL_SRCS
     "comparator.h"
     "env.cc"
     "env.h"
-    "histogram.cc"
-    "histogram.h"
     "io_report.cc"
     "io_report.h"
     "port_posix.cc"
