@@ -32,7 +32,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 using namespace util;
 
-#define IS_PMEM 1
+// #define IS_PMEM 1
 
 // For hash table 
 DEFINE_bool(no_rehash, false, "control hash table do not do rehashing during insertion");
@@ -727,12 +727,12 @@ public:
         size_t interval = num_ / FLAGS_thread;
         size_t start_offset = thread->tid * interval;
         auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
-        Duration duration(FLAGS_readtime, writes_);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
         thread->stats.Start();
         std::string val(value_size_, 'v');
-        while(!duration.Done(batch)) {
-            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {  
-                size_t key = key_iterator.Next(); 
+        while (key_iterator.Valid()) {
+            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {   
+                size_t key = key_iterator.Next();
                 bool res = hashtable_->Put(key, key);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
