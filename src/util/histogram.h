@@ -8,7 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
-#include "statistics.h"
+// #include "statistics.h"
 
 #include <cassert>
 #include <string>
@@ -20,6 +20,19 @@
 #include <stdio.h>
 
 namespace util {
+
+struct HistogramData {
+  double median;
+  double percentile95;
+  double percentile99;
+  double average;
+  double standard_deviation;
+  // zero-initialize new members since old Statistics::histogramData()
+  // implementations won't write them.
+  double max = 0.0;
+  uint64_t count = 0;
+  uint64_t sum = 0;
+};
 
 class HistogramBucketMapper {
  public:
