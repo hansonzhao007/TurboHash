@@ -1,5 +1,8 @@
 #include <immintrin.h>
 #include <cstdlib>
+#include <thread>               // std::thread
+#include <mutex>                // std::mutex
+#include <condition_variable>   // std::condition_variable
 #include "typename.h"
 
 #ifdef CUCKOO
@@ -18,7 +21,6 @@
 #include "util/trace.h"
 #include "util/perf_util.h"
 #include "util/histogram.h"
-#include "util/port_posix.h"
 #include "util/pmm_util.h"
 
 #include "absl/container/flat_hash_map.h"
@@ -278,9 +280,9 @@ public:
 
 // State shared by all concurrent executions of the same benchmark.
 struct SharedState {
-  port::Mutex mu;
-  port::CondVar cv GUARDED_BY(mu);
-  int total GUARDED_BY(mu);
+  std::mutex mu;
+  std::condition_variable cv;
+  int total;
 
   // Each thread goes through the following states:
   //    (1) initializing
@@ -288,12 +290,12 @@ struct SharedState {
   //    (3) running
   //    (4) done
 
-  int num_initialized GUARDED_BY(mu);
-  int num_done GUARDED_BY(mu);
-  bool start GUARDED_BY(mu);
+  int num_initialized;
+  int num_done;
+  bool start;
 
-  SharedState(int total)
-      : cv(&mu), total(total), num_initialized(0), num_done(0), start(false) { }
+  SharedState(int total):
+    total(total), num_initialized(0), num_done(0), start(false) { }
 };
 
 // Per-thread state for concurrent executions of the same benchmark.
@@ -760,13 +762,13 @@ private:
         SharedState* shared = arg->shared;
         ThreadState* thread = arg->thread;
         {
-            port::MutexLock l(&shared->mu);
+            std::unique_lock<std::mutex> lck(shared->mu);
             shared->num_initialized++;
             if (shared->num_initialized >= shared->total) {
-                shared->cv.SignalAll();
+                shared->cv.notify_all();
             }
             while (!shared->start) {
-                shared->cv.Wait();
+                shared->cv.wait(lck);
             }
         }
 
@@ -775,50 +777,45 @@ private:
         thread->stats.Stop();
 
         {
-            port::MutexLock l(&shared->mu);
+            std::unique_lock<std::mutex> lck(shared->mu);
             shared->num_done++;
             if (shared->num_done >= shared->total) {
-                shared->cv.SignalAll();
+                shared->cv.notify_all();
             }
         }
     }
 
-    void RunBenchmark(int n, Slice name,
-                    void (Benchmark::*method)(ThreadState*),
-                    bool hist) {
-        SharedState shared(n);
-
-        ThreadArg* arg = new ThreadArg[n];
-        for (int i = 0; i < n; i++) {
+    void RunBenchmark(int thread_num, const std::string& name, 
+                      void (Benchmark::*method)(ThreadState*), bool print_hist) {
+        SharedState shared(thread_num);
+        ThreadArg* arg = new ThreadArg[thread_num];
+        std::thread server_threads[thread_num];
+        for (int i = 0; i < thread_num; i++) {
             arg[i].bm = this;
             arg[i].method = method;
             arg[i].shared = &shared;
             arg[i].thread = new ThreadState(i);
             arg[i].thread->shared = &shared;
-            util::Env::Default()->StartThread(ThreadBody, &arg[i]);
+            server_threads[i] = std::thread(ThreadBody, &arg[i]);
         }
 
-        shared.mu.Lock();
-        while (shared.num_initialized < n) {
-            shared.cv.Wait();
+        std::unique_lock<std::mutex> lck(shared.mu);
+        while (shared.num_initialized < thread_num) {
+            shared.cv.wait(lck);
         }
 
         shared.start = true;
-        shared.cv.SignalAll();
-        while (shared.num_done < n) {
-            shared.cv.Wait();
+        shared.cv.notify_all();
+        while (shared.num_done < thread_num) {
+            shared.cv.wait(lck);
         }
-        shared.mu.Unlock();
 
-        for (int i = 1; i < n; i++) {
+        for (int i = 1; i < thread_num; i++) {
             arg[0].thread->stats.Merge(arg[i].thread->stats);
         }
-        arg[0].thread->stats.Report(name, hist);
-
-        for (int i = 0; i < n; i++) {
-            delete arg[i].thread;
-        }
-        delete[] arg;
+        arg[0].thread->stats.Report(name, print_hist);
+        
+        for (auto& th : server_threads) th.join();
     }
 
 
