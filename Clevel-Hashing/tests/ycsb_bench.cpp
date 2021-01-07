@@ -44,7 +44,10 @@ DEFINE_uint64(write, 1 * 1000000, "Number of read operations");
 DEFINE_bool(hist, false, "");
 DEFINE_string(benchmarks, "load,readrandom", "");
 
-#define TYPE_CLEVEL
+#define TYPE_CCEH
+// #define TYPE_CLEVEL
+// #define TYPE_LEVEL
+// #define TYPE_CLHT
 
 using string_t = polymorphic_string;
 namespace nvobj = pmem::obj;
@@ -510,19 +513,11 @@ public:
                 print_hist = true;
                 key_trace_->Randomize();
                 method = &Benchmark::DoReadNonLat;                
-            } else if (name == "proberandom") {
-                fresh_db = false;
-                key_trace_->Randomize();
-                method = &Benchmark::DoProbe;
             } else if (name == "stats") {
                 fresh_db = false;
                 thread = 1;
                 method = &Benchmark::DoStats;
-            } else if (name == "compare") {
-                fresh_db = true;
-                thread = 1;
-                method = &Benchmark::DoCompare;
-            } 
+            }
 
             IPMWatcher watcher(name);
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
@@ -561,36 +556,10 @@ public:
         // thread->stats.AddMessage(buf);
     }
 
-    void DoProbe(ThreadState* thread) {
-        // uint64_t batch = FLAGS_batch;
-        // if (key_trace_ == nullptr) {
-        //     // ERROR("DoProbe lack key_trace_ initialization.");
-        //     return;
-        // }
-        // size_t start_offset = random() % trace_size_;
-        // auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
-        // size_t not_find = 0;
-        // Duration duration(FLAGS_readtime, reads_);
-        // thread->stats.Start();
-        // while (!duration.Done(batch)) {
-        //     for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {         
-        //         bool res = hashtable_->Probe(key_iterator.Next());
-        //         if (unlikely(!res)) {
-        //             not_find++;
-        //         }
-        //     }
-        //     thread->stats.FinishedBatchOp(batch);
-        // }
-        // char buf[100];
-        // snprintf(buf, sizeof(buf), "(num: %lu, not probed: %lu)", reads_, not_find);
-        // // INFO("DoProbe thread: %2d. Total probe num: %lu, not find: %lu)", thread->tid, reads_, not_find);
-        // thread->stats.AddMessage(buf);
-    }
-
     void DoRead(ThreadState* thread) {
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            // ERROR("DoRead lack key_trace_ initialization.");
+            perror("DoRead lack key_trace_ initialization.");
             return;
         }
         size_t start_offset = random() % trace_size_;
@@ -599,8 +568,9 @@ public:
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
-        while (!duration.Done(batch)) {
-            for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {  
+        while (!duration.Done(batch) && key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {    
                 size_t ikey = key_iterator.Next();  
                 char key[KEY_LEN] = {0};
                 snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
@@ -609,7 +579,7 @@ public:
                     not_find++;
                 }
             }
-            thread->stats.FinishedBatchOp(batch);
+            thread->stats.FinishedBatchOp(j);
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
@@ -617,106 +587,101 @@ public:
     }
 
     void DoReadNon(ThreadState* thread) {
-        // uint64_t batch = FLAGS_batch;
-        // if (key_trace_ == nullptr) {
-        //     // ERROR("DoReadNon lack key_trace_ initialization.");
-        //     return;
-        // }
-        // size_t start_offset = random() % trace_size_;
-        // auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
-        // size_t not_find = 0;
-        // uint64_t data_offset;
-        // Duration duration(FLAGS_readtime, reads_);
-        // thread->stats.Start();        
-        // while (!duration.Done(batch)) {
-        //     for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {      
-        //         size_t key = key_iterator.Next() + num_;
-        //         auto record_ptr = hashtable_->Find(key);
-        //         if (likely(record_ptr == nullptr)) {
-        //             not_find++;
-        //         }
-        //     }
-        //     thread->stats.FinishedBatchOp(batch);
-        // }
-        // char buf[100];
-        // snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
-        // // INFO("DoReadNon thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
-        // thread->stats.AddMessage(buf);
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("DoReadNon lack key_trace_ initialization.");
+            return;
+        }
+        size_t start_offset = random() % trace_size_;
+        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        size_t not_find = 0;
+        uint64_t data_offset;
+        Duration duration(FLAGS_readtime, reads_);
+        thread->stats.Start();        
+        while (!duration.Done(batch) && key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {      
+                size_t ikey = key_iterator.Next() + num_;  
+                char key[KEY_LEN] = {0};
+                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
+                auto ret = Find({key, KEY_LEN}, thread->tid);
+                if (!ret.found) {
+                    not_find++;
+                }
+            }
+            thread->stats.FinishedBatchOp(j);
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
+        thread->stats.AddMessage(buf);
     }
 
     void DoReadLat(ThreadState* thread) {
-        // uint64_t batch = FLAGS_batch;
-        // if (key_trace_ == nullptr) {
-        //     // ERROR("DoReadLat lack key_trace_ initialization.");
-        //     return;
-        // }
-        // size_t start_offset = random() % trace_size_;
-        // auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
-        // size_t not_find = 0;
-        // uint64_t data_offset;
-        // Duration duration(FLAGS_readtime, reads_);
-        // thread->stats.Start();
-        // while (key_iterator.Valid()) {
-        //     size_t key = key_iterator.Next();
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("DoReadLat lack key_trace_ initialization.");
+            return;
+        }
+        size_t start_offset = random() % trace_size_;
+        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        size_t not_find = 0;
+        uint64_t data_offset;
+        Duration duration(FLAGS_readtime, reads_);
+        thread->stats.Start();
+        while (key_iterator.Valid()) {            
+            size_t ikey = key_iterator.Next();  
+            char key[KEY_LEN] = {0};
+            snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
 
-        //     auto time_start = NowNanos();
-        //     auto record_ptr = hashtable_->Find(key);
-        //     auto time_duration = NowNanos() - time_start;
-        //     thread->stats.hist_.Add(time_duration);
+            auto time_start = NowNanos();
+            auto ret = Find({key, KEY_LEN}, thread->tid);
+            if (!ret.found) {
+                not_find++;
+            }
+            auto time_duration = NowNanos() - time_start;
 
-        //     if (unlikely(record_ptr == nullptr)) {
-        //         not_find++;
-        //     }       
-        // }
-        // char buf[100];
-        // snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
-        // // INFO("DoReadLat thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
-        // thread->stats.AddMessage(buf);
+            thread->stats.hist_.Add(time_duration); 
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
+        thread->stats.AddMessage(buf);
     }
 
     void DoReadNonLat(ThreadState* thread) {
-        // // INFO("DoReadNonLat");
-        // uint64_t batch = FLAGS_batch;
-        // if (key_trace_ == nullptr) {
-        //     // ERROR("DoReadNonLat lack key_trace_ initialization.");
-        //     return;
-        // }
-        // size_t start_offset = random() % trace_size_;
-        // auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
-        // size_t not_find = 0;
-        // uint64_t data_offset;
-        // Duration duration(FLAGS_readtime, reads_);
-        // thread->stats.Start();
-        // while (key_iterator.Valid()) {
-        //     size_t key = key_iterator.Next() + num_;
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("DoReadLat lack key_trace_ initialization.");
+            return;
+        }
+        size_t start_offset = random() % trace_size_;
+        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        size_t not_find = 0;
+        uint64_t data_offset;
+        Duration duration(FLAGS_readtime, reads_);
+        thread->stats.Start();
+        while (key_iterator.Valid()) {            
+            size_t ikey = key_iterator.Next() + num_;  /* Generate a key out of the insertion range */
+            char key[KEY_LEN] = {0};
+            snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
+
+            auto time_start = NowNanos();
+            auto ret = Find({key, KEY_LEN}, thread->tid);
+            if (!ret.found) {
+                not_find++;
+            }
+            auto time_duration = NowNanos() - time_start;
             
-        //     auto time_start = NowNanos();
-        //     auto record_ptr = hashtable_->Find(key);
-        //     auto time_duration = NowNanos() - time_start;
-        //     thread->stats.hist_.Add(time_duration);
-
-        //     if (likely(record_ptr == nullptr)) {
-        //         not_find++;
-        //     }     
-        // }
-        // char buf[100];
-        // snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
-        // // INFO("DoReadNonLat thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
-        // thread->stats.AddMessage(buf);
-    }
-
-    /** DoCompare
-     *  @note: compare TurboHash with other Dram hash table in single thread write and multithread read
-    */
-    void DoCompare(ThreadState* thread) {
-        // TurboHash
-        
+            thread->stats.hist_.Add(time_duration); 
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
+        thread->stats.AddMessage(buf);
     }
 
     void DoWrite(ThreadState* thread) {
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            // ERROR("DoWrite lack key_trace_ initialization.");
+            perror("DoWrite lack key_trace_ initialization.");
             return;
         }
         size_t interval = num_ / FLAGS_thread;
@@ -744,37 +709,44 @@ public:
             thread->stats.FinishedBatchOp(batch);
         }
         write_end:
+        printf("Thread %2d: num: %lu, not insert: %lu\n", thread->stats.tid_, interval, not_inserted);
         return;
     }
 
 
     void DoOverWrite(ThreadState* thread) {
-        // uint64_t batch = FLAGS_batch;
-        // if (key_trace_ == nullptr) {
-        //     // ERROR("DoOverWrite lack key_trace_ initialization.");
-        //     return;
-        // }
-        // size_t interval = num_ / FLAGS_thread;
-        // size_t start_offset = thread->tid * interval;
-        // auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
-        // Duration duration(FLAGS_readtime, writes_);
-        // thread->stats.Start();
-        // std::string val(value_size_, 'v');
-        // while(!duration.Done(batch)) {
-        //     for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) {  
-        //         size_t key = key_iterator.Next(); 
-        //         bool res = hashtable_->Put(key, key);
-        //         if (!res) {
-        //             // INFO("Hash Table Full!!!\n");
-        //             printf("Hash Table Full!!!\n");
-        //             goto write_end;
-                    
-        //         }
-        //     }
-        //     thread->stats.FinishedBatchOp(batch);
-        // }
-        // write_end:
-        // return;
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("DoOverWrite lack key_trace_ initialization.");
+            return;
+        }
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        Duration duration(FLAGS_readtime, writes_);
+        size_t not_inserted = 0;
+        thread->stats.Start();
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                size_t ikey = key_iterator.Next();  
+                char key[KEY_LEN] = {0};
+	            char value[VALUE_LEN] = {0};
+                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
+                snprintf(reinterpret_cast<char *>(value), VALUE_LEN, "%lu", ikey);
+                auto res = Insert({key, KEY_LEN}, {value, VALUE_LEN}, thread->tid);
+                if (!res.found) {
+                    // success insertion
+                } else {
+                    // insertion fail
+                    not_inserted++;
+                }
+            }
+            thread->stats.FinishedBatchOp(j);
+        }
+        write_end:
+        printf("Thread %2d: num: %lu, not insert: %lu\n", thread->stats.tid_, interval, not_inserted);
+        return;
     }
 
 private:
@@ -883,6 +855,7 @@ private:
         fprintf(stdout, "------------------------------------------------\n");                   
         PrintEnvironment();
         fprintf(stdout, "HashType:              %s\n", LAYOUT);
+        fprintf(stdout, "Init Capacity:         %lu\n", map_->capacity());
         fprintf(stdout, "Entries:               %lu\n", (uint64_t)num_);
         fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);                      
         fprintf(stdout, "Read:                  %lu \n", (uint64_t)FLAGS_read);

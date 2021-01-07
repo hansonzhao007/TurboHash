@@ -1312,6 +1312,8 @@ public:
         inline void Store(uint64_t hash, const Key& key, const T& value, RecordAllocator& allocator) {
             HashSlot::H1 = key;
             HashSlot::entry = value;
+            FLUSH(this);
+            FLUSHFENCE;
         }
 
         inline Key first(void) {
@@ -1339,8 +1341,10 @@ public:
                 size_t old_val_len = *reinterpret_cast<size_t*>(old_addr);
                 if (old_val_len >= value.size()) {
                     EncodeToRecord1<false, T>::Encode(value, old_addr);
-
                     HashSlot::H1 = key;
+                    FLUSH(old_addr);
+                    FLUSH(this);
+                    FLUSHFENCE;
                     return;
                 } else {
                     allocator.Release(old_addr);
@@ -1354,6 +1358,9 @@ public:
 
             HashSlot::H1 = key;
             HashSlot::entry = addr;
+            FLUSH(addr);
+            FLUSH(this);
+            FLUSHFENCE;
         }
 
         inline Key first(void) {
@@ -1386,6 +1393,10 @@ public:
                     EncodeToRecord2<false, true, Key, T>::Encode(key, value, old_addr);
 
                     HashSlot::H1 = hash;
+
+                    FLUSH(old_addr);
+                    FLUSH(this);
+                    FLUSHFENCE;
                     return;
                 } else {
                     allocator.Release(old_addr);
@@ -1398,6 +1409,10 @@ public:
 
             HashSlot::H1 = hash;
             HashSlot::entry = addr;
+
+            FLUSH(addr);
+            FLUSH(this);
+            FLUSHFENCE;
         }
 
         inline Key first(void) {
@@ -1427,6 +1442,9 @@ public:
                 if (old_buf_len >= new_buf_len) {
                     EncodeToRecord2<false, false, Key, T>::Encode(key, value, old_addr);
                     HashSlot::H1 = hash;
+                    FLUSH(old_addr);
+                    FLUSH(this);
+                    FLUSHFENCE;
                     return;
                 }
                 allocator.Release(old_addr);
@@ -1438,6 +1456,9 @@ public:
 
             HashSlot::H1 = hash;
             HashSlot::entry = addr;
+            FLUSH(addr);
+            FLUSH(this);
+            FLUSHFENCE;
         }
 
         inline Key first(void) {
@@ -1938,7 +1959,6 @@ public:
             exit(1);
         }
 
-
         // Reset all cell's meta data
         for (size_t i = 0; i < new_cell_count; ++i) {
             char* des_cell_addr = new_bucket_addr_dram + (i << kCellSizeLeftShift);
@@ -2014,16 +2034,16 @@ public:
         // Step 4. Reset bucket meta in buckets_
         bucket_meta->Reset(new_bucket_addr_pmem, new_cell_count);
         
-        // Step 5. commit the changed bucket meta to pmem meta
+        // Step 5. commit the changed bucket meta to pmem meta. As long as this is not finished, if crash happens, turbo hash will reboot from the last state
         buckets_pmem_[bi].Store(*bucket_meta);
 
         // Step 6. Release old_bucket_addr_pmem
         cell_allocator_.Release(old_bucket_addr_pmem);
 
-        TURBO_PMEM_DEBUG("Rehash bucket: " << bi <<
-             ", old cell count: " << old_cell_count <<
-             ", loadfactor: " << (double)count / ( old_cell_count * (CellMeta256V2::SlotCount() - 1) ) << 
-             ", new cell count: " << new_cell_count);
+        // TURBO_PMEM_DEBUG("Rehash bucket: " << bi <<
+        //      ", old cell count: " << old_cell_count <<
+        //      ", loadfactor: " << (double)count / ( old_cell_count * (CellMeta256V2::SlotCount() - 1) ) << 
+        //      ", new cell count: " << new_cell_count);
 
         free(slot_vec);
         free(new_bucket_addr_dram);
@@ -2362,6 +2382,8 @@ private:
         // https://preshing.com/20130922/acquire-and-release-fences/
         TURBO_PMEM_COMPILER_FENCE();
         *bitmap = new_bitmap;
+        FLUSH(bitmap);
+        FLUSHFENCE;
     }
 
     inline bool insertSlot(const Key& key, const T& value, size_t hash_value) {
@@ -2398,18 +2420,6 @@ private:
                 } 
                 else if (res.target_slot.equal_key) {   // If this is an update request and the backup slot is occupied,
                                                         // it means the backup slot has changed in current cell. So we 
-                    // it means the backup slot has changed in current cell. So we 
-                                                        // it means the backup slot has changed in current cell. So we 
-                    // it means the backup slot has changed in current cell. So we 
-                                                        // it means the backup slot has changed in current cell. So we 
-                    // it means the backup slot has changed in current cell. So we 
-                                                        // it means the backup slot has changed in current cell. So we 
-                                                        // update the slot location.                    
-                    // update the slot location.
-                                                        // update the slot location.                    
-                    // update the slot location.
-                                                        // update the slot location.                    
-                    // update the slot location.
                                                         // update the slot location.                    
                     util::BitSet empty_bitset = meta.EmptyBitSet(); 
                     if (TURBO_PMEM_UNLIKELY(!empty_bitset)) {
