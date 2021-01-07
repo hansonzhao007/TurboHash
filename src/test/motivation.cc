@@ -27,7 +27,6 @@ const uint64_t MASK64 = (~(UINT64_C(63)));
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
-
 static uint64_t kBuff = 123;
 
 inline void // __attribute__((optimize("O0"),always_inline))
@@ -104,7 +103,7 @@ void AccessCacheLineSize() {
     size_t mapped_len;
     int   is_pmem;
     {
-        util::IPMWatcher watcher("pmem");        
+        // util::IPMWatcher watcher("pmem");        
         if ((pmem_addr = (char *)pmem_map_file(filename.c_str(), file_size, PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem)) == NULL) {
             perror("pmem_map file creation fail");
             exit(1);
