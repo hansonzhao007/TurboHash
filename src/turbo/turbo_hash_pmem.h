@@ -1235,7 +1235,7 @@ public:
     class SlotInfo {
     public:
         uint32_t bucket;        // bucket index
-        uint16_t cell;          // cell index
+        uint32_t cell;          // cell index
         uint8_t  slot;          // slot index  
         uint8_t  old_slot;      // if equal_key, this save old slot position      
         H1Tag    H1;            // hash-tag in HashSlot
@@ -1478,7 +1478,7 @@ public:
     */
     class BucketMetaDram {
     public:
-        explicit BucketMetaDram(char* addr, uint16_t cell_count) {
+        explicit BucketMetaDram(char* addr, uint32_t cell_count) {
             data_ = (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 8);
         }
 
@@ -1493,15 +1493,15 @@ public:
             return (char*)(data_ >> 16);
         }
 
-        inline uint16_t CellCountMask() {
+        inline uint32_t CellCountMask() {
             return CellCount() - 1;
         }
 
-        inline uint16_t CellCount() {
+        inline uint32_t CellCount() {
             return  ( 1 << ((data_ >> 8) & 0xFF) );
         }
 
-        inline void Reset(char* addr, uint16_t cell_count) {
+        inline void Reset(char* addr, uint32_t cell_count) {
             data_ = (data_ & 0x00000000000000FF) | (((uint64_t) addr) << 16) | (__builtin_ctz(cell_count) << 8);
         }
 
@@ -1866,13 +1866,13 @@ public:
     }
 
     struct FindNextSlotInRehashResult {
-        uint16_t cell_index;
+        uint32_t cell_index;
         uint8_t  slot_index;
     };
 
     // return the cell index and slot index
-    inline FindNextSlotInRehashResult findNextSlotInRehash(uint8_t* slot_vec, H1Tag h1, uint16_t cell_count_mask) {
-        uint16_t ai = H1ToHash(h1) & cell_count_mask;
+    inline FindNextSlotInRehashResult findNextSlotInRehash(uint8_t* slot_vec, H1Tag h1, uint32_t cell_count_mask) {
+        uint32_t ai = H1ToHash(h1) & cell_count_mask;
         int loop_count = 0;
 
         // find next cell that is not full yet

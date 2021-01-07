@@ -30,7 +30,7 @@ const uint64_t MASK64 = (~(UINT64_C(63)));
 
 static uint64_t kBuff = 123;
 
-inline void // __attribute__((optimize("O0"),always_inline))
+inline void 
 RndAccess(char* addr, uint64_t size_mask, uint64_t interval) {
     uint64_t off = turbo::wyhash32() & size_mask;
     int loop = FLAGS_loop;
@@ -42,7 +42,7 @@ RndAccess(char* addr, uint64_t size_mask, uint64_t interval) {
     }
 }
 
-inline void // __attribute__((optimize("O0"),always_inline))
+inline void 
 ConAccess(char* addr, uint64_t size_mask) {
     uint64_t off = turbo::wyhash32() & size_mask;
     int loop = FLAGS_loop;
@@ -53,7 +53,7 @@ ConAccess(char* addr, uint64_t size_mask) {
     }
 }
 
-inline void  // __attribute__((optimize("O0"),always_inline))
+inline void
 RndWrite(char* addr, uint64_t size_mask, uint64_t interval) {
     uint64_t off = turbo::wyhash32() & size_mask;
     int loop = FLAGS_loop;
@@ -62,16 +62,14 @@ RndWrite(char* addr, uint64_t size_mask, uint64_t interval) {
         *(uint64_t*)(addr + off) = val + off;
         #ifdef IS_PMEM      
         FLUSH(addr + off);
+        // FLUSHFENCE;
         #endif
         off += interval;
         off &= size_mask;
     }
-    #ifdef IS_PMEM
-    FLUSHFENCE;
-    #endif
 }
 
-inline void // __attribute__((optimize("O0"),always_inline))
+inline void
 ConWrite(char* addr, uint64_t size_mask) {
     uint64_t off = turbo::wyhash32() & size_mask;
     int loop = FLAGS_loop;
@@ -80,13 +78,10 @@ ConWrite(char* addr, uint64_t size_mask) {
         *(uint64_t*)(addr + off) = val + off;
         #ifdef IS_PMEM      
         FLUSH(addr + off);
+        // FLUSHFENCE;
         #endif
         off += 64;
     }
-    #ifdef IS_PMEM
-    FLUSHFENCE;
-    #endif
-
 }
 #pragma GCC diagnostic pop
 
