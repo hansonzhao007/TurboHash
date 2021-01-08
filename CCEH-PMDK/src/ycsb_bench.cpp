@@ -484,7 +484,6 @@ public:
     }
 
     void DoReadLat(ThreadState* thread) {
-        uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             perror("DoReadLat lack key_trace_ initialization.");
             return;
@@ -495,7 +494,7 @@ public:
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
-        while (!duration.Done(batch) && key_iterator.Valid()) {
+        while (!duration.Done(1) && key_iterator.Valid()) {
             size_t ikey = key_iterator.Next();
 
             auto time_start = NowNanos();
@@ -513,7 +512,6 @@ public:
     }
 
     void DoReadNonLat(ThreadState* thread) {
-        uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             perror("DoReadLat lack key_trace_ initialization.");
             return;
@@ -524,7 +522,7 @@ public:
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
-        while (!duration.Done(batch) && key_iterator.Valid()) {
+        while (!duration.Done(1) && key_iterator.Valid()) {
             size_t ikey = key_iterator.Next() + num_;
 
             auto time_start = NowNanos();

@@ -607,7 +607,6 @@ public:
 
     void DoReadLat(ThreadState* thread) {
         INFO("DoReadLat");
-        uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             ERROR("DoReadLat lack key_trace_ initialization.");
             return;
@@ -618,7 +617,7 @@ public:
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
-        while (!duration.Done(batch) && key_iterator.Valid()) {
+        while (!duration.Done(1) && key_iterator.Valid()) {
             size_t key = key_iterator.Next();
             auto time_start = Env::Default()->NowNanos();
             auto record_ptr = hashtable_->Find(key);
@@ -637,7 +636,6 @@ public:
 
     void DoReadNonLat(ThreadState* thread) {
         INFO("DoReadNonLat");
-        uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             ERROR("DoReadNonLat lack key_trace_ initialization.");
             return;
@@ -648,15 +646,18 @@ public:
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
-        while (!duration.Done(batch) && key_iterator.Valid()) {
-            size_t key = key_iterator.Next() + num_;            
+        while (!duration.Done(1) && key_iterator.Valid()) {
+            size_t key = key_iterator.Next() + (UINT64_MAX >> 2);
             auto time_start = Env::Default()->NowNanos();
             auto record_ptr = hashtable_->Find(key);
             auto time_duration = Env::Default()->NowNanos() - time_start;
             thread->stats.hist_.Add(time_duration);
             if (likely(record_ptr == nullptr)) {
                 not_find++;
-            }     
+            } else {
+                printf("find key : %lu, val : %lu", record_ptr->first(), record_ptr->second());
+                exit(1);
+            }
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
