@@ -721,7 +721,7 @@ public:
                 inserted++;
             }
             thread->stats.FinishedBatchOp(j);
-            printf("Load factor: %.3f\n", hashtable_->LoadFactor());
+            printf("Load factor: %.3f\n", (double)inserted / hashtable_->Capacity());
         }
         write_end:
         return;

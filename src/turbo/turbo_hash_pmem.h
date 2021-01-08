@@ -1831,6 +1831,14 @@ public:
         return 0.0;
     }
 
+    size_t Capacity() {
+        size_t sum = 0;
+        for (size_t b = 0; b < bucket_count_; ++b) {
+            sum += buckets_[b].CellCount() * (CellMeta::SlotCount() - 1);
+        }
+        return sum;
+    }
+
     /** MinorReHashAll
      *  @note: not thread safe. This global rehashing will double the hash table capacity.
      *  ! 
@@ -1840,7 +1848,6 @@ public:
         int rehash_thread = 16;
         printf("Rehash threads: %d\n", rehash_thread);
         std::vector<std::thread> workers(rehash_thread);
-        std::vector<size_t> add_capacity(rehash_thread, 0);
         std::atomic<size_t> rehash_count(0);
         auto rehash_start = util::NowMicros();
         for (int t = 0; t < rehash_thread; t++) {
