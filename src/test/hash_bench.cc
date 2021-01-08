@@ -648,7 +648,7 @@ public:
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
-        while (key_iterator.Valid()) {
+        while (!duration.Done(batch) && key_iterator.Valid()) {
             size_t key = key_iterator.Next() + num_;            
             auto time_start = Env::Default()->NowNanos();
             auto record_ptr = hashtable_->Find(key);
