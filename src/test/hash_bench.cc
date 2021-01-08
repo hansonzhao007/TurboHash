@@ -34,7 +34,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 using namespace util;
 
-#define IS_PMEM 1
+// #define IS_PMEM 1
 
 // For hash table 
 DEFINE_bool(use_existing_db, false, "");
@@ -433,6 +433,9 @@ public:
                 fresh_db = false;
                 key_trace_->Randomize();
                 method = &Benchmark::DoOverWrite;                
+            } else if (name == "allloadfactor") {
+                fresh_db = true;
+                method = &Benchmark::DoLoadFactor;                
             } else if (name == "readrandom") {
                 fresh_db = false;
                 key_trace_->Randomize();
@@ -486,6 +489,9 @@ public:
             #else
             if (fresh_db) {
                 hashtable_ = new Hashtable(FLAGS_bucket_count, FLAGS_cell_count);
+            } else if (hashtable_ == nullptr) {
+                perror("Hash table not initialized.");
+                exit(1);
             }
             #endif
 
@@ -688,6 +694,38 @@ public:
         return;
     }
 
+    // Print out load factor every 1 million insertion
+    void DoLoadFactor(ThreadState* thread) {
+        INFO("DoLoadFactor");
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            ERROR("DoLoadFactor lack key_trace_ initialization.");
+            return;
+        }
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
+        size_t inserted = 0;
+        thread->stats.Start();        
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                size_t key = key_iterator.Next();
+                bool res = hashtable_->Put(key, key);
+                if (!res) {
+                    INFO("Hash Table Full!!!\n");
+                    printf("Hash Table Full!!!\n");
+                    goto write_end;
+                }
+                inserted++;
+            }
+            thread->stats.FinishedBatchOp(j);
+            printf("Load factor: %.3f\n", hashtable_->LoadFactor());
+        }
+        write_end:
+        return;
+    }
 
     void DoOverWrite(ThreadState* thread) {
         INFO("DoOverWrite");

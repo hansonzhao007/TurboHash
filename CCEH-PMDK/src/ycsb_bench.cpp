@@ -29,6 +29,7 @@ using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
 
+DEFINE_int32(initsize, 16, "initial capacity in million");
 DEFINE_string(filepath, "/mnt/pmem/objpool.data", "");
 DEFINE_uint32(batch, 1000000, "report batch");
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
@@ -357,7 +358,7 @@ public:
             exit(1);
         }
 
-        const size_t initialSize = 1024*32;
+        const size_t initialSize = 1024 * FLAGS_initsize; // 16 million initial
         hashtable_ = POBJ_ROOT(pop_, CCEH);
         D_RW(hashtable_)->initCCEH(pop_, initialSize);
     }
@@ -394,6 +395,9 @@ public:
             if (name == "load") {
                 fresh_db = true;
                 method = &Benchmark::DoWrite;                
+            } else if (name == "allloadfactor") {
+                fresh_db = true;
+                method = &Benchmark::DoLoadFactor;                
             } else if (name == "overwrite") {
                 fresh_db = false;
                 key_trace_->Randomize();
@@ -556,6 +560,32 @@ public:
                 D_RW(hashtable_)->Insert(pop_, ikey, reinterpret_cast<Value_t>(ikey));
             }
             thread->stats.FinishedBatchOp(j);
+        }
+        write_end:
+        return;
+    }
+
+    void DoLoadFactor(ThreadState* thread) {
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("DoLoadFactor lack key_trace_ initialization.");
+            return;
+        }
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
+        size_t inserted = 0;
+        thread->stats.Start();        
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                size_t ikey = key_iterator.Next();  
+                D_RW(hashtable_)->Insert(pop_, ikey, reinterpret_cast<Value_t>(ikey));
+                inserted++;
+            }
+            thread->stats.FinishedBatchOp(j);
+            printf("Load factor: %.3f\n", (double)(inserted) / D_RW(hashtable_)->Capacity());
         }
         write_end:
         return;

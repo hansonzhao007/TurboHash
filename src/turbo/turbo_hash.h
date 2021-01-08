@@ -2130,9 +2130,9 @@ private:
                     insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot); // update slot content (including pointer and H1), H2 and bitmap
 
                     // TODO: use thread_local variable to improve write performance
-                    // if (!res.target_slot.equal_key) {
-                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
-                    // }
+                    if (!res.target_slot.equal_key) {
+                        size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                    }
 
                     return true;
                 } else if (res.target_slot.equal_key) {

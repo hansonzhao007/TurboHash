@@ -49,6 +49,33 @@ DEFINE_string(benchmarks, "load,readrandom", "");
 // #define TYPE_LEVEL
 // #define TYPE_CLHT
 
+#define DEBUG_RESIZING 1
+
+#define MICRO_BENCH
+// #define MACRO_BENCH
+
+#ifdef MICRO_BENCH
+// Initialize around 10 million slots
+// 16 M
+#define CCEH_INITIAL_DEPTH 14U 
+// 12 million
+#define CLEVEL_HASH_POWER 20
+// 12 million
+#define LEVEL_HASH_POWER 21
+// 12 million
+#define CLHT_N_BUCKETS ((1LU << 22))
+#else 
+// Initialize around 100 million slots
+// 8 M
+#define CCEH_INITIAL_DEPTH 13U 
+// 12 million
+#define CLEVEL_HASH_POWER 20
+// 12 million
+#define LEVEL_HASH_POWER 21
+
+#define CLHT_N_BUCKETS 16384
+#endif
+
 using string_t = polymorphic_string;
 namespace nvobj = pmem::obj;
 
@@ -86,36 +113,25 @@ private:
 
 namespace {
 
+#define KEY_LEN 15
+#define VALUE_LEN 15
+
 #ifdef TYPE_CCEH
 #define LAYOUT "CCEH"
-#define KEY_LEN 15
-#define VALUE_LEN 16
-//1024*2^6=65536
-#define INITIAL_DEPTH 6U
 typedef nvobj::experimental::CCEH
 	persistent_map_type;
 #elif defined TYPE_CLEVEL
 #define LAYOUT "CLEVEL"
-#define KEY_LEN 15
-#define VALUE_LEN 16
-#define HASH_POWER 12
 typedef nvobj::experimental::clevel_hash<string_t, string_t, string_hasher,
-	std::equal_to<string_t>, HASH_POWER>
+	std::equal_to<string_t>, CLEVEL_HASH_POWER>
 	persistent_map_type;
 #elif defined TYPE_LEVEL
-// (2^13 + 2^12) * 4 = 49152
-#define HASH_POWER 13
 #define LAYOUT "LEVEL"
-#define KEY_LEN 15
-#define VALUE_LEN 16
 typedef nvobj::experimental::level_hash<string_t, string_t, string_hasher,
 	std::equal_to<string_t>>
 	persistent_map_type;
 #elif defined TYPE_CLHT
 #define LAYOUT "CLHT"
-#define KEY_LEN 15
-#define VALUE_LEN 16
-#define N_BUCKETS 16384
 typedef nvobj::experimental::clht<string_t, string_t, string_hasher,
 	std::equal_to<string_t>>
 	persistent_map_type;
@@ -434,20 +450,20 @@ public:
         key_trace_(nullptr) {
         
         remove(FLAGS_filepath.c_str()); // delete the mapped file.
-        pop_ = nvobj::pool<root>::create(FLAGS_filepath.c_str(), LAYOUT, PMEMOBJ_MIN_POOL * 10240, S_IWUSR | S_IRUSR);
+        pop_ = nvobj::pool<root>::create(FLAGS_filepath.c_str(), LAYOUT, PMEMOBJ_MIN_POOL * 15360, S_IWUSR | S_IRUSR);
         auto proot = pop_.root();
         {
             nvobj::transaction::manual tx(pop_);
 
             #ifdef TYPE_CCEH
-		    proot->cons = nvobj::make_persistent<persistent_map_type>(INITIAL_DEPTH);
+		    proot->cons = nvobj::make_persistent<persistent_map_type>(CCEH_INITIAL_DEPTH);
             #elif defined TYPE_CLEVEL
             proot->cons = nvobj::make_persistent<persistent_map_type>();
 		    proot->cons->set_thread_num(2);
             #elif defined TYPE_LEVEL
-            proot->cons = nvobj::make_persistent<persistent_map_type>((uint64_t)HASH_POWER, 1);
+            proot->cons = nvobj::make_persistent<persistent_map_type>((uint64_t)LEVEL_HASH_POWER, 1);
             #elif defined TYPE_CLHT
-            proot->cons = nvobj::make_persistent<persistent_map_type>((uint64_t)N_BUCKETS);
+            proot->cons = nvobj::make_persistent<persistent_map_type>((uint64_t)CLHT_N_BUCKETS);
             #endif
 
 		    nvobj::transaction::commit();
@@ -491,6 +507,9 @@ public:
             if (name == "load") {
                 fresh_db = true;
                 method = &Benchmark::DoWrite;                
+            } else if (name == "allloadfactor") {
+                fresh_db = true;
+                method = &Benchmark::DoLoadFactor;                
             } else if (name == "overwrite") {
                 fresh_db = false;
                 key_trace_->Randomize();
@@ -688,7 +707,6 @@ public:
         size_t start_offset = thread->tid * interval;
         auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
         printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
-        size_t not_inserted = 0;
         thread->stats.Start();
         std::string val(value_size_, 'v');
         while (key_iterator.Valid()) {
@@ -698,21 +716,44 @@ public:
 	            char value[VALUE_LEN] = {0};
                 snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
                 snprintf(reinterpret_cast<char *>(value), VALUE_LEN, "%lu", ikey);
-                auto res = Insert({key, KEY_LEN}, {value, VALUE_LEN}, thread->tid);
-                if (!res.found) {
-                    // success insertion
-                } else {
-                    // insertion fail
-                    not_inserted++;
-                }
+                auto res = Insert({key, KEY_LEN}, {value, VALUE_LEN}, thread->tid);                
             }
             thread->stats.FinishedBatchOp(batch);
         }
         write_end:
-        printf("Thread %2d: num: %lu, not insert: %lu\n", thread->stats.tid_, interval, not_inserted);
         return;
     }
 
+    void DoLoadFactor(ThreadState* thread) {
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("DoLoadFactor lack key_trace_ initialization.");
+            return;
+        }
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
+        size_t inserted = 0;
+        size_t not_inserted = 0;
+        thread->stats.Start();      
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                size_t ikey = key_iterator.Next();  
+                char key[KEY_LEN] = {0};
+	            char value[VALUE_LEN] = {0};
+                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
+                snprintf(reinterpret_cast<char *>(value), VALUE_LEN, "%lu", ikey);
+                auto res = Insert({key, KEY_LEN}, {value, VALUE_LEN}, thread->tid);
+                inserted++;
+            }
+            thread->stats.FinishedBatchOp(j);
+            printf("Load factor: %.3f\n", (double)(inserted) / map_->capacity());
+        }
+        write_end:
+        return;
+    }
 
     void DoOverWrite(ThreadState* thread) {
         uint64_t batch = FLAGS_batch;
@@ -856,6 +897,8 @@ private:
         PrintEnvironment();
         fprintf(stdout, "HashType:              %s\n", LAYOUT);
         fprintf(stdout, "Init Capacity:         %lu\n", map_->capacity());
+        fprintf(stdout, "Key Size:              %lu\n", KEY_LEN);
+        fprintf(stdout, "Val Size:              %lu\n", VALUE_LEN);
         fprintf(stdout, "Entries:               %lu\n", (uint64_t)num_);
         fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);                      
         fprintf(stdout, "Read:                  %lu \n", (uint64_t)FLAGS_read);
