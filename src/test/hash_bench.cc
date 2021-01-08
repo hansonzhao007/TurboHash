@@ -34,7 +34,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 using namespace util;
 
-// #define IS_PMEM 1
+#define IS_PMEM 1
 
 // For hash table 
 DEFINE_bool(use_existing_db, false, "");
@@ -618,7 +618,7 @@ public:
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
-        while (key_iterator.Valid()) {
+        while (!duration.Done(batch) && key_iterator.Valid()) {
             size_t key = key_iterator.Next();
             auto time_start = Env::Default()->NowNanos();
             auto record_ptr = hashtable_->Find(key);
