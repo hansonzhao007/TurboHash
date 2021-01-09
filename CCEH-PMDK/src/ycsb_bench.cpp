@@ -395,6 +395,10 @@ public:
             if (name == "load") {
                 fresh_db = true;
                 method = &Benchmark::DoWrite;                
+            } if (name == "loadlat") {
+                fresh_db = true;
+                print_hist = true;
+                method = &Benchmark::DoWriteLat;                
             } else if (name == "allloadfactor") {
                 fresh_db = true;
                 method = &Benchmark::DoLoadFactor;                
@@ -558,6 +562,29 @@ public:
                 D_RW(hashtable_)->Insert(pop_, ikey, reinterpret_cast<Value_t>(ikey));
             }
             thread->stats.FinishedBatchOp(j);
+        }
+        write_end:
+        return;
+    }
+
+    void DoWriteLat(ThreadState* thread) {
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("DoWriteLat lack key_trace_ initialization.");
+            return;
+        }
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
+        thread->stats.Start();
+        while (key_iterator.Valid()) {
+            size_t ikey = key_iterator.Next();  
+
+            auto time_start = NowNanos();
+            D_RW(hashtable_)->Insert(pop_, ikey, reinterpret_cast<Value_t>(ikey));
+            auto time_duration = NowNanos() - time_start;
+            thread->stats.hist_.Add(time_duration);   
         }
         write_end:
         return;
