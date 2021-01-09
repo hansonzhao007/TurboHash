@@ -456,7 +456,8 @@ public:
 		    proot->cons = nvobj::make_persistent<persistent_map_type>(CCEH_INITIAL_DEPTH);
             #elif defined TYPE_CLEVEL
             proot->cons = nvobj::make_persistent<persistent_map_type>();
-		    proot->cons->set_thread_num(FLAGS_thread);
+            // add one more thread for background resize
+		    proot->cons->set_thread_num(FLAGS_thread + 1);
             #elif defined TYPE_LEVEL
             proot->cons = nvobj::make_persistent<persistent_map_type>((uint64_t)LEVEL_HASH_POWER, 1);
             #elif defined TYPE_CLHT
