@@ -8,13 +8,13 @@ from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
 # import matplotlib as mpl
 plt.rcParams["font.family"] = "serif"
-plt.rcParams['axes.linewidth'] = 1.2
+plt.rcParams['axes.linewidth'] = 1.8
 
 hashtables = ('turbo', 'cceh', 'turbo30', 'cceh30', 'clevel30', 'clht30')
 legend_name = ('TURBO16', 'CCEH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
 
 def PlotIO():
-    fig, ax = plt.subplots(figsize=(5, 3.1))
+    fig, ax = plt.subplots(figsize=(7, 7))
 
     data = pd.DataFrame()
 
@@ -39,10 +39,10 @@ def PlotIO():
 
     ax.set_axisbelow(True)
     ax.grid(axis='y', linestyle='-.', linewidth=0.5)    
-    ax.set_ylabel("Total IO (GB)", fontsize=16)
-    ax.legend(["Positive Read", "Positive Write", "Negative Read", "Negative Write", "Load Read", "Load Write"], loc="upper left", fontsize=9.5, framealpha=1)
-    ax.tick_params(axis='y', labelsize=13)
-    ax.tick_params(axis='x', labelsize=12, rotation=45)
+    ax.set_ylabel("Total IO (GB)", fontsize=22)
+    ax.legend(["Positive Read - R", "Positive Read - W", "Negative Read - R", "Negative Read - W", "Load - R", "Load - W"], loc="upper left", fontsize=16, framealpha=1)
+    ax.tick_params(axis='y', labelsize=18)
+    ax.tick_params(axis='x', labelsize=20, rotation=30)
     ax.set_xlim([-0.5, 5.75])
     fig.savefig('io.pdf', bbox_inches='tight', pad_inches=0.05)
 
@@ -81,9 +81,10 @@ def add_value_labels(ax, spacing, labels, pick_standard):
 
             # Use Y value as label and format number with one decimal place
             label = "{:.1f}".format(labels[j])
-            if not unit:
-                label = label + " Mops/s"
-                unit = True
+            label = label + " Mops/s"
+            # if not unit:
+            #     label = label + " Mops/s"
+            #     unit = True
             # Create annotation
             ax.annotate(
                 label,                      # Use `label` as label
@@ -91,13 +92,13 @@ def add_value_labels(ax, spacing, labels, pick_standard):
                 xytext=(-7, space),          # Vertically shift label by `space`
                 textcoords="offset points", # Interpret `xytext` as offset in points
                 ha='center',                # Horizontally center label
-                va=va, rotation=90, fontsize=20)                      # Vertically align label differently for
+                va=va, rotation=90, fontsize=18)                      # Vertically align label differently for
                                             # positive and negative values.
             j = j + 1
         i = i + 1
 
 def PlotNormal(df, ax, filename):    
-    pick_standard = 2
+    pick_standard = 3
     normalized = df.copy()
     for kv in hashtables:
         normalized.loc[kv] = normalized.loc[kv] / df.iloc[pick_standard]
@@ -113,16 +114,13 @@ def PlotNormal(df, ax, filename):
     
     labels = (df).values.tolist()[pick_standard] 
     print(labels)
-    # amplification1 = normalized['cceh'].tolist()
-    # amplification2 = normalized['cceh30'].tolist()
     add_value_labels(ax, 7, labels, pick_standard)
-    # add_value_labels(ax, 7, amplification1, 1)
     # draw legend
     ax.get_legend().remove()
-    ax.legend(legend_name, fontsize=14) #, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(0, 1.22, 1, 0))
+    ax.legend(legend_name, fontsize=15, loc='upper left') #, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(0, 1.22, 1, 0))
     ax.yaxis.grid(linewidth=1, linestyle='--')
     ax.set_axisbelow(True)
-    ax.set_ylabel('Normalized Throughput', fontsize=22)
+    ax.set_ylabel('Normalized Throughput', fontsize=26)
     # ax.set_ylim([0.1, 11.9])
     plt.savefig(filename, bbox_inches='tight', pad_inches=0.05)
 
@@ -135,9 +133,9 @@ def PlotNormalThroughput():
         data = data.append(df.iloc[0])
     
     data.index = hashtables
-
+    data.columns = ['Load', 'Positive\nRead', 'Negative\nRead']
     # Plot 
-    ax = plt.figure(figsize=(5, 3.1)).add_subplot(111)
+    ax = plt.figure(figsize=(7, 7)).add_subplot(111)
     df = data
     print(df)
     PlotNormal(df, ax, 'throughput_normalized.pdf')
