@@ -77,11 +77,7 @@ def PlotLat():
         ax.text(0.43, 0.87, " p99: " + '%.2f' % (df_data.iloc[0]['p99'] / 1000.0),
             horizontalalignment='center',
             verticalalignment='center',
-            transform = ax.transAxes, fontsize=mysize)
-        ax.text(0.41, 0.82, "p999: " + '%.2f' % (df_data.iloc[0]['p999'] / 1000.0),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes, fontsize=mysize)
+            transform = ax.transAxes, fontsize=mysize)       
         # xmin, xmax = ax.get_ylim()
         # ax.axhline(y=df_data.iloc[0]['avg'] / 1000.0, xmin=xmin, xmax=xmax, color='#B31512')
 
@@ -108,10 +104,6 @@ def PlotLat():
             verticalalignment='center',
             transform = ax2.transAxes, fontsize=mysize)
         ax2.text(0.57, 0.87, " p99: " + '%.2f' % (df2_data.iloc[0]['p99'] / 1000.0),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax2.transAxes, fontsize=mysize)
-        ax2.text(0.55, 0.82, "p999: " + '%.2f' % (df2_data.iloc[0]['p999'] / 1000.0),
             horizontalalignment='center',
             verticalalignment='center',
             transform = ax2.transAxes, fontsize=mysize)
@@ -198,7 +190,7 @@ def PlotNormalLat():
     ax = plt.figure(figsize=(12, 6)).add_subplot(111)
     df = data_positive
     df = df.iloc[:,:-2]
-    df = df.drop(['min', 'std', 'p50', 'p75', 'max'], axis=1)
+    df = df.drop(['min', 'std', 'p50', 'p75', 'max', 'p999'], axis=1)
     print(df)
     pick_standard = 0
     normalized = df.copy()
@@ -224,14 +216,14 @@ def PlotNormalLat():
     ax.yaxis.grid(linewidth=1, linestyle='--')
     ax.set_axisbelow(True)
     ax.set_ylabel('Normalized Average Latency', fontsize=24)
-    ax.set_ylim([0.1, 10])
+    # ax.set_ylim([0.1, 10])
     plt.savefig('readlat_normalized.pdf', bbox_inches='tight', pad_inches=0.05)
 
     # Plot Negetive
     ax = plt.figure(figsize=(12, 6)).add_subplot(111)
     df = data_negetive
     df = df.iloc[:,:-2]
-    df = df.drop(['min', 'std', 'p50', 'p75', 'max'], axis=1)
+    df = df.drop(['min', 'std', 'p50', 'p75', 'max', 'p999'], axis=1)
     print(df)
     pick_standard = 0
     normalized = df.copy()
@@ -259,7 +251,7 @@ def PlotNormalLat():
     ax.yaxis.grid(linewidth=1, linestyle='--')
     ax.set_axisbelow(True)
     ax.set_ylabel('Normalized Average Latency', fontsize=24)
-    ax.set_ylim([0.1, 10])
+    # ax.set_ylim([0.1, 10])
     plt.savefig('readnonlat_normalized.pdf', bbox_inches='tight', pad_inches=0.05)
 
 PlotIO()
