@@ -10,7 +10,7 @@ SOCKET_NO=0
 # numactl -N $SOCKET_NO sudo ../CCEH-PMDK/ycsb_bench --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.cceh
 
 
-numactl -N $SOCKET_NO sudo ../Clevel-Hashing/release/tests/ycsb_bench --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.clht30
+numactl -N $SOCKET_NO sudo ../Clevel-Hashing/release/tests/ycsb_bench --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.clevel30
 
 
 

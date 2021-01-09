@@ -18,70 +18,70 @@ Stats interval:        10000000 records
 benchmarks:            loadlat
 ------------------------------------------------
 [32mStart IPMWatcher for loadlat
-[0mthread  3, between 18750000 - 25000000
-thread  8, between 50000000 - 56250000
-thread 11, between 68750000 - 75000000
-thread  0, between 0 - 6250000
-thread 14, between 87500000 - 93750000
-thread  5, between 31250000 - 37500000
+[0mthread  2, between 12500000 - 18750000
 thread  6, between 37500000 - 43750000
-thread  7, between 43750000 - 50000000
-thread  9, between 56250000 - 62500000
-thread 15, between 93750000 - 100000000
+thread  8, between 50000000 - 56250000
 thread 10, between 62500000 - 68750000
-thread 13, between 81250000 - 87500000
-thread 12, between 75000000 - 81250000
+thread 14, between 87500000 - 93750000
+thread  0, between 0 - 6250000
 thread  1, between 6250000 - 12500000
-thread  2, between 12500000 - 18750000
+thread 15, between 93750000 - 100000000
+thread  9, between 56250000 - 62500000
+thread  3, between 18750000 - 25000000
+thread 11, between 68750000 - 75000000
 thread  4, between 25000000 - 31250000
-Thread-2 starts expanding for 2097152 buckets
-Thread-2 finishes expanding, capacity: 29360128
+thread 12, between 75000000 - 81250000
+thread 13, between 81250000 - 87500000
+thread  5, between 31250000 - 37500000
+thread  7, between 43750000 - 50000000
+Thread-16 starts expanding for 2097152 buckets
+Thread-16 finishes expanding, capacity: 29360128
 Expand thread updates metadata, is_resizing: 0 levels_left: 2
-Thread-1 starts expanding for 4194304 buckets
-Thread-1 finishes expanding, capacity: 58720256
+Thread-12 starts expanding for 4194304 buckets
+Thread-12 finishes expanding, capacity: 58720256
 expand during resizing!
 Thread-0 starts expanding for 8388608 buckets
 Thread-0 finishes expanding, capacity: 125829120
 Expand thread updates metadata, is_resizing: 1 levels_left: 3
 Expand thread updates metadata, is_resizing: 0 levels_left: 2
-Thread-13 starts expanding for 16777216 buckets
-Thread-13 finishes expanding, capacity: 234881024
-loadlat      : 72981733.000 micros/op 0.000000 Mops/s;
+Thread-10 starts expanding for 16777216 buckets
+Thread-10 finishes expanding, capacity: 234881024
+loadlat      : 72001969.000 micros/op 0.000000 Mops/s;
 Nanoseconds per op:
-Count: 100000000 Average: 10913.7857  StdDev: 30.07
-Min: 4349  Median: 10005.5320  Max: 1411420437
-Percentiles: P50: 10005.53 P75: 12466.37 P99: 21365.82 P99.9: 32893.11 P99.99: 106502.86
+Count: 100000000 Average: 11058.9545  StdDev: 11.92
+Min: 4192  Median: 10220.4189  Max: 1463384192
+Percentiles: P50: 10220.42 P75: 12581.77 P99: 21415.78 P99.9: 36117.13 P99.99: 107900.27
 ------------------------------------------------------
-(    2900,    4400 ]        2   0.000%   0.000% 
-(    4400,    6600 ]  2305103   2.305%   2.305% 
-(    6600,    9900 ] 46622781  46.623%  48.928% #########
-(    9900,   14000 ] 41652459  41.652%  90.580% ########
-(   14000,   22000 ]  9144571   9.145%  99.725% ##
-(   22000,   33000 ]   176802   0.177%  99.902% 
-(   33000,   50000 ]     9031   0.009%  99.911% 
-(   50000,   75000 ]    63856   0.064%  99.975% 
-(   75000,  110000 ]    17104   0.017%  99.992% 
-(  110000,  170000 ]      444   0.000%  99.992% 
-(  170000,  250000 ]      273   0.000%  99.992% 
-(  250000,  380000 ]      439   0.000%  99.993% 
-(  380000,  570000 ]      645   0.001%  99.994% 
-(  570000,  860000 ]     6405   0.006% 100.000% 
-(  860000, 1200000 ]       12   0.000% 100.000% 
-( 1200000, 1900000 ]        9   0.000% 100.000% 
-( 110000000, 160000000 ]        7   0.000% 100.000% 
-( 160000000, 250000000 ]        9   0.000% 100.000% 
+(    2900,    4400 ]        6   0.000%   0.000% 
+(    4400,    6600 ]  1785511   1.786%   1.786% 
+(    6600,    9900 ] 44822161  44.822%  46.608% #########
+(    9900,   14000 ] 43407297  43.407%  90.015% #########
+(   14000,   22000 ]  9692867   9.693%  99.708% ##
+(   22000,   33000 ]   190126   0.190%  99.898% 
+(   33000,   50000 ]    11082   0.011%  99.909% 
+(   50000,   75000 ]    63636   0.064%  99.973% 
+(   75000,  110000 ]    18419   0.018%  99.991% 
+(  110000,  170000 ]      565   0.001%  99.992% 
+(  170000,  250000 ]      294   0.000%  99.992% 
+(  250000,  380000 ]      576   0.001%  99.993% 
+(  380000,  570000 ]      778   0.001%  99.993% 
+(  570000,  860000 ]     6561   0.007% 100.000% 
+(  860000, 1200000 ]       49   0.000% 100.000% 
+( 1200000, 1900000 ]        8   0.000% 100.000% 
+( 110000000, 160000000 ]        4   0.000% 100.000% 
+( 160000000, 250000000 ]       12   0.000% 100.000% 
 ( 250000000, 370000000 ]       16   0.000% 100.000% 
 ( 560000000, 850000000 ]       16   0.000% 100.000% 
 ( 1200000000, 1900000000 ]       16   0.000% 100.000% 
 
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |      49589.89 |       29964.92 |    75596.02 |     34238.74 |   1.52 |   1.14 |[0m
+  MB  |      49224.22 |       29925.00 |    75562.61 |     34087.22 |   1.54 |   1.14 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |      54686.32 |       41427.47 |    83795.67 |     58631.57 |   1.53 |   1.42 |[0m
+  MB  |      54425.68 |       41372.15 |    83487.82 |     58493.17 |   1.53 |   1.41 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |      27943.43 |       11316.02 |    57067.38 |     19728.20 |   2.04 |   1.74 |[0m
+  MB  |      27916.79 |       11285.87 |    56970.93 |     19654.82 |   2.04 |   1.74 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |      27897.28 |       11316.93 |    56971.48 |     19701.79 |   2.04 |   1.74 |[0m
-[34m*SUM* | DIMM-R:  3746.5 MB/s. User-R:  2193.9 MB/s   | DIMM-W:  1812.8 MB/s, User-W:  1288.3 MB/s. Time:  72.98s.[0m
+  MB  |      27881.35 |       11287.65 |    56856.82 |     19604.47 |   2.04 |   1.74 |[0m
+[34m*SUM* | DIMM-R:  3789.8 MB/s. User-R:  2214.5 MB/s   | DIMM-W:  1831.0 MB/s, User-W:  1303.7 MB/s. Time:  72.00s.[0m
 [32mDestroy IPMWatcher.
 [0m
