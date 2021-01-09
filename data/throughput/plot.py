@@ -122,7 +122,7 @@ def PlotNormal(df, ax, filename):
     ax.legend(legend_name, fontsize=14) #, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(0, 1.22, 1, 0))
     ax.yaxis.grid(linewidth=1, linestyle='--')
     ax.set_axisbelow(True)
-    ax.set_ylabel('Normalized Latency', fontsize=22)
+    ax.set_ylabel('Normalized Throughput', fontsize=22)
     # ax.set_ylim([0.1, 11.9])
     plt.savefig(filename, bbox_inches='tight', pad_inches=0.05)
 
@@ -137,13 +137,13 @@ def PlotNormalThroughput():
     data.index = hashtables
 
     # Plot 
-    ax = plt.figure(figsize=(7, 6)).add_subplot(111)
+    ax = plt.figure(figsize=(5, 3.1)).add_subplot(111)
     df = data
     print(df)
     PlotNormal(df, ax, 'throughput_normalized.pdf')
 
 
-# PlotIO()
+PlotIO()
 PlotNormalThroughput()
 
 

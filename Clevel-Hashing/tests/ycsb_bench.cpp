@@ -45,11 +45,11 @@ DEFINE_bool(hist, false, "");
 DEFINE_string(benchmarks, "load,readrandom", "");
 
 // #define TYPE_CCEH
-#define TYPE_CLEVEL
+// #define TYPE_CLEVEL
 // #define TYPE_LEVEL
-// #define TYPE_CLHT
+#define TYPE_CLHT
 
-#define DEBUG_RESIZING 1
+// #define DEBUG_RESIZING 1
 
 #define MICRO_BENCH
 // #define MACRO_BENCH
@@ -558,7 +558,7 @@ public:
 
     inline Ret Insert(const string_t& key, const string_t& val, size_t tid) {
         #ifdef TYPE_CCEH
-        return map_->insert((uint8_t*)key.c_str(), (uint8_t*)val.c_str(), KEY_LEN, VALUE_LEN, tid);
+        return map_->insert((uint8_t*)key.c_str(), (uint8_t*)val.c_str(), key.size(), val.size(), tid);
         #elif defined TYPE_CLEVEL
         return map_->insert(ValueType(key, val), tid + 1, tid +1);
         #elif defined TYPE_LEVEL
