@@ -34,7 +34,7 @@ def PlotMiss(data, bw, r_w, latency, filename, islog):
     seq_r = "seq_" + r_w + "_r"
     seq_w = "seq_" + r_w + "_w"
     ax = axes[0]
-    bw[[rnd_r, rnd_w]].plot.barh(ax=ax, color=("blue", "red"), edgecolor='k',stacked=True, width=0.25, position=1, fontsize=16, alpha=0.6)
+    bw[[rnd_r, rnd_w]].plot.barh(ax=ax, color=("blue", "red"), edgecolor='k',  stacked=True, width=0.25, position=1, fontsize=16, alpha=0.6)
     bw[[seq_r, seq_w]].plot.barh(ax=ax, color=("blue", "red"), edgecolor='k',  stacked=True, width=0.25, position=0, fontsize=16, alpha=0.6)
     ax.grid(axis='x', linestyle='-.', linewidth=0.5)
     ax.set_axisbelow(True)
@@ -48,7 +48,7 @@ def PlotMiss(data, bw, r_w, latency, filename, islog):
     axes[0].yaxis.tick_right()
     fig.subplots_adjust(wspace=0.17)
 
-    fig.savefig(filename, bbox_inches='tight', pad_inches=0 )
+    fig.savefig(filename, bbox_inches='tight', pad_inches=0.05)
 
 
 # Plot Dram

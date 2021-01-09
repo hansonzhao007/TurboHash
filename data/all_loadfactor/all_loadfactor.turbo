@@ -1,6 +1,6 @@
 key trace size: 100000000
 Randomize the trace...------------------------------------------------
-Pmem:                  false
+Pmem:                  true
 Key type:              unsigned long
 Val type:              unsigned long
 Keys:                  8 bytes each
@@ -23,7 +23,8 @@ Report interval:       0 s
 Stats interval:        10000000 records
 benchmarks:            allloadfactor,readrandom
 ------------------------------------------------
-thread  0, between 0 - 100000000
+[32mStart IPMWatcher for allloadfactor
+[0mthread  0, between 0 - 100000000
 Load factor: 0.073
 Load factor: 0.147
 Load factor: 0.220
@@ -33,7 +34,7 @@ Load factor: 0.440
 Load factor: 0.514
 Load factor: 0.587
 Load factor: 0.660
-2021/01/07-20:27:21  ... thread 0: (10000000,10000000) ops and ( 5388381.0,5388381.0 ) ops/second in (1.8558,1.8558) seconds
+2021/01/08-13:06:05  ... thread 0: (10000000,10000000) ops and ( 1091706.0,1091706.0 ) ops/second in (9.1600,9.1600) seconds
 Load factor: 0.734
 Load factor: 0.806
 Load factor: 0.860
@@ -44,7 +45,7 @@ Load factor: 0.588
 Load factor: 0.624
 Load factor: 0.660
 Load factor: 0.697
-2021/01/07-20:27:23  ... thread 0: (10000000,20000000) ops and ( 4015119.3,4601476.5 ) ops/second in (2.4906,4.3464) seconds
+2021/01/08-13:06:14  ... thread 0: (10000000,20000000) ops and ( 1022529.1,1055985.8 ) ops/second in (9.7797,18.9396) seconds
 Load factor: 0.734
 Load factor: 0.770
 Load factor: 0.807
@@ -55,7 +56,7 @@ Load factor: 0.704
 Load factor: 0.597
 Load factor: 0.545
 Load factor: 0.538
-2021/01/07-20:27:26  ... thread 0: (10000000,30000000) ops and ( 3677327.7,4245805.5 ) ops/second in (2.7194,7.0658) seconds
+2021/01/08-13:06:26  ... thread 0: (10000000,30000000) ops and ( 859791.7,981342.3 ) ops/second in (11.6307,30.5704) seconds
 Load factor: 0.551
 Load factor: 0.569
 Load factor: 0.587
@@ -66,7 +67,7 @@ Load factor: 0.660
 Load factor: 0.679
 Load factor: 0.697
 Load factor: 0.715
-2021/01/07-20:27:28  ... thread 0: (10000000,40000000) ops and ( 4677752.0,4346136.8 ) ops/second in (2.1378,9.2036) seconds
+2021/01/08-13:06:34  ... thread 0: (10000000,40000000) ops and ( 1192713.2,1026835.9 ) ops/second in (8.3842,38.9546) seconds
 Load factor: 0.734
 Load factor: 0.752
 Load factor: 0.770
@@ -77,7 +78,7 @@ Load factor: 0.843
 Load factor: 0.859
 Load factor: 0.869
 Load factor: 0.862
-2021/01/07-20:27:31  ... thread 0: (10000000,50000000) ops and ( 4182298.0,4312350.1 ) ops/second in (2.3910,11.5946) seconds
+2021/01/08-13:06:44  ... thread 0: (10000000,50000000) ops and ( 1026934.9,1026855.7 ) ops/second in (9.7377,48.6923) seconds
 Load factor: 0.825
 Load factor: 0.748
 Load factor: 0.655
@@ -88,7 +89,7 @@ Load factor: 0.516
 Load factor: 0.523
 Load factor: 0.532
 Load factor: 0.541
-2021/01/07-20:27:34  ... thread 0: (10000000,60000000) ops and ( 2856987.8,3974879.8 ) ops/second in (3.5002,15.0948) seconds
+2021/01/08-13:06:56  ... thread 0: (10000000,60000000) ops and ( 865689.6,995952.8 ) ops/second in (11.5515,60.2438) seconds
 Load factor: 0.550
 Load factor: 0.559
 Load factor: 0.569
@@ -99,7 +100,7 @@ Load factor: 0.605
 Load factor: 0.614
 Load factor: 0.624
 Load factor: 0.633
-2021/01/07-20:27:36  ... thread 0: (10000000,70000000) ops and ( 4500375.1,4042309.6 ) ops/second in (2.2220,17.3168) seconds
+2021/01/08-13:07:04  ... thread 0: (10000000,70000000) ops and ( 1222120.2,1022998.2 ) ops/second in (8.1825,68.4263) seconds
 Load factor: 0.642
 Load factor: 0.651
 Load factor: 0.660
@@ -110,7 +111,7 @@ Load factor: 0.697
 Load factor: 0.706
 Load factor: 0.715
 Load factor: 0.724
-2021/01/07-20:27:39  ... thread 0: (10000000,80000000) ops and ( 4435368.7,4087589.5 ) ops/second in (2.2546,19.5714) seconds
+2021/01/08-13:07:12  ... thread 0: (10000000,80000000) ops and ( 1213318.9,1043457.7 ) ops/second in (8.2419,76.6682) seconds
 Load factor: 0.734
 Load factor: 0.743
 Load factor: 0.752
@@ -121,7 +122,7 @@ Load factor: 0.789
 Load factor: 0.798
 Load factor: 0.807
 Load factor: 0.816
-2021/01/07-20:27:41  ... thread 0: (10000000,90000000) ops and ( 4398618.7,4119958.9 ) ops/second in (2.2734,21.8449) seconds
+2021/01/08-13:07:21  ... thread 0: (10000000,90000000) ops and ( 1198469.1,1058672.2 ) ops/second in (8.3440,85.0122) seconds
 Load factor: 0.825
 Load factor: 0.834
 Load factor: 0.844
@@ -132,17 +133,32 @@ Load factor: 0.880
 Load factor: 0.889
 Load factor: 0.899
 Load factor: 0.908
-2021/01/07-20:27:43  ... thread 0: (10000000,100000000) ops and ( 4233153.6,4131005.2 ) ops/second in (2.3623,24.2072) seconds
+2021/01/08-13:07:29  ... thread 0: (10000000,100000000) ops and ( 1156815.1,1067730.7 ) ops/second in (8.6444,93.6566) seconds
 Load factor: 0.917
-allloadfactor :       0.242 micros/op 3.939624 Mops/s;
-Randomize the trace...2021/01/07-20:27:50  ... thread 0: (10000000,10000000) ops and ( 15276061.3,15276061.3 ) ops/second in (0.6546,0.6546) seconds
-2021/01/07-20:27:51  ... thread 0: (10000000,20000000) ops and ( 15148829.7,15212179.5 ) ops/second in (0.6601,1.3147) seconds
-2021/01/07-20:27:51  ... thread 0: (10000000,30000000) ops and ( 15803630.4,15404348.8 ) ops/second in (0.6328,1.9475) seconds
-2021/01/07-20:27:52  ... thread 0: (10000000,40000000) ops and ( 15081273.0,15322289.0 ) ops/second in (0.6631,2.6106) seconds
-2021/01/07-20:27:53  ... thread 0: (10000000,50000000) ops and ( 15832204.0,15421627.3 ) ops/second in (0.6316,3.2422) seconds
-2021/01/07-20:27:53  ... thread 0: (10000000,60000000) ops and ( 15415089.8,15420537.3 ) ops/second in (0.6487,3.8909) seconds
-2021/01/07-20:27:54  ... thread 0: (10000000,70000000) ops and ( 14897801.1,15343626.0 ) ops/second in (0.6712,4.5622) seconds
-2021/01/07-20:27:55  ... thread 0: (10000000,80000000) ops and ( 15483351.5,15360953.6 ) ops/second in (0.6459,5.2080) seconds
-2021/01/07-20:27:55  ... thread 0: (10000000,90000000) ops and ( 15230320.5,15346328.3 ) ops/second in (0.6566,5.8646) seconds
-2021/01/07-20:27:56  ... thread 0: (10000000,100000000) ops and ( 13964666.6,15195979.5 ) ops/second in (0.7161,6.5807) seconds
-readrandom   :       0.066 micros/op 14.491813 Mops/s; (num: 100000000, not find: 0)
+allloadfactor :       0.937 micros/op 1.018266 Mops/s;
+[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      11623.93 |       12429.92 |    22788.02 |     19010.56 |   1.96 |   1.53 |[0m
+[34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      11495.12 |       12375.17 |    22811.82 |     19018.96 |   1.98 |   1.54 |[0m
+[34m*SUM* | DIMM-R:   486.9 MB/s. User-R:   246.8 MB/s   | DIMM-W:   406.1 MB/s, User-W:   264.9 MB/s. Time:  93.66s.[0m
+[32mDestroy IPMWatcher.
+[0m
+Randomize the trace...[32mStart IPMWatcher for readrandom
+[0m2021/01/08-13:07:38  ... thread 0: (10000000,10000000) ops and ( 6916002.4,6916002.4 ) ops/second in (1.4459,1.4459) seconds
+2021/01/08-13:07:39  ... thread 0: (10000000,20000000) ops and ( 6891632.5,6903795.9 ) ops/second in (1.4510,2.8970) seconds
+2021/01/08-13:07:41  ... thread 0: (10000000,30000000) ops and ( 6844894.0,6884049.7 ) ops/second in (1.4609,4.3579) seconds
+2021/01/08-13:07:42  ... thread 0: (10000000,40000000) ops and ( 6834270.3,6871537.0 ) ops/second in (1.4632,5.8211) seconds
+2021/01/08-13:07:44  ... thread 0: (10000000,50000000) ops and ( 6856481.5,6868520.6 ) ops/second in (1.4585,7.2796) seconds
+2021/01/08-13:07:45  ... thread 0: (10000000,60000000) ops and ( 6857708.7,6866716.2 ) ops/second in (1.4582,8.7378) seconds
+2021/01/08-13:07:46  ... thread 0: (10000000,70000000) ops and ( 6841695.5,6863130.6 ) ops/second in (1.4616,10.1994) seconds
+2021/01/08-13:07:48  ... thread 0: (10000000,80000000) ops and ( 6849432.4,6861415.4 ) ops/second in (1.4600,11.6594) seconds
+2021/01/08-13:07:49  ... thread 0: (10000000,90000000) ops and ( 6856481.5,6860866.8 ) ops/second in (1.4585,13.1179) seconds
+2021/01/08-13:07:51  ... thread 0: (10000000,100000000) ops and ( 6830811.1,6857849.3 ) ops/second in (1.4640,14.5818) seconds
+readrandom   :       0.146 micros/op 6.540113 Mops/s; (num: 100000000, not find: 0)
+[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       5923.01 |           0.02 |    12777.67 |        14.31 |   2.16 | 861.71 |[0m
+[34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       5923.87 |           0.02 |    12780.92 |        14.88 |   2.16 | 896.03 |[0m
+[34m*SUM* | DIMM-R:  1752.7 MB/s. User-R:   812.4 MB/s   | DIMM-W:     2.0 MB/s, User-W:     0.0 MB/s. Time:  14.58s.[0m
+[32mDestroy IPMWatcher.
+[0m

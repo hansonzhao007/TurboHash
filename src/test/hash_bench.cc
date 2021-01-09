@@ -647,7 +647,7 @@ public:
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {
-            size_t key = key_iterator.Next() + (UINT64_MAX >> 2);
+            size_t key = key_iterator.Next() + num_;
             auto time_start = Env::Default()->NowNanos();
             auto record_ptr = hashtable_->Find(key);
             auto time_duration = Env::Default()->NowNanos() - time_start;

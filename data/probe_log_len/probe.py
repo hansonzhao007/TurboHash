@@ -43,7 +43,7 @@ def Plot(c_name, ylable, is_legend):
     ax.set_ylabel(ylable, fontsize=16, color='k')
     ax.set_xlabel("Number of Rehash", fontsize=16)
     ax.yaxis.grid(linewidth=1, linestyle='--')
-    plt.savefig(c_name+".pdf", bbox_inches='tight', pad_inches=0)
+    plt.savefig(c_name+".pdf", bbox_inches='tight', pad_inches=0.05)
 
 Plot("probe_loadfactor", "Load Factor", False)
 Plot("probe_log_dis", "Average Log Length", True)
