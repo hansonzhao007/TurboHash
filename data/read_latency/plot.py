@@ -60,9 +60,9 @@ def PlotLat():
         ax.set_axisbelow(True)
         ax.set_xlabel("Positive", fontsize=16)
         ax.get_legend().remove()
-        ax.fill_betweenx(df.us, df['frequency'], 1, alpha=0.5)
+        ax.fill_betweenx(df.us, df['frequency'], 1, alpha=0.5, color="#5E88C2")
         ax.set_xticks([])
-        ax.set_ylim([0.03, 100000 - 1])
+        ax.set_ylim([0.03, 1000 - 1])
         # text avg, std, p99
         mysize=12
         df_data = pd.read_csv(file_readlat_data)
@@ -92,7 +92,7 @@ def PlotLat():
         ax2.set_axisbelow(True)
         ax2.set_xlabel("Negative", fontsize=16)
         ax2.get_legend().remove()
-        ax2.fill_betweenx(df2.us, df2['frequency'], 1, alpha=0.5)
+        ax2.fill_betweenx(df2.us, df2['frequency'], 1, alpha=0.5, color="#5E88C2")
         ax2.set_xticks([])
         df2_data = pd.read_csv(file_readnonlat_data)
         ax2.text(0.57, 0.97, " avg: " + '%.2f' % (df2_data.iloc[0]['avg'] / 1000.0),
@@ -169,6 +169,34 @@ def add_value_labels(ax, spacing, labels, pick_standard):
             j = j + 1
         i = i + 1
 
+def PlotNormal(df, ax, filename):    
+    pick_standard = 0
+    normalized = df.copy()
+    for kv in hashtables:
+        normalized.loc[kv] = normalized.loc[kv] / df.iloc[pick_standard]
+    normalized = normalized.T
+    print(normalized)
+    normalized.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
+    # plot marker in bar
+    bars = ax.patches
+    hatches = ''.join(h*len(normalized) for h in ' - x. /-\\')
+    for bar, hatch in zip(bars, hatches):
+        bar.set_hatch(hatch)
+    labels = (df).values.tolist()[pick_standard] 
+    print(labels)
+    # amplification1 = normalized['cceh'].tolist()
+    # amplification2 = normalized['cceh30'].tolist()
+    add_value_labels(ax, 7, labels, pick_standard)
+    # add_value_labels(ax, 7, amplification1, 1)
+    # draw legend
+    ax.get_legend().remove()
+    ax.legend(legend_name, loc="upper right", fontsize=14) #, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(0, 1.22, 1, 0))
+    ax.yaxis.grid(linewidth=1, linestyle='--')
+    ax.set_axisbelow(True)
+    ax.set_ylabel('Normalized Average Latency', fontsize=22)
+    ax.set_ylim([0.1, 11.9])
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0.05)
+
 def PlotNormalLat():
     data_positive = pd.DataFrame(columns=['avg','std','min','median','max','p50','p75','p99','p999','p9999','non'])
     data_negetive = pd.DataFrame(columns=['avg','std','min','median','max','p50','p75','p99','p999','p9999','non'])
@@ -187,72 +215,20 @@ def PlotNormalLat():
     data_negetive.index = hashtables
 
     # Plot positive
-    ax = plt.figure(figsize=(12, 6)).add_subplot(111)
+    ax = plt.figure(figsize=(7, 6)).add_subplot(111)
     df = data_positive
     df = df.iloc[:,:-2]
     df = df.drop(['min', 'std', 'p50', 'p75', 'max', 'p999'], axis=1)
     print(df)
-    pick_standard = 0
-    normalized = df.copy()
-    for kv in hashtables:
-        normalized.loc[kv] = normalized.loc[kv] / df.iloc[pick_standard]
-    normalized = normalized.T
-    print(normalized)
-    normalized.plot(ax=ax, kind="bar", rot=0, colormap='Accent', width=0.75, edgecolor='k', fontsize=26, alpha=0.8)
-    # plot marker in bar
-    bars = ax.patches
-    hatches = ''.join(h*len(normalized) for h in ' - x. /-\\')
-    for bar, hatch in zip(bars, hatches):
-        bar.set_hatch(hatch)
-    labels = (df).values.tolist()[pick_standard] 
-    print(labels)
-    # amplification1 = normalized['cceh'].tolist()
-    # amplification2 = normalized['cceh30'].tolist()
-    add_value_labels(ax, 7, labels, pick_standard)
-    # add_value_labels(ax, 7, amplification1, 1)
-    # draw legend
-    ax.get_legend().remove()
-    ax.legend(legend_name, loc="upper right", fontsize=20, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(0, 1.22, 1, 0))
-    ax.yaxis.grid(linewidth=1, linestyle='--')
-    ax.set_axisbelow(True)
-    ax.set_ylabel('Normalized Average Latency', fontsize=24)
-    # ax.set_ylim([0.1, 10])
-    plt.savefig('readlat_normalized.pdf', bbox_inches='tight', pad_inches=0.05)
+    PlotNormal(df, ax, 'readlat_normalized.pdf')
 
     # Plot Negetive
-    ax = plt.figure(figsize=(12, 6)).add_subplot(111)
+    ax = plt.figure(figsize=(7, 6)).add_subplot(111)
     df = data_negetive
     df = df.iloc[:,:-2]
     df = df.drop(['min', 'std', 'p50', 'p75', 'max', 'p999'], axis=1)
     print(df)
-    pick_standard = 0
-    normalized = df.copy()
-    for kv in hashtables:
-        normalized.loc[kv] = normalized.loc[kv] / df.iloc[pick_standard]
-    normalized = normalized.T
-    print(normalized)
-    normalized.plot(ax=ax, kind="bar", rot=0, colormap='Accent', width=0.75, edgecolor='k', fontsize=26, alpha=0.8)
-    # plot marker in bar
-    bars = ax.patches
-    hatches = ''.join(h*len(normalized) for h in ' - x. /-\\')
-    for bar, hatch in zip(bars, hatches):
-        bar.set_hatch(hatch)
-    labels = (df).values.tolist()[pick_standard] 
-    print(labels)
-    # amplification1 = normalized['cceh'].tolist()
-    # amplification2 = normalized['cceh30'].tolist()
-    add_value_labels(ax, 7, labels, pick_standard)
-    # add_value_labels(ax, 7, amplification1, 1)
-
-    # draw legend
-    ax.get_legend().remove()
-    ax.legend(legend_name, loc="upper right", fontsize=20, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(0, 1.22, 1, 0))
-
-    ax.yaxis.grid(linewidth=1, linestyle='--')
-    ax.set_axisbelow(True)
-    ax.set_ylabel('Normalized Average Latency', fontsize=24)
-    # ax.set_ylim([0.1, 10])
-    plt.savefig('readnonlat_normalized.pdf', bbox_inches='tight', pad_inches=0.05)
+    PlotNormal(df, ax, 'readnonlat_normalized.pdf')
 
 PlotIO()
 

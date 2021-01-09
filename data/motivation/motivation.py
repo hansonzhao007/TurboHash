@@ -34,8 +34,8 @@ def PlotMiss(data, bw, r_w, latency, filename, islog):
     seq_r = "seq_" + r_w + "_r"
     seq_w = "seq_" + r_w + "_w"
     ax = axes[0]
-    bw[[rnd_r, rnd_w]].plot.barh(ax=ax, color=("blue", "red"), edgecolor='k',  stacked=True, width=0.25, position=1, fontsize=16, alpha=0.6)
-    bw[[seq_r, seq_w]].plot.barh(ax=ax, color=("blue", "red"), edgecolor='k',  stacked=True, width=0.25, position=0, fontsize=16, alpha=0.6)
+    bw[[rnd_r, rnd_w]].plot.barh(ax=ax, color=("#5E88C2", "red"), edgecolor='k',  stacked=True, width=0.25, position=1, fontsize=14, alpha=0.6)
+    bw[[seq_r, seq_w]].plot.barh(ax=ax, color=("#5E88C2", "red"), edgecolor='k',  stacked=True, width=0.25, position=0, fontsize=14, alpha=0.6)
     ax.grid(axis='x', linestyle='-.', linewidth=0.5)
     ax.set_axisbelow(True)
     ax.set_xlabel("Bandwidth (GB/s)", fontsize=16)
