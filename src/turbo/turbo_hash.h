@@ -2376,7 +2376,7 @@ private:
                     if (SlotKeyEqual<Key, is_key_flat>{}(key, record)) {
                         // If this key exsit, set the deleted bitmap
                         uint32_t* bitmap = (uint32_t*)cell_addr;
-                        *bitmap = (*bitmap) | ( 1 << (16 + i) );
+                        util::AtomicBitOps::BitTestAndSet(bitmap, 16 + i);
                         return;
                     }                                        
                 }
