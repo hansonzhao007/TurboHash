@@ -45,4 +45,4 @@ while read line; do
 done < motivation_pmem.data
 echo $one_line >> motivation_pmem_bw.csv
 
-python3 motivation.py
+python3 plot.py
