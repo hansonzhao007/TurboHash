@@ -36,9 +36,6 @@ using namespace util;
 
 #define IS_PMEM 1
 
-#define KEY_LEN ((15))
-#define VALUE_LEN ((15))
-
 // For hash table 
 DEFINE_bool(use_existing_db, false, "");
 DEFINE_bool(no_rehash, false, "control hash table do not do rehashing during insertion");
@@ -378,12 +375,12 @@ public:
     size_t reads_;
     size_t writes_;
     Hashtable* hashtable_ = nullptr;
-    RandomKeyTrace* key_trace_;
+    RandomKeyTraceString* key_trace_;
     size_t trace_size_;
     size_t initial_capacity_;
     Benchmark():
         num_(FLAGS_num),
-        value_size_(VALUE_LEN),
+        value_size_(KEY_LEN),
         reads_(FLAGS_read),
         writes_(FLAGS_write),
         key_trace_(nullptr) {
@@ -406,7 +403,7 @@ public:
             trace_size_ = FLAGS_num;
         }
         printf("key trace size: %lu\n", trace_size_);
-        key_trace_ = new RandomKeyTrace(trace_size_);
+        key_trace_ = new RandomKeyTraceString(trace_size_);
         if (reads_ == 0) {
             reads_ = key_trace_->count_;
             FLAGS_read = key_trace_->count_;
@@ -535,11 +532,8 @@ public:
         thread->stats.Start();        
         while (!duration.Done(batch) && key_iterator.Valid()) {
             uint64_t j = 0;
-            for (; j < batch && key_iterator.Valid(); j++) {     
-                size_t ikey = key_iterator.Next();  
-                char key[KEY_LEN] = {0};
-                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);                     
-                auto record_ptr = hashtable_->Find({key, KEY_LEN});
+            for (; j < batch && key_iterator.Valid(); j++) {                         
+                auto record_ptr = hashtable_->Find(key_iterator.Next());
                 if (unlikely(record_ptr == nullptr)) {
                     not_find++;
                 }
@@ -568,10 +562,9 @@ public:
         while (!duration.Done(batch) && key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {      
-                size_t ikey = key_iterator.Next() + num_;  
-                char key[KEY_LEN] = {0};
-                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);                     
-                auto record_ptr = hashtable_->Find({key, KEY_LEN});
+                std::string key = key_iterator.Next();
+                key[0] = 'a';                 
+                auto record_ptr = hashtable_->Find(key);
                 if (likely(record_ptr == nullptr)) {
                     not_find++;
                 }
@@ -596,13 +589,9 @@ public:
         uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
-        while (!duration.Done(1) && key_iterator.Valid()) {
-            size_t ikey = key_iterator.Next();  
-            char key[KEY_LEN] = {0};
-            snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-
+        while (!duration.Done(1) && key_iterator.Valid()) {       
             auto time_start = Env::Default()->NowNanos();
-            auto record_ptr = hashtable_->Find({key, KEY_LEN});
+            auto record_ptr = hashtable_->Find(key_iterator.Next());
             auto time_duration = Env::Default()->NowNanos() - time_start;
             thread->stats.hist_.Add(time_duration);
 
@@ -629,12 +618,10 @@ public:
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {
-            size_t ikey = key_iterator.Next() + num_;  /* Generate a key out of the insertion range */
-            char key[KEY_LEN] = {0};
-            snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-            
+            std::string key = key_iterator.Next();
+            key[0] = 'a';
             auto time_start = Env::Default()->NowNanos();
-            auto record_ptr = hashtable_->Find({key, KEY_LEN});
+            auto record_ptr = hashtable_->Find(key);
             auto time_duration = Env::Default()->NowNanos() - time_start;
             thread->stats.hist_.Add(time_duration);
             if (likely(record_ptr == nullptr)) {
@@ -662,16 +649,11 @@ public:
         auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
         printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
         thread->stats.Start();
-        std::string val(value_size_, 'v');
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
-                size_t ikey = key_iterator.Next();  
-                char key[KEY_LEN] = {0};
-	            char value[VALUE_LEN] = {0};
-                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-                snprintf(reinterpret_cast<char *>(value), VALUE_LEN, "%lu", ikey);
-                bool res = hashtable_->Put({key, KEY_LEN}, {value, VALUE_LEN});
+                std::string& key = key_iterator.Next(); 
+                bool res = hashtable_->Put(key, key);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
                     printf("Hash Table Full!!!\n");
@@ -697,14 +679,9 @@ public:
         printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
         thread->stats.Start();
         while (key_iterator.Valid()) {                      
-            size_t ikey = key_iterator.Next();  
-            char key[KEY_LEN] = {0};
-            char value[VALUE_LEN] = {0};
-            snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-            snprintf(reinterpret_cast<char *>(value), VALUE_LEN, "%lu", ikey);
-
+            std::string& key = key_iterator.Next();
             auto time_start = Env::Default()->NowNanos();
-            bool res = hashtable_->Put({key, KEY_LEN}, {value, VALUE_LEN});
+            bool res = hashtable_->Put(key, key);
             auto time_duration = Env::Default()->NowNanos() - time_start;
             thread->stats.hist_.Add(time_duration);
             
@@ -736,12 +713,8 @@ public:
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
-                size_t ikey = key_iterator.Next();  
-                char key[KEY_LEN] = {0};
-	            char value[VALUE_LEN] = {0};
-                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-                snprintf(reinterpret_cast<char *>(value), VALUE_LEN, "%lu", ikey);
-                bool res = hashtable_->Put({key, KEY_LEN}, {value, VALUE_LEN});
+                std::string& key = key_iterator.Next();                  
+                bool res = hashtable_->Put(key, key);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
                     printf("Hash Table Full!!!\n");
@@ -768,16 +741,11 @@ public:
         auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
         printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
         thread->stats.Start();
-        std::string val(value_size_, 'v');
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
-                size_t ikey = key_iterator.Next();  
-                char key[KEY_LEN] = {0};
-	            char value[VALUE_LEN] = {0};
-                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-                snprintf(reinterpret_cast<char *>(value), VALUE_LEN, "%lu", ikey);
-                bool res = hashtable_->Put({key, KEY_LEN}, {value, VALUE_LEN});
+                std::string& key = key_iterator.Next();                  
+                bool res = hashtable_->Put(key, key);
                 if (!res) {
                     INFO("Hash Table Full!!!\n");
                     printf("Hash Table Full!!!\n");
@@ -905,8 +873,8 @@ private:
                    INFO("Val type:              %s\n", type_name<Hashtable::mapped_type>().c_str());
         fprintf(stdout, "Keys:                  %lu bytes each\n", KEY_LEN);
                    INFO("Keys:                  %lu bytes each\n", KEY_LEN);
-        fprintf(stdout, "Values:                %lu bytes each\n", VALUE_LEN);
-                   INFO("Values:                %lu bytes each\n", VALUE_LEN);
+        fprintf(stdout, "Values:                %lu bytes each\n", KEY_LEN);
+                   INFO("Values:                %lu bytes each\n", KEY_LEN);
         fprintf(stdout, "Entries:               %lu\n", (uint64_t)num_);
                    INFO("Entries:               %lu\n", (uint64_t)num_);
         fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);   

@@ -3,6 +3,7 @@
 
 #include "test_util.h"
 const uint64_t KEY_COUNT = 80000000;
+#define KEY_LEN ((15))
 using namespace util;
 int main() {
     char str[128] = "1234567890";

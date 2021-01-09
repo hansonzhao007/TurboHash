@@ -9,6 +9,7 @@
 #include <fstream>
 #include <random>
 
+#define UTIL_KEY_LEN ((15))
 
 std::string Execute(const std::string& cmd) {
     std::array<char, 128> buffer;
@@ -441,3 +442,102 @@ public:
     std::vector<size_t> keys_;
 };
 
+
+class RandomKeyTraceString {
+public:
+    RandomKeyTraceString(size_t count, int seed = random()) {
+        count_ = count;
+        keys_.resize(count);
+        for (size_t i = 0; i < count; i++) {
+            char buf[128];
+            sprintf(buf, "%0.*lu", UTIL_KEY_LEN, i);
+            keys_[i] = std::string(buf, UTIL_KEY_LEN);
+        }
+        Randomize();
+    }
+
+    ~RandomKeyTraceString() {
+    }
+
+    void Randomize(void) {
+        printf("Randomize the trace...\r");
+        fflush(nullptr);
+        std::shuffle(std::begin(keys_), std::end(keys_), rng);
+    }
+    
+    class RangeIterator {
+    public:
+        RangeIterator(std::vector<std::string>* pkey_vec, size_t start, size_t end):
+            pkey_vec_(pkey_vec),                        
+            end_index_(end), 
+            cur_index_(start) { }
+
+        inline bool Valid() {
+            return (cur_index_ < end_index_);
+        }
+
+        inline std::string& Next() {
+            return (*pkey_vec_)[cur_index_++];
+        }
+
+        std::vector<std::string>* pkey_vec_;
+        size_t end_index_;
+        size_t cur_index_;
+    };
+
+    class Iterator {
+    public:
+        Iterator(std::vector<std::string>* pkey_vec, size_t start_index, size_t range):
+            pkey_vec_(pkey_vec),
+            range_(range),                        
+            end_index_(start_index % range_), 
+            cur_index_(start_index % range_),
+            begin_(true)  
+        {
+            
+        }
+
+        Iterator(){}
+
+        inline bool Valid() {
+            return (begin_ || cur_index_ != end_index_);
+        }
+
+        inline std::string& Next() {
+            begin_ = false;
+            size_t index = cur_index_;
+            cur_index_++;
+            if (cur_index_ >= range_) {
+                cur_index_ = 0;
+            }
+            return (*pkey_vec_)[index];
+        }
+
+        std::string Info() {
+            char buffer[128];
+            sprintf(buffer, "valid: %s, cur i: %lu, end_i: %lu, range: %lu", Valid() ? "true" : "false", cur_index_, end_index_, range_);
+            return buffer;
+        }
+
+        std::vector<std::string>* pkey_vec_;
+        size_t range_;
+        size_t end_index_;
+        size_t cur_index_;
+        bool   begin_;
+    };
+
+    Iterator trace_at(size_t start_index, size_t range) {
+        return Iterator(&keys_, start_index, range);
+    }
+
+    RangeIterator Begin(void) {
+        return RangeIterator(&keys_, 0, keys_.size());
+    }
+
+    RangeIterator iterate_between(size_t start, size_t end) {
+        return RangeIterator(&keys_, start, end);
+    }
+
+    size_t count_;
+    std::vector<std::string> keys_;
+};

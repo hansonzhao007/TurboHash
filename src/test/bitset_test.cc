@@ -7,6 +7,11 @@
 
 using namespace util;
 int main() {
+    char tmp_buf[128];
+    sprintf(tmp_buf, "%0.*lu", 15, 123);
+    printf("%s\n", tmp_buf);
+
+
     srand(time(NULL));
     turbo::util::BitSet bitset(0x05);
     for (int i : bitset) {

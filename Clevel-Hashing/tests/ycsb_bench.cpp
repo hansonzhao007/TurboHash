@@ -113,9 +113,6 @@ private:
 
 namespace {
 
-#define KEY_LEN 15
-#define VALUE_LEN 15
-
 #ifdef TYPE_CCEH
 #define LAYOUT "CCEH"
 typedef nvobj::experimental::CCEH
@@ -438,7 +435,7 @@ public:
     int value_size_;
     size_t reads_;
     size_t writes_;
-    RandomKeyTrace* key_trace_;
+    RandomKeyTraceString* key_trace_;
     size_t trace_size_;
     nvobj::pool<root> pop_;
     decltype(pop_.root()->cons) map_;
@@ -482,7 +479,7 @@ public:
     void Run() {
         trace_size_ = FLAGS_num;
         printf("key trace size: %lu\n", trace_size_);
-        key_trace_ = new RandomKeyTrace(trace_size_);
+        key_trace_ = new RandomKeyTraceString(trace_size_);
         if (reads_ == 0) {
             reads_ = key_trace_->count_;
             FLAGS_read = key_trace_->count_;
@@ -594,10 +591,8 @@ public:
         while (!duration.Done(batch) && key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {    
-                size_t ikey = key_iterator.Next();  
-                char key[KEY_LEN] = {0};
-                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-                auto ret = Find({key, KEY_LEN}, thread->tid);
+                std::string& key = key_iterator.Next();  
+                auto ret = Find({key.data(), key.size()}, thread->tid);
                 if (!ret.found) {
                     not_find++;
                 }
@@ -624,10 +619,9 @@ public:
         while (!duration.Done(batch) && key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {      
-                size_t ikey = key_iterator.Next() + num_;  
-                char key[KEY_LEN] = {0};
-                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-                auto ret = Find({key, KEY_LEN}, thread->tid);
+                std::string key = key_iterator.Next();
+                key[0] = 'a';
+                auto ret = Find({key.data(), key.size()}, thread->tid);
                 if (!ret.found) {
                     not_find++;
                 }
@@ -651,12 +645,10 @@ public:
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {   
-            size_t ikey = key_iterator.Next();  
-            char key[KEY_LEN] = {0};
-            snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-
+            std::string& key = key_iterator.Next();  
+            
             auto time_start = NowNanos();
-            auto ret = Find({key, KEY_LEN}, thread->tid);
+            auto ret = Find({key.data(), key.size()}, thread->tid);
             if (!ret.found) {
                 not_find++;
             }
@@ -681,12 +673,11 @@ public:
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {        
-            size_t ikey = key_iterator.Next() + num_;  /* Generate a key out of the insertion range */
-            char key[KEY_LEN] = {0};
-            snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
+            std::string key = key_iterator.Next();
+            key[0] = 'a';
 
             auto time_start = NowNanos();
-            auto ret = Find({key, KEY_LEN}, thread->tid);
+            auto ret = Find({key.data(), key.size()}, thread->tid);
             if (!ret.found) {
                 not_find++;
             }
@@ -713,12 +704,9 @@ public:
         std::string val(value_size_, 'v');
         while (key_iterator.Valid()) {
             for (uint64_t j = 0; j < batch && key_iterator.Valid(); j++) { 
-                size_t ikey = key_iterator.Next();  
-                char key[KEY_LEN] = {0};
-	            char value[VALUE_LEN] = {0};
-                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-                snprintf(reinterpret_cast<char *>(value), VALUE_LEN, "%lu", ikey);
-                auto res = Insert({key, KEY_LEN}, {value, VALUE_LEN}, thread->tid);                
+                std::string& key = key_iterator.Next();  
+                
+                auto res = Insert({key.data(), key.size()}, {key.data(), key.size()}, thread->tid);                
             }
             thread->stats.FinishedBatchOp(batch);
         }
@@ -738,14 +726,10 @@ public:
         printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
         thread->stats.Start();
         while (key_iterator.Valid()) {            
-            size_t ikey = key_iterator.Next();  
-            char key[KEY_LEN] = {0};
-            char value[VALUE_LEN] = {0};
-            snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-            snprintf(reinterpret_cast<char *>(value), VALUE_LEN, "%lu", ikey);
-
+            std::string& key = key_iterator.Next();  
+            
             auto time_start = NowNanos();
-            auto res = Insert({key, KEY_LEN}, {value, VALUE_LEN}, thread->tid);                
+            auto res = Insert({key.data(), key.size()}, {key.data(), key.size()}, thread->tid);                
             auto time_duration = NowNanos() - time_start;
             thread->stats.hist_.Add(time_duration);
         }
@@ -769,12 +753,9 @@ public:
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
-                size_t ikey = key_iterator.Next();  
-                char key[KEY_LEN] = {0};
-	            char value[VALUE_LEN] = {0};
-                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-                snprintf(reinterpret_cast<char *>(value), VALUE_LEN, "%lu", ikey);
-                auto res = Insert({key, KEY_LEN}, {value, VALUE_LEN}, thread->tid);
+                std::string& key = key_iterator.Next();  
+                
+                auto res = Insert({key.data(), key.size()}, {key.data(), key.size()}, thread->tid);
                 inserted++;
             }
             thread->stats.FinishedBatchOp(j);
@@ -799,12 +780,9 @@ public:
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
-                size_t ikey = key_iterator.Next();  
-                char key[KEY_LEN] = {0};
-	            char value[VALUE_LEN] = {0};
-                snprintf(reinterpret_cast<char *>(key),   KEY_LEN,   "%lu", ikey);
-                snprintf(reinterpret_cast<char *>(value), VALUE_LEN, "%lu", ikey);
-                auto res = Insert({key, KEY_LEN}, {value, VALUE_LEN}, thread->tid);
+                std::string& key = key_iterator.Next();  
+                
+                auto res = Insert({key.data(), key.size()}, {key.data(), key.size()}, thread->tid);
                 if (!res.found) {
                     // success insertion
                 } else {
@@ -926,8 +904,8 @@ private:
         PrintEnvironment();
         fprintf(stdout, "HashType:              %s\n", LAYOUT);
         fprintf(stdout, "Init Capacity:         %lu\n", map_->capacity());
-        fprintf(stdout, "Key Size:              %lu\n", KEY_LEN);
-        fprintf(stdout, "Val Size:              %lu\n", VALUE_LEN);
+        fprintf(stdout, "Key Size:              %lu\n", UTIL_KEY_LEN);
+        fprintf(stdout, "Val Size:              %lu\n", UTIL_KEY_LEN);
         fprintf(stdout, "Entries:               %lu\n", (uint64_t)num_);
         fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);                      
         fprintf(stdout, "Read:                  %lu \n", (uint64_t)FLAGS_read);
