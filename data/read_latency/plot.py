@@ -179,9 +179,11 @@ def PlotNormal(df, ax, filename):
     normalized.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
     # plot marker in bar
     bars = ax.patches
-    hatches = ''.join(h*len(normalized) for h in ' - x. /-\\')
+    patterns =('///', ' ', '///', ' ', '..', 'xx')
+    hatches = [p for p in patterns for i in range(len(normalized))]
     for bar, hatch in zip(bars, hatches):
         bar.set_hatch(hatch)
+    
     labels = (df).values.tolist()[pick_standard] 
     print(labels)
     # amplification1 = normalized['cceh'].tolist()

@@ -37,86 +37,6 @@ def PlotIO():
     ax.tick_params(axis='x', labelsize=14, rotation=45)
     fig.savefig('load_latency_io.pdf', bbox_inches='tight', pad_inches=0.05)
 
-def PlotLat():
-    
-    for i in hashtables:
-        fig, axes = plt.subplots(ncols=2, sharey=True, figsize=(4, 6))
-
-        file_readlat = "loadlat_" + str(i) + ".parse"
-        file_readlat_data = "readlat_" + str(i) + "_exist_stat.parse"
-        
-        # Plot positive hist
-        ax=axes[0]
-        df = pd.read_csv(file_readlat)
-        df['us'] = df['ns'] / 1000.0
-        df.set_index('us')
-        df.plot(ax=ax, x='frequency', y='us')
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        ax.set_axisbelow(True)
-        ax.set_xlabel("Positive", fontsize=16)
-        ax.get_legend().remove()
-        ax.fill_betweenx(df.us, df['frequency'], 1, alpha=0.5, color="#5E88C2")
-        ax.set_xticks([])
-        ax.set_ylim([0.03, 1000 - 1])
-        # text avg, std, p99
-        mysize=12
-        df_data = pd.read_csv(file_readlat_data)
-        ax.text(0.43, 0.97, " avg: " + '%.2f' % (df_data.iloc[0]['avg'] / 1000.0),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes, fontsize=mysize)
-        ax.text(0.43, 0.92, " mid: " + '%.2f' % (df_data.iloc[0]['median'] / 1000.0),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes, fontsize=mysize)
-        ax.text(0.43, 0.87, " p99: " + '%.2f' % (df_data.iloc[0]['p99'] / 1000.0),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes, fontsize=mysize)       
-        # xmin, xmax = ax.get_ylim()
-        # ax.axhline(y=df_data.iloc[0]['avg'] / 1000.0, xmin=xmin, xmax=xmax, color='#B31512')
-
-        # Plot negetive hist
-        ax2=axes[1]
-        df2 = pd.read_csv(file_readnonlat)
-        df2['us'] = df2['ns'] / 1000.0
-        df2.set_index('us')
-        df2.plot(ax=ax2, x='frequency', y='us')
-        ax2.set_xscale('log')
-        # ax2.set_yscale('log')
-        ax2.set_axisbelow(True)
-        ax2.set_xlabel("Negative", fontsize=16)
-        ax2.get_legend().remove()
-        ax2.fill_betweenx(df2.us, df2['frequency'], 1, alpha=0.5, color="#5E88C2")
-        ax2.set_xticks([])
-        df2_data = pd.read_csv(file_readnonlat_data)
-        ax2.text(0.57, 0.97, " avg: " + '%.2f' % (df2_data.iloc[0]['avg'] / 1000.0),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax2.transAxes, fontsize=mysize)
-        ax2.text(0.57, 0.92, " mid: " + '%.2f' % (df2_data.iloc[0]['median'] / 1000.0),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax2.transAxes, fontsize=mysize)
-        ax2.text(0.57, 0.87, " p99: " + '%.2f' % (df2_data.iloc[0]['p99'] / 1000.0),
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax2.transAxes, fontsize=mysize)
-        # xmin, xmax = ax2.get_ylim()
-        # ax2.axhline(y=df2_data.iloc[0]['avg'] / 1000.0, xmin=xmin, xmax=xmax, color='#B31512')
-
-        axes[0].invert_xaxis()
-        axes[0].yaxis.tick_right()
-        fig.subplots_adjust(wspace=0.32)
-        plt.text(1.17, 0.98,'us',
-            horizontalalignment='center',
-            verticalalignment='center',
-            transform = ax.transAxes, fontsize=16)
-        
-        fig.savefig('read_latency_' + i + '.pdf', bbox_inches='tight', pad_inches=0.05)
-
-
 # plot value on top of standard bar
 def add_value_labels(ax, spacing, labels, pick_standard):
     """Add labels to the end of each bar in a bar chart.
@@ -175,9 +95,11 @@ def PlotNormal(df, ax, filename):
     normalized.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
     # plot marker in bar
     bars = ax.patches
-    hatches = ''.join(h*len(normalized) for h in ' - x. /-\\')
+    patterns =('///', ' ', '///', ' ', '..', 'xx')
+    hatches = [p for p in patterns for i in range(len(normalized))]
     for bar, hatch in zip(bars, hatches):
         bar.set_hatch(hatch)
+
     labels = (df).values.tolist()[pick_standard] 
     print(labels)
     # amplification1 = normalized['cceh'].tolist()
@@ -213,8 +135,6 @@ def PlotNormalLat():
 
 
 PlotIO()
-
-# PlotLat()
 
 PlotNormalLat()
 
