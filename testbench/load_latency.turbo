@@ -1,0 +1,86 @@
+key trace size: 100000000
+Randomize the trace...------------------------------------------------
+Pmem:                  true
+Key type:              unsigned long
+Val type:              unsigned long
+Keys:                  8 bytes each
+Values:                8 bytes each
+Entries:               100000000
+Trace size:            100000000
+Read:                  10000000 
+Write:                 100000000 
+Thread:                16 
+Hash key flat:         true 
+Hash val flat:         true 
+Hash Buckets:          65536 
+Hash Cell in Bucket:   16 
+Hash Slot in Cell:     14 
+Hash init capacity:    13631488 
+Hash table size:       256 MB
+Hash loadfactor:       0.72 
+Cell Type:             CellMeta256V2 
+Report interval:       0 s
+Stats interval:        10000000 records
+benchmarks:            loadlat
+------------------------------------------------
+[32mStart IPMWatcher for loadlat
+[0mthread  3, between 18750000 - 25000000
+thread  4, between 25000000 - 31250000
+thread  6, between 37500000 - 43750000
+thread  2, between 12500000 - 18750000
+thread 10, between 62500000 - 68750000
+thread  8, between 50000000 - 56250000
+thread  9, between 56250000 - 62500000
+thread  1, between 6250000 - 12500000
+thread 11, between 68750000 - 75000000
+thread 15, between 93750000 - 100000000
+thread  7, between 43750000 - 50000000
+thread 12, between 75000000 - 81250000
+thread 13, between 81250000 - 87500000
+thread  0, between 0 - 6250000
+thread  5, between 31250000 - 37500000
+thread 14, between 87500000 - 93750000
+loadlat      : 10394587.000 micros/op 0.000000 Mops/s;
+Nanoseconds per op:
+Count: 100000000 Average: 1610.6788  StdDev: 30.73
+Min: 61  Median: 867.3712  Max: 1296275
+Percentiles: P50: 867.37 P75: 1433.38 P99: 4199.74 P99.9: 37210.71 P99.99: 799290.23
+------------------------------------------------------
+(      51,      76 ]       36   0.000%   0.000% 
+(      76,     110 ]      259   0.000%   0.000% 
+(     110,     170 ]     3738   0.004%   0.004% 
+(     170,     250 ]    19959   0.020%   0.024% 
+(     250,     380 ]   217711   0.218%   0.242% 
+(     380,     580 ]  1046565   1.047%   1.288% 
+(     580,     870 ] 49157331  49.157%  50.446% ##########
+(     870,    1300 ] 20726902  20.727%  71.173% ####
+(    1300,    1900 ] 17217892  17.218%  88.390% ###
+(    1900,    2900 ]  9309709   9.310%  97.700% ##
+(    2900,    4400 ]  1500177   1.500%  99.200% 
+(    4400,    6600 ]   474214   0.474%  99.674% 
+(    6600,    9900 ]   111889   0.112%  99.786% 
+(    9900,   14000 ]    37913   0.038%  99.824% 
+(   14000,   22000 ]    40110   0.040%  99.864% 
+(   22000,   33000 ]    29030   0.029%  99.893% 
+(   33000,   50000 ]    26505   0.027%  99.920% 
+(   50000,   75000 ]    12895   0.013%  99.933% 
+(   75000,  110000 ]     1265   0.001%  99.934% 
+(  110000,  170000 ]      911   0.001%  99.935% 
+(  170000,  250000 ]     1311   0.001%  99.936% 
+(  250000,  380000 ]     3436   0.003%  99.940% 
+(  380000,  570000 ]    13637   0.014%  99.953% 
+(  570000,  860000 ]    46297   0.046% 100.000% 
+(  860000, 1200000 ]      289   0.000% 100.000% 
+( 1200000, 1900000 ]       19   0.000% 100.000% 
+
+[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       5793.83 |        6264.93 |    11442.12 |      9615.41 |   1.97 |   1.53 |[0m
+[34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       5766.07 |        6249.74 |    11418.82 |      9571.65 |   1.98 |   1.53 |[0m
+[34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       5751.58 |        6242.11 |    11387.62 |      9524.02 |   1.98 |   1.53 |[0m
+[34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       5737.71 |        6241.86 |    11363.95 |      9537.85 |   1.98 |   1.53 |[0m
+[34m*SUM* | DIMM-R:  4387.7 MB/s. User-R:  2217.2 MB/s   | DIMM-W:  3679.4 MB/s, User-W:  2404.8 MB/s. Time:  10.40s.[0m
+[32mDestroy IPMWatcher.
+[0m
