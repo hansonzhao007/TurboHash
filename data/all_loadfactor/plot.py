@@ -60,7 +60,7 @@ def Plot(ylable, is_legend):
     )
 
     ax.set_ylabel(ylable, fontsize=16, color='k')
-    ax.set_xlabel("Number of Rehash", fontsize=16)
+    ax.set_xlabel("Insertion (million)", fontsize=16)
     ax.yaxis.grid(linewidth=1, linestyle='--')
     plt.savefig("all_loadfactor.pdf", bbox_inches='tight', pad_inches=0.05)
 
