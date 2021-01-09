@@ -1427,8 +1427,8 @@ public:
     /**
      * @brief key and value both are std::string
      * HashSlot:
-     *          | H1 | pointer | -> | key_len | value | key_buffer
-     *                              | size_t  |   T   |  ...
+     *          | H1 | pointer | -> | key_len | value_len | key_buf | value_buf
+     *                              | size_t  |  size_t   |  ...    |  ...
      * 
      */
     template<typename T1>

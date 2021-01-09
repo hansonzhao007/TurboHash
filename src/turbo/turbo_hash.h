@@ -1417,8 +1417,8 @@ public:
     /**
      * @brief key and value both are std::string
      * HashSlot:
-     *          | H1 | pointer | -> | key_len | value | key_buffer
-     *                              | size_t  |   T   |  ...
+     *          | H1 | pointer | -> | key_len | value_len | key_buf | value_buf
+     *                              | size_t  |  size_t   |  ...    |  ...
      * 
      */
     template<typename T1>
@@ -2364,15 +2364,15 @@ private:
             char* cell_addr = locateCell(offset);
 
             CellMeta256V2 meta(cell_addr);
-            
+
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell
-                
+
                 HashSlot* slot = locateSlot(cell_addr, i); // locate the slot reference
 
                 if (TURBO_LIKELY(slot->H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
                 {
                     value_type* record = (value_type*)slot;
-                
+
                     if (SlotKeyEqual<Key, is_key_flat>{}(key, record)) {
                         // If this key exsit, set the deleted bitmap
                         uint32_t* bitmap = (uint32_t*)cell_addr;
