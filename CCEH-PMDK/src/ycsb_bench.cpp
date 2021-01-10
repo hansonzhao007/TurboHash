@@ -266,6 +266,7 @@ struct ThreadState {
     // Random rand;         // Has different seeds for different threads
     Stats stats;
     SharedState* shared;
+    YCSBGenerator ycsb_gen;
     ThreadState(int index) : 
         tid(index),
         stats(index) {
@@ -424,7 +425,26 @@ public:
                 print_hist = true;
                 key_trace_->Randomize();
                 method = &Benchmark::DoReadNonLat;                
-            }
+            } else if (name == "ycsba") {
+                fresh_db = false;
+                key_trace_->Randomize();
+                method = &Benchmark::YCSBA;                
+            } else if (name == "ycsbb") {
+                fresh_db = false;
+                key_trace_->Randomize();
+                method = &Benchmark::YCSBB;                
+            } else if (name == "ycsbc") {
+                fresh_db = false;
+                key_trace_->Randomize();
+                method = &Benchmark::YCSBC;                
+            } else if (name == "ycsbd") {
+                fresh_db = false;
+                method = &Benchmark::YCSBD;                
+            } else if (name == "ycsbf") {
+                fresh_db = false;
+                key_trace_->Randomize();
+                method = &Benchmark::YCSBF;                
+            } 
 
             IPMWatcher watcher(name);
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
@@ -637,6 +657,175 @@ public:
             thread->stats.FinishedBatchOp(j);
         }
         write_end:
+        return;
+    }
+
+
+    void YCSBA(ThreadState* thread) {        
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("YCSBA lack key_trace_ initialization.");
+            return;
+        }
+        size_t find = 0;
+        size_t insert = 0;
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
+        thread->stats.Start();
+        
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                size_t key = key_iterator.Next();
+                if (thread->ycsb_gen.NextA() == kYCSB_Write) {
+                    D_RW(hashtable_)->Insert(pop_, key, reinterpret_cast<Value_t>(key));
+                    insert++;
+                } else {
+                    auto ret = D_RW(hashtable_)->Get(key);
+                    find++;
+                }
+            }
+            thread->stats.FinishedBatchOp(j);
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(insert: %lu, read: %lu)", insert, find);
+        thread->stats.AddMessage(buf);
+        return;
+    }
+
+    void YCSBB(ThreadState* thread) {
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("YCSBB lack key_trace_ initialization.");
+            return;
+        }
+        size_t find = 0;
+        size_t insert = 0;
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
+        thread->stats.Start();
+        
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                size_t key = key_iterator.Next();
+                if (thread->ycsb_gen.NextB() == kYCSB_Write) {
+                    D_RW(hashtable_)->Insert(pop_, key, reinterpret_cast<Value_t>(key));
+                    insert++;
+                } else {
+                    auto ret = D_RW(hashtable_)->Get(key);
+                    find++;
+                }
+            }
+            thread->stats.FinishedBatchOp(j);
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(insert: %lu, read: %lu)", insert, find);
+        thread->stats.AddMessage(buf);
+        return;
+    }
+
+    void YCSBC(ThreadState* thread) {
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("YCSBC lack key_trace_ initialization.");
+            return;
+        }
+        size_t find = 0;
+        size_t insert = 0;
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
+        thread->stats.Start();
+        
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                size_t key = key_iterator.Next();                
+                auto ret = D_RW(hashtable_)->Get(key);
+                if (ret == reinterpret_cast<Value_t>(key)) {
+                    find++;
+                }                
+            }
+            thread->stats.FinishedBatchOp(j);
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(insert: %lu, read: %lu)", insert, find);        
+        thread->stats.AddMessage(buf);
+        return;
+    }
+
+    void YCSBD(ThreadState* thread) {
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("YCSBD lack key_trace_ initialization.");
+            return;
+        }
+        size_t find = 0;
+        size_t insert = 0;
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        // Read the latest 20%
+        auto key_iterator = key_trace_->iterate_between(start_offset + 0.8 * interval, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, (size_t)(start_offset + 0.8 * interval), start_offset + interval);
+        thread->stats.Start();
+        
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                size_t key = key_iterator.Next();                
+                auto ret = D_RW(hashtable_)->Get(key);
+                if (ret == reinterpret_cast<Value_t>(key)) {
+                    find++;
+                }  
+            }
+            thread->stats.FinishedBatchOp(j);
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(insert: %lu, read: %lu)", insert, find);
+        thread->stats.AddMessage(buf);
+        return;
+    }
+
+    void YCSBF(ThreadState* thread) {
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("YCSBF lack key_trace_ initialization.");
+            return;
+        }
+        size_t find = 0;
+        size_t insert = 0;
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
+        thread->stats.Start();
+        
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                size_t key = key_iterator.Next();
+                if (thread->ycsb_gen.NextF() == kYCSB_Read) {              
+                    auto ret = D_RW(hashtable_)->Get(key);
+                    if (ret == reinterpret_cast<Value_t>(key)) {
+                        find++;
+                    }  
+                } else {
+                    D_RW(hashtable_)->Get(key);
+                    D_RW(hashtable_)->Insert(pop_, key, reinterpret_cast<Value_t>(key));
+                    insert++;
+                }
+            }
+            thread->stats.FinishedBatchOp(j);
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(read_modify: %lu, read: %lu)", insert, find);
+        thread->stats.AddMessage(buf);
         return;
     }
 

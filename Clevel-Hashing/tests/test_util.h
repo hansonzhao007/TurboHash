@@ -541,3 +541,67 @@ public:
     size_t count_;
     std::vector<std::string> keys_;
 };
+
+
+enum YCSBOpType {kYCSB_Write, kYCSB_Read, kYCSB_Query, kYCSB_ReadModifyWrite};
+
+inline uint32_t wyhash32() {
+    static thread_local uint32_t wyhash32_x = random();
+    wyhash32_x += 0x60bee2bee120fc15;
+    uint64_t tmp;
+    tmp = (uint64_t) wyhash32_x * 0xa3b195354a39b70d;
+    uint32_t m1 = (tmp >> 32) ^ tmp;
+    tmp = (uint64_t)m1 * 0x1b03738712fad5c9;
+    uint32_t m2 = (tmp >> 32) ^ tmp;
+    return m2;
+}
+
+class YCSBGenerator {
+public:
+    // Generate 
+    YCSBGenerator() {
+    }
+
+    inline YCSBOpType NextA() {
+        // ycsba: 50% reads, 50% writes
+        uint32_t rnd_num = wyhash32();
+
+        if ((rnd_num & 0x1) == 0) {
+            return kYCSB_Read;
+        } else {
+            return kYCSB_Write;
+        }
+    }
+
+    inline YCSBOpType NextB() {
+        // ycsbb: 95% reads, 5% writes
+        // 51/1024 = 0.0498
+        uint32_t rnd_num = wyhash32();
+
+        if ((rnd_num & 1023) < 51) {
+            return kYCSB_Write;
+        } else {
+            return kYCSB_Read;
+        }
+    }
+
+    inline YCSBOpType NextC() {
+        return kYCSB_Read;
+    }
+
+    inline YCSBOpType NextD() {
+        // ycsbd: read latest inserted records
+        return kYCSB_Read;
+    }
+
+    inline YCSBOpType NextF() {
+        // ycsba: 50% reads, 50% writes
+        uint32_t rnd_num = wyhash32();
+
+        if ((rnd_num & 0x1) == 0) {
+            return kYCSB_Read;
+        } else {
+            return kYCSB_ReadModifyWrite;
+        }
+    }
+};

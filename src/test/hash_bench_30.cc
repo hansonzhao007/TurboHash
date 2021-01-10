@@ -931,7 +931,7 @@ public:
         size_t start_offset = thread->tid * interval;
         // Read the latest 20%
         auto key_iterator = key_trace_->iterate_between(start_offset + 0.8 * interval, start_offset + interval);
-        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset + 0.8 * interval, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, (size_t)(start_offset + 0.8 * interval), start_offset + interval);
         thread->stats.Start();
         
         while (key_iterator.Valid()) {
