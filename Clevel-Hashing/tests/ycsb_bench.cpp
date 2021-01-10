@@ -564,6 +564,8 @@ public:
     inline Ret Delete(const string_t& key, size_t tid) {
         #ifdef TYPE_CLEVEL
         return map_->erase(key, tid + 1);
+        #elif defined TYPE_LEVEL
+        return map_->erase(key, tid);
         #elif defined TYPE_CLHT
         return map_->erase(key);
         #endif
@@ -573,6 +575,8 @@ public:
     inline Ret Update(const string_t& key, const string_t& val, size_t tid) {
         #ifdef TYPE_CLEVEL
         return map_->update(ValueType(key, val), tid + 1);
+        #elif defined TYPE_LEVEL
+        return map_->update(ValueType(key, val), tid);
         #elif defined TYPE_CLHT
         return map_->put(ValueType(key, val), tid);
         #endif
@@ -789,7 +793,7 @@ public:
     }
 
     void DoOverWrite(ThreadState* thread) {
-        #ifdef TYPE_CLEVEL
+        #if defined TYPE_LEVEL || defined TYPE_CLHT || defined TYPE_LEVEL
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             perror("DoOverWrite lack key_trace_ initialization.");
@@ -821,7 +825,7 @@ public:
     }
 
     void DoDelete(ThreadState* thread) {
-        #ifdef TYPE_CLEVEL
+        #if defined TYPE_LEVEL || defined TYPE_CLHT || defined TYPE_LEVEL
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             perror("DoOverWrite lack key_trace_ initialization.");
