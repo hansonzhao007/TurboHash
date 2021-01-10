@@ -6,44 +6,9 @@
 #include <fstream>
 #include <random>
 
-#include "util/trace.h"
-
 #define KEY_LEN ((15))
 
 auto rng = std::default_random_engine {};
-
-void GenerateRandomKeys(std::vector<size_t>& res, size_t min, size_t max, size_t count, int32_t seeds = 123) {
-    res.resize(count);
-    
-    util::TraceUniform trace(seeds, min, max);
-    
-    for (size_t i = 0; i < count; ++i) {
-        res[i] = trace.Next();
-        if ((i & 0xFFFFF) == 0) {
-            fprintf(stderr, "generate: %03d->seed: 0x%x\r", int(i >> 20), seeds);fflush(stderr);
-        }
-    }
-    printf("\r");
-}
-
-int ShuffleFun(int i) {
-  static util::Trace* trace = new util::TraceUniform(142857);
-  return trace->Next() % i;
-}
-
-std::string* GenerateAllKeysInRange(size_t min, size_t max) {
-    // generate keys in range [min, max]
-    size_t count = max - min + 1;
-    std::string* keys = new std::string[count];
-    for (size_t i = min; i <= max; ++i) {
-        keys[i].append("key").append(std::to_string(i));
-        if ((i & 0xFFFFF) == 0) {
-            fprintf(stderr, "generate%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
-        }
-    }
-    printf("\r");
-    return keys;
-}
 
 class RandomKeyTrace {
 public:
@@ -242,3 +207,65 @@ public:
     std::vector<std::string> keys_;
 };
 
+enum YCSBOpType {kYCSB_Write, kYCSB_Read, kYCSB_Query, kYCSB_ReadModifyWrite};
+
+inline uint32_t wyhash32() {
+    static thread_local uint32_t wyhash32_x = random();
+    wyhash32_x += 0x60bee2bee120fc15;
+    uint64_t tmp;
+    tmp = (uint64_t) wyhash32_x * 0xa3b195354a39b70d;
+    uint32_t m1 = (tmp >> 32) ^ tmp;
+    tmp = (uint64_t)m1 * 0x1b03738712fad5c9;
+    uint32_t m2 = (tmp >> 32) ^ tmp;
+    return m2;
+}
+
+class YCSBGenerator {
+public:
+    // Generate 
+    YCSBGenerator() {
+    }
+
+    inline YCSBOpType NextA() {
+        // ycsba: 50% reads, 50% writes
+        uint32_t rnd_num = wyhash32();
+
+        if ((rnd_num & 0x1) == 0) {
+            return kYCSB_Read;
+        } else {
+            return kYCSB_Write;
+        }
+    }
+
+    inline YCSBOpType NextB() {
+        // ycsbb: 95% reads, 5% writes
+        // 51/1024 = 0.0498
+        uint32_t rnd_num = wyhash32();
+
+        if ((rnd_num & 1023) < 51) {
+            return kYCSB_Write;
+        } else {
+            return kYCSB_Read;
+        }
+    }
+
+    inline YCSBOpType NextC() {
+        return kYCSB_Read;
+    }
+
+    inline YCSBOpType NextD() {
+        // ycsbd: read latest inserted records
+        return kYCSB_Read;
+    }
+
+    inline YCSBOpType NextF() {
+        // ycsba: 50% reads, 50% writes
+        uint32_t rnd_num = wyhash32();
+
+        if ((rnd_num & 0x1) == 0) {
+            return kYCSB_Read;
+        } else {
+            return kYCSB_ReadModifyWrite;
+        }
+    }
+};
