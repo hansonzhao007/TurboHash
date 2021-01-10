@@ -45,9 +45,9 @@ DEFINE_bool(hist, false, "");
 DEFINE_string(benchmarks, "load,readrandom", "");
 
 // #define TYPE_CCEH
-#define TYPE_CLEVEL
+// #define TYPE_CLEVEL
 // #define TYPE_LEVEL
-// #define TYPE_CLHT
+#define TYPE_CLHT
 
 // #define DEBUG_RESIZING 1
 
@@ -564,6 +564,8 @@ public:
     inline Ret Delete(const string_t& key, size_t tid) {
         #ifdef TYPE_CLEVEL
         return map_->erase(key, tid + 1);
+        #elif defined TYPE_CLHT
+        return map_->erase(key);
         #endif
         return {};
     }
@@ -571,6 +573,8 @@ public:
     inline Ret Update(const string_t& key, const string_t& val, size_t tid) {
         #ifdef TYPE_CLEVEL
         return map_->update(ValueType(key, val), tid + 1);
+        #elif defined TYPE_CLHT
+        return map_->put(ValueType(key, val), tid);
         #endif
         return {};
     }
