@@ -1,0 +1,157 @@
+clevel_hash constructor: HashPower = 20
+hashpower : 20
+Initialization done.
+Initial capacity 12582912
+key trace size: 120000000
+Randomize the trace...------------------------------------------------
+HashType:              CLEVEL
+Init Capacity:         12582912
+Key Size:              15
+Val Size:              15
+Entries:               120000000
+Trace size:            120000000
+Read:                  10000000 
+Write:                 1000000 
+Thread:                28 
+Report interval:       0 s
+Stats interval:        10000000 records
+benchmarks:            load,readrandom,readnon
+------------------------------------------------
+[32mStart IPMWatcher for load
+[0mthread 27, between 115714278 - 119999992
+thread  2, between 8571428 - 12857142
+thread  1, between 4285714 - 8571428
+thread  3, between 12857142 - 17142856
+thread  6, between 25714284 - 29999998
+thread  7, between 29999998 - 34285712
+thread  4, between 17142856 - 21428570
+thread 10, between 42857140 - 47142854
+thread 11, between 47142854 - 51428568
+thread  9, between 38571426 - 42857140
+thread  8, between 34285712 - 38571426
+thread 15, between 64285710 - 68571424
+thread 16, between 68571424 - 72857138
+thread 17, between 72857138 - 77142852
+thread 18, between 77142852 - 81428566
+thread  5, between 21428570 - 25714284
+thread 12, between 51428568 - 55714282
+thread 24, between 102857136 - 107142850
+thread 20, between 85714280 - 89999994
+thread 21, between 89999994 - 94285708
+thread 23, between 98571422 - 102857136
+thread 13, between 55714282 - 59999996
+thread 14, between 59999996 - 64285710
+thread 19, between 81428566 - 85714280
+thread 25, between 107142850 - 111428564
+thread 26, between 111428564 - 115714278
+thread  0, between 0 - 4285714
+thread 22, between 94285708 - 98571422
+Thread-2 starts expanding for 2097152 buckets
+Thread-2 finishes expanding, capacity: 29360128
+expand during resizing!
+Thread-0 starts expanding for 4194304 buckets
+Thread-0 finishes expanding, capacity: 62914560
+Expand thread updates metadata, is_resizing: 1 levels_left: 3
+expand during resizing!
+Thread-0 starts expanding for 8388608 buckets
+Thread-0 finishes expanding, capacity: 125829120
+Expand thread updates metadata, is_resizing: 1 levels_left: 3
+expand during resizing!
+Thread-0 starts expanding for 16777216 buckets
+Thread-0 finishes expanding, capacity: 251658240
+Expand thread updates metadata, is_resizing: 1 levels_left: 3
+load         :       0.558 micros/op 1.708798 Mops/s;
+[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      71154.80 |       42312.44 |   117696.75 |     61560.81 |   1.65 |   1.45 |[0m
+[34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      63313.94 |       42273.54 |   126177.96 |     84694.93 |   1.99 |   2.00 |[0m
+[34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      40740.28 |       12967.69 |    82726.55 |     23372.72 |   2.03 |   1.80 |[0m
+[34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      40673.73 |       12969.92 |    82599.02 |     23350.17 |   2.03 |   1.80 |[0m
+[34m*SUM* | DIMM-R:  5237.1 MB/s. User-R:  2763.0 MB/s   | DIMM-W:  2469.8 MB/s, User-W:  1414.5 MB/s. Time:  78.13s.[0m
+[32mDestroy IPMWatcher.
+[0m
+Randomize the trace...[32mStart IPMWatcher for readrandom
+[0mExpand thread updates metadata, is_resizing: 0 levels_left: 2
+2021/01/09-20:27:34  ... thread 18: (10000000,10000000) ops and ( 458807.9,458807.9 ) ops/second in (21.7956,21.7956) seconds
+2021/01/09-20:27:34  ... thread 15: (10000000,10000000) ops and ( 457668.0,457668.0 ) ops/second in (21.8499,21.8499) seconds
+2021/01/09-20:27:34  ... thread 13: (10000000,10000000) ops and ( 457456.3,457456.3 ) ops/second in (21.8600,21.8600) seconds
+2021/01/09-20:27:34  ... thread 11: (10000000,10000000) ops and ( 457276.8,457276.8 ) ops/second in (21.8686,21.8686) seconds
+2021/01/09-20:27:34  ... thread 9: (10000000,10000000) ops and ( 457271.6,457271.6 ) ops/second in (21.8688,21.8688) seconds
+2021/01/09-20:27:34  ... thread 16: (10000000,10000000) ops and ( 457127.5,457127.5 ) ops/second in (21.8757,21.8757) seconds
+2021/01/09-20:27:34  ... thread 17: (10000000,10000000) ops and ( 457122.9,457122.9 ) ops/second in (21.8760,21.8760) seconds
+2021/01/09-20:27:34  ... thread 12: (10000000,10000000) ops and ( 456848.0,456848.0 ) ops/second in (21.8891,21.8891) seconds
+2021/01/09-20:27:34  ... thread 14: (10000000,10000000) ops and ( 456804.0,456804.0 ) ops/second in (21.8912,21.8912) seconds
+2021/01/09-20:27:34  ... thread 10: (10000000,10000000) ops and ( 456802.7,456802.7 ) ops/second in (21.8913,21.8913) seconds
+2021/01/09-20:27:35  ... thread 5: (10000000,10000000) ops and ( 453752.8,453752.8 ) ops/second in (22.0384,22.0384) seconds
+2021/01/09-20:27:36  ... thread 1: (10000000,10000000) ops and ( 433031.5,433031.5 ) ops/second in (23.0930,23.0930) seconds
+2021/01/09-20:27:36  ... thread 20: (10000000,10000000) ops and ( 432808.8,432808.8 ) ops/second in (23.1049,23.1049) seconds
+2021/01/09-20:27:36  ... thread 0: (10000000,10000000) ops and ( 425377.1,425377.1 ) ops/second in (23.5086,23.5086) seconds
+2021/01/09-20:27:36  ... thread 19: (10000000,10000000) ops and ( 425351.7,425351.7 ) ops/second in (23.5100,23.5100) seconds
+2021/01/09-20:27:36  ... thread 27: (10000000,10000000) ops and ( 425132.6,425132.6 ) ops/second in (23.5221,23.5221) seconds
+2021/01/09-20:27:36  ... thread 8: (10000000,10000000) ops and ( 425032.6,425032.6 ) ops/second in (23.5276,23.5276) seconds
+2021/01/09-20:27:36  ... thread 4: (10000000,10000000) ops and ( 424954.4,424954.4 ) ops/second in (23.5319,23.5319) seconds
+2021/01/09-20:27:36  ... thread 24: (10000000,10000000) ops and ( 424943.3,424943.3 ) ops/second in (23.5326,23.5326) seconds
+2021/01/09-20:27:36  ... thread 23: (10000000,10000000) ops and ( 424895.7,424895.7 ) ops/second in (23.5352,23.5352) seconds
+2021/01/09-20:27:36  ... thread 26: (10000000,10000000) ops and ( 424751.0,424751.0 ) ops/second in (23.5432,23.5432) seconds
+2021/01/09-20:27:36  ... thread 6: (10000000,10000000) ops and ( 424618.7,424618.7 ) ops/second in (23.5505,23.5505) seconds
+2021/01/09-20:27:36  ... thread 7: (10000000,10000000) ops and ( 424586.6,424586.6 ) ops/second in (23.5523,23.5523) seconds
+2021/01/09-20:27:36  ... thread 25: (10000000,10000000) ops and ( 424572.5,424572.5 ) ops/second in (23.5531,23.5531) seconds
+2021/01/09-20:27:36  ... thread 22: (10000000,10000000) ops and ( 424243.5,424243.5 ) ops/second in (23.5714,23.5714) seconds
+2021/01/09-20:27:36  ... thread 21: (10000000,10000000) ops and ( 424213.2,424213.2 ) ops/second in (23.5731,23.5731) seconds
+2021/01/09-20:27:36  ... thread 3: (10000000,10000000) ops and ( 424212.0,424212.0 ) ops/second in (23.5731,23.5731) seconds
+2021/01/09-20:27:36  ... thread 2: (10000000,10000000) ops and ( 424169.1,424169.1 ) ops/second in (23.5755,23.5755) seconds
+readrandom   :       0.084 micros/op 11.326515 Mops/s; (num: 10000000, not find: 1)
+[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      50970.02 |         484.38 |   122139.11 |       581.12 |   2.40 |   1.20 |[0m
+[34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      50587.55 |         353.13 |   121997.60 |       571.05 |   2.41 |   1.62 |[0m
+[34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      50643.29 |         353.22 |   122169.26 |       571.77 |   2.41 |   1.62 |[0m
+[34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      50610.23 |         353.13 |   122116.36 |       573.09 |   2.41 |   1.62 |[0m
+[34m*SUM* | DIMM-R: 20716.6 MB/s. User-R:  8602.3 MB/s   | DIMM-W:    97.4 MB/s, User-W:    65.5 MB/s. Time:  23.58s.[0m
+[32mDestroy IPMWatcher.
+[0m
+Randomize the trace...[32mStart IPMWatcher for readnon
+[0m2021/01/09-20:28:00  ... thread 15: (10000000,10000000) ops and ( 660413.7,660413.7 ) ops/second in (15.1420,15.1420) seconds
+2021/01/09-20:28:00  ... thread 8: (10000000,10000000) ops and ( 660023.9,660023.9 ) ops/second in (15.1510,15.1510) seconds
+2021/01/09-20:28:00  ... thread 13: (10000000,10000000) ops and ( 660002.8,660002.8 ) ops/second in (15.1515,15.1515) seconds
+2021/01/09-20:28:00  ... thread 16: (10000000,10000000) ops and ( 659635.9,659635.9 ) ops/second in (15.1599,15.1599) seconds
+2021/01/09-20:28:00  ... thread 9: (10000000,10000000) ops and ( 659593.3,659593.3 ) ops/second in (15.1609,15.1609) seconds
+2021/01/09-20:28:00  ... thread 11: (10000000,10000000) ops and ( 659368.2,659368.2 ) ops/second in (15.1660,15.1660) seconds
+2021/01/09-20:28:00  ... thread 14: (10000000,10000000) ops and ( 659354.9,659354.9 ) ops/second in (15.1663,15.1663) seconds
+2021/01/09-20:28:00  ... thread 6: (10000000,10000000) ops and ( 658814.9,658814.9 ) ops/second in (15.1788,15.1788) seconds
+2021/01/09-20:28:00  ... thread 10: (10000000,10000000) ops and ( 658615.7,658615.7 ) ops/second in (15.1834,15.1834) seconds
+2021/01/09-20:28:00  ... thread 5: (10000000,10000000) ops and ( 658079.9,658079.9 ) ops/second in (15.1957,15.1957) seconds
+2021/01/09-20:28:00  ... thread 12: (10000000,10000000) ops and ( 658067.3,658067.3 ) ops/second in (15.1960,15.1960) seconds
+2021/01/09-20:28:00  ... thread 24: (10000000,10000000) ops and ( 657651.2,657651.2 ) ops/second in (15.2056,15.2056) seconds
+2021/01/09-20:28:01  ... thread 23: (10000000,10000000) ops and ( 604870.3,604870.3 ) ops/second in (16.5325,16.5325) seconds
+2021/01/09-20:28:02  ... thread 3: (10000000,10000000) ops and ( 581816.3,581816.3 ) ops/second in (17.1876,17.1876) seconds
+2021/01/09-20:28:02  ... thread 17: (10000000,10000000) ops and ( 578505.9,578505.9 ) ops/second in (17.2859,17.2859) seconds
+2021/01/09-20:28:02  ... thread 21: (10000000,10000000) ops and ( 578471.3,578471.3 ) ops/second in (17.2869,17.2869) seconds
+2021/01/09-20:28:02  ... thread 4: (10000000,10000000) ops and ( 578278.8,578278.8 ) ops/second in (17.2927,17.2927) seconds
+2021/01/09-20:28:02  ... thread 20: (10000000,10000000) ops and ( 578244.0,578244.0 ) ops/second in (17.2937,17.2937) seconds
+2021/01/09-20:28:02  ... thread 0: (10000000,10000000) ops and ( 578234.4,578234.4 ) ops/second in (17.2940,17.2940) seconds
+2021/01/09-20:28:02  ... thread 18: (10000000,10000000) ops and ( 578232.3,578232.3 ) ops/second in (17.2941,17.2941) seconds
+2021/01/09-20:28:02  ... thread 26: (10000000,10000000) ops and ( 578174.6,578174.6 ) ops/second in (17.2958,17.2958) seconds
+2021/01/09-20:28:02  ... thread 19: (10000000,10000000) ops and ( 578001.3,578001.3 ) ops/second in (17.3010,17.3010) seconds
+2021/01/09-20:28:02  ... thread 1: (10000000,10000000) ops and ( 577844.7,577844.7 ) ops/second in (17.3057,17.3057) seconds
+2021/01/09-20:28:02  ... thread 7: (10000000,10000000) ops and ( 577822.8,577822.8 ) ops/second in (17.3063,17.3063) seconds
+2021/01/09-20:28:02  ... thread 22: (10000000,10000000) ops and ( 577806.2,577806.2 ) ops/second in (17.3068,17.3068) seconds
+2021/01/09-20:28:02  ... thread 27: (10000000,10000000) ops and ( 577323.0,577323.0 ) ops/second in (17.3213,17.3213) seconds
+2021/01/09-20:28:02  ... thread 2: (10000000,10000000) ops and ( 577147.4,577147.4 ) ops/second in (17.3266,17.3266) seconds
+2021/01/09-20:28:02  ... thread 25: (10000000,10000000) ops and ( 577063.2,577063.2 ) ops/second in (17.3291,17.3291) seconds
+readnon      :       0.062 micros/op 15.409237 Mops/s; (num: 10000000, not find: 10000000)
+[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      42063.81 |           0.02 |    93174.04 |        38.17 |   2.22 | 2141.60 |[0m
+[34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      42094.13 |           0.02 |    93213.39 |        36.20 |   2.21 | 2024.49 |[0m
+[34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      42094.59 |           0.02 |    93202.99 |        38.17 |   2.21 | 2141.62 |[0m
+[34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      42076.62 |           0.02 |    93184.08 |        38.70 |   2.21 | 2171.25 |[0m
+[34m*SUM* | DIMM-R: 21510.4 MB/s. User-R:  9713.2 MB/s   | DIMM-W:     8.7 MB/s, User-W:     0.0 MB/s. Time:  17.33s.[0m
+[32mDestroy IPMWatcher.
+[0m
