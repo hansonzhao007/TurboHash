@@ -21,10 +21,10 @@ markers= {
     'clevel30': 's', 
     'clht30'  : ''}
 colors= {
-    'turbo'   : '#E31A1C',
-    'turbo30' : '#FB9A99', 
-    'cceh'    : '#E7BA52', 
-    'cceh30'  : '#FF7F00', 
+    'turbo'   : '#B82126',
+    'turbo30' : '#F37F82', 
+    'cceh'    : '#0E5932', 
+    'cceh30'  : '#AFD34E', 
     'clevel30': '#3182BD', 
     'clht30'  : '#BDBDBD'}
 

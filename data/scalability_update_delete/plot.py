@@ -17,15 +17,15 @@ legend_name = ('TURBO16', 'TURBO30', 'CLEVEL30', 'CLHT30')
 markers= {
     'turbo'   : 'o',
     'turbo30' : '.', 
-    'cceh'    : '^', 
-    'cceh30'  : 'v', 
-    'clevel30': 's', 
+    'cceh'    : '|', 
+    'cceh30'  : 'x', 
+    'clevel30': 'd', 
     'clht30'  : ''}
 colors= {
-    'turbo'   : '#E31A1C',
-    'turbo30' : '#262626', 
-    'cceh'    : '#8ABC3E', 
-    'cceh30'  : '#FF7F00', 
+    'turbo'   : '#9B0522',
+    'turbo30' : '#F37F82', 
+    'cceh'    : '#83C047', 
+    'cceh30'  : '#0E5932', 
     'clevel30': '#3182BD', 
     'clht30'  : '#BDBDBD'}
     
@@ -79,18 +79,14 @@ def PlotScalability():
     Plot("scalability_delete.parse", "scalability_delete.pdf", -10, "Delete Throughput", "Mops/s")
     
     # Plot IO
-    Plot("scalability_load_io.parse", "scalability_load_io.pdf", -4, "", "GB", 1024.0)
-    Plot("scalability_update_io.parse", "scalability_update_io.pdf", -4, "", "GB", 1024.0)
-    Plot("scalability_update_io_r.parse", "scalability_update_io_r.pdf", -4, "", "GB", 1024.0)
-    Plot("scalability_update_io_w.parse", "scalability_update_io_w.pdf", -4, "", "GB", 1024.0)
-    Plot("scalability_delete_io.parse", "scalability_delete_io.pdf", -4, "", "GB", 1024.0)
-    Plot("scalability_delete_io_r.parse", "scalability_delete_io_r.pdf", -4, "", "GB", 1024.0)
-    Plot("scalability_delete_io_w.parse", "scalability_delete_io_w.pdf", -4, "", "GB", 1024.0)
-
+    Plot("scalability_load_io.parse", "scalability_load_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
+    Plot("scalability_update_io.parse", "scalability_update_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
+    Plot("scalability_delete_io.parse", "scalability_delete_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
+    
     # Plot bw
-    Plot("scalability_load_bw.parse", "scalability_load_bw.pdf", -4, "", "GB/s", 1024.0)
-    Plot("scalability_update_bw.parse", "scalability_update_bw.pdf", -4, "", "GB/s", 1024.0)
-    Plot("scalability_delete_bw.parse", "scalability_delete_bw.pdf", -4, "", "GB/s", 1024.0)
+    Plot("scalability_load_bw.parse", "scalability_load_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
+    Plot("scalability_update_bw.parse", "scalability_update_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
+    Plot("scalability_delete_bw.parse", "scalability_delete_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
 
 PlotScalability()
 
