@@ -196,7 +196,7 @@ def PlotNormal(df, ax, filename):
     ax.yaxis.grid(linewidth=1, linestyle='--')
     ax.set_axisbelow(True)
     ax.set_ylabel('Normalized Latency', fontsize=22)
-    ax.set_ylim([0.1, 11.9])
+    ax.set_ylim([0.1, 12.9])
     plt.savefig(filename, bbox_inches='tight', pad_inches=0.05)
 
 def PlotNormalLat():
@@ -217,7 +217,7 @@ def PlotNormalLat():
     data_negetive.index = hashtables
 
     # Plot positive
-    ax = plt.figure(figsize=(7, 6)).add_subplot(111)
+    ax = plt.figure(figsize=(7, 5)).add_subplot(111)
     df = data_positive
     df = df.iloc[:,:-2]
     df = df.drop(['min', 'std', 'p50', 'p75', 'max', 'p999', 'p9999'], axis=1)
@@ -225,7 +225,7 @@ def PlotNormalLat():
     PlotNormal(df, ax, 'readlat_normalized.pdf')
 
     # Plot Negetive
-    ax = plt.figure(figsize=(7, 6)).add_subplot(111)
+    ax = plt.figure(figsize=(7, 5)).add_subplot(111)
     df = data_negetive
     df = df.iloc[:,:-2]
     df = df.drop(['min', 'std', 'p50', 'p75', 'max', 'p999', 'p9999'], axis=1)
