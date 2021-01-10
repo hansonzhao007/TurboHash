@@ -45,9 +45,9 @@ DEFINE_bool(hist, false, "");
 DEFINE_string(benchmarks, "load,readrandom", "");
 
 // #define TYPE_CCEH
-// #define TYPE_CLEVEL
+#define TYPE_CLEVEL
 // #define TYPE_LEVEL
-#define TYPE_CLHT
+// #define TYPE_CLHT
 
 // #define DEBUG_RESIZING 1
 
@@ -516,6 +516,10 @@ public:
                 fresh_db = false;
                 key_trace_->Randomize();
                 method = &Benchmark::DoOverWrite;                
+            } else if (name == "delete") {
+                fresh_db = false;
+                key_trace_->Randomize();
+                method = &Benchmark::DoDelete;             
             } else if (name == "readrandom") {
                 fresh_db = false;
                 key_trace_->Randomize();
@@ -538,7 +542,7 @@ public:
                 fresh_db = false;
                 thread = 1;
                 method = &Benchmark::DoStats;
-            }
+            } 
 
             IPMWatcher watcher(name);
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
@@ -555,6 +559,20 @@ public:
         #elif defined TYPE_CLHT
         return map_->get(key);
         #endif
+    }
+
+    inline Ret Delete(const string_t& key, size_t tid) {
+        #ifdef TYPE_CLEVEL
+        return map_->erase(key, tid + 1);
+        #endif
+        return {};
+    }
+
+    inline Ret Update(const string_t& key, const string_t& val, size_t tid) {
+        #ifdef TYPE_CLEVEL
+        return map_->update(ValueType(key, val), tid + 1);
+        #endif
+        return {};
     }
 
     inline Ret Insert(const string_t& key, const string_t& val, size_t tid) {
@@ -767,6 +785,7 @@ public:
     }
 
     void DoOverWrite(ThreadState* thread) {
+        #ifdef TYPE_CLEVEL
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             perror("DoOverWrite lack key_trace_ initialization.");
@@ -776,25 +795,55 @@ public:
         size_t start_offset = thread->tid * interval;
         auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
         Duration duration(FLAGS_readtime, writes_);
-        size_t not_inserted = 0;
+        size_t updated = 0;
         thread->stats.Start();
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
                 std::string& key = key_iterator.Next();  
                 
-                auto res = Insert({key.data(), key.size()}, {key.data(), key.size()}, thread->tid);
-                if (!res.found) {
-                    // success insertion
-                } else {
-                    // insertion fail
-                    not_inserted++;
+                auto res = Update({key.data(), key.size()}, {key.data(), key.size()}, thread->tid);
+                if (res.found) {
+                    // success update
+                    updated++;
                 }
             }
             thread->stats.FinishedBatchOp(j);
         }
         write_end:
-        printf("Thread %2d: num: %lu, not insert: %lu\n", thread->stats.tid_, interval, not_inserted);
+        printf("Thread %2d: num: %lu, updated: %lu\n", thread->stats.tid_, interval, updated);
+        #endif
+        return;
+    }
+
+    void DoDelete(ThreadState* thread) {
+        #ifdef TYPE_CLEVEL
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("DoOverWrite lack key_trace_ initialization.");
+            return;
+        }
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        Duration duration(FLAGS_readtime, writes_);
+        size_t deleted = 0;
+        thread->stats.Start();
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                std::string& key = key_iterator.Next();                  
+                auto res = Delete({key.data(), key.size()}, thread->tid);
+                if (res.found) {
+                    // success deleted
+                    deleted++;
+                }
+            }
+            thread->stats.FinishedBatchOp(j);
+        }
+        write_end:
+        printf("Thread %2d: num: %lu, deleted: %lu\n", thread->stats.tid_, interval, deleted);
+        #endif
         return;
     }
 

@@ -2232,11 +2232,11 @@ public:
         return nullptr;
     }
 
-    void Delete(const Key& key) {
+    bool Delete(const Key& key) {
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
         
-        deleteSlot(key, hash_value);
+        return deleteSlot(key, hash_value);
     }
 
     void IterateValidBucket() {
@@ -2628,7 +2628,7 @@ private:
         return {nullptr, false};
     }
 
-    inline void deleteSlot(const Key& key, size_t hash_value) {
+    inline bool deleteSlot(const Key& key, size_t hash_value) {
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         BucketMetaDram* bucket_meta = locateBucket(bucket_i);
@@ -2655,7 +2655,7 @@ private:
                         util::AtomicBitOps::BitTestAndSet(bitmap, 16 + i);
                         FLUSH(cell_addr);
                         FLUSHFENCE;
-                        return;
+                        return true;
                     }                                        
                 }
             }
@@ -2663,11 +2663,13 @@ private:
             // If this cell still has more than one empty slot, then it means the key does't exist.
             util::BitSet empty_bitset = meta.EmptyBitSet();
             if (empty_bitset.validCount() > 1) {
-                return;
+                return false;
             }
             
             probe.next();
         }
+
+        return false;
     }
 
 
