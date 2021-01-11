@@ -593,7 +593,9 @@ public:
     }
 
     inline Ret Update(const string_t& key, const string_t& val, size_t tid) {
-        #ifdef TYPE_CLEVEL
+        #ifdef TYPE_CCEH
+        return map_->insert((uint8_t*)key.c_str(), (uint8_t*)val.c_str(), key.size(), val.size(), tid);
+        #elif defined TYPE_CLEVEL
         return map_->update(ValueType(key, val), tid + 1);
         #elif defined TYPE_LEVEL
         return map_->update(ValueType(key, val), tid);
@@ -813,7 +815,6 @@ public:
     }
 
     void DoOverWrite(ThreadState* thread) {
-        #if defined TYPE_LEVEL || defined TYPE_CLHT || defined TYPE_LEVEL
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             perror("DoOverWrite lack key_trace_ initialization.");
@@ -840,7 +841,6 @@ public:
         }
         write_end:
         printf("Thread %2d: num: %lu, updated: %lu\n", thread->stats.tid_, interval, updated);
-        #endif
         return;
     }
 

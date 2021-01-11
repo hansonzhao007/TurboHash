@@ -48,8 +48,6 @@ echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_readnon_bw
 echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_readnon_bw_r
 echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_readnon_bw_w
 
-
-# Parse throughput
 for t in 1 2 4 8 16 20 24 28 32 36 40
 do
     # parse the throughput
@@ -137,7 +135,6 @@ do
     echo $oneline_readnon_w >> $outfile_readnon_io_w
 
     # Parse the bw
-    # parse the io
     oneline_load="$t"
     oneline_read="$t"
     oneline_readnon="$t"

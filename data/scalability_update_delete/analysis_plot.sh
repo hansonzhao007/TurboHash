@@ -48,8 +48,6 @@ echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_delete_bw
 echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_delete_bw_r
 echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_delete_bw_w
 
-
-# Parse throughput
 for t in 1 2 4 8 16 20 24 28 32 36 40
 do
     # parse the throughput
@@ -196,4 +194,4 @@ do
     echo $oneline_delete_w >> $outfile_delete_bw_w
 done
 
-# python3 plot.py
+python3 plot.py
