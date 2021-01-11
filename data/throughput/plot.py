@@ -13,42 +13,6 @@ plt.rcParams['axes.linewidth'] = 1.8
 hashtables = ['turbo', 'cceh', 'turbo30', 'cceh30', 'clevel30', 'clht30']
 legend_name = ('TURBO16', 'CCEH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
 
-def PlotIO():
-    fig, ax = plt.subplots(figsize=(7, 7))
-
-    data = pd.DataFrame()
-
-    for i in hashtables:
-        filename = "io_" + str(i) + ".parse"
-        df = pd.read_csv(filename)
-        data = data.append(df.iloc[0])
-    data.index=legend_name
-    data = data / 1024.0
-    # print(data)
-
-    # Plot bw
-    data[['read_r', 'read_w']].plot.bar(ax=ax, color=("#5E88C2", "red"), edgecolor='k',  stacked=True, width=0.25, position=1, fontsize=16, alpha=0.6)
-    data[['readnon_r', 'readnon_w']].plot.bar(ax=ax, color=("white", "grey"), edgecolor='k',  stacked=True, width=0.25, position=0, fontsize=16, alpha=0.6)
-    data[['load_r', 'load_w']].plot.bar(ax=ax, color=("white", "#F2AA3F"), edgecolor='k',  stacked=True, width=0.25, position=-1, fontsize=16, alpha=0.6)
-    bars = ax.patches
-    patterns =(' ', ' ', ' ',' ', 'xxx', '...')
-    hatches = [p for p in patterns for i in range(6)]
-    for bar, hatch in zip(bars, hatches):
-        bar.set_hatch(hatch)
-
-
-    ax.set_axisbelow(True)
-    ax.grid(axis='y', linestyle='-.', linewidth=0.5)    
-    ax.set_ylabel("Total IO (GB)", fontsize=22)
-    ax.legend(["Positive Read - R", "Positive Read - W", "Negative Read - R", "Negative Read - W", "Load - R", "Load - W"], loc="upper left", fontsize=16, framealpha=1)
-    ax.tick_params(axis='y', labelsize=18)
-    ax.tick_params(axis='x', labelsize=20, rotation=30)
-    ax.set_xlim([-0.5, 5.75])
-    fig.savefig('io.pdf', bbox_inches='tight', pad_inches=0.05)
-    return data
-
-
-
 # plot value on top of standard bar
 def add_value_labels(ax, spacing, labels, pick_standard, units="Mops/s"):
     """Add labels to the end of each bar in a bar chart.
@@ -98,13 +62,13 @@ def add_value_labels(ax, spacing, labels, pick_standard, units="Mops/s"):
             j = j + 1
         i = i + 1
 
-def PlotNormal(df, ax, filename, rotation = 0, pick = 1, units="Mops/s"):    
+def PlotNormal(df, ax, filename, rotation = 0, pick = 1, units="Mops/s", ytitle='Normalized Throughput', is_while=False):    
     pick_standard = pick
     normalized = df.copy()
     for kv in hashtables:
         normalized.loc[kv] = normalized.loc[kv] / df.iloc[pick_standard]
     normalized = normalized.T
-    # print(normalized)
+
     normalized.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
     # plot marker in bar
     bars = ax.patches
@@ -121,10 +85,87 @@ def PlotNormal(df, ax, filename, rotation = 0, pick = 1, units="Mops/s"):
     ax.legend(legend_name, fontsize=22) #, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(0, 1.22, 1, 0))
     ax.yaxis.grid(linewidth=1, linestyle='--')
     ax.set_axisbelow(True)
-    ax.set_ylabel('Normalized Throughput', fontsize=26)
+    ax.set_ylabel(ytitle, fontsize=26)
     # ax.set_ylim([0.1, 11.9])
     plt.xticks(rotation=rotation)
     plt.savefig(filename, bbox_inches='tight', pad_inches=0.05)
+
+
+def PlotIO():
+    fig, ax = plt.subplots(figsize=(7, 7))
+
+    data = pd.DataFrame()
+
+    for i in hashtables:
+        filename = "io_" + str(i) + ".parse"
+        df = pd.read_csv(filename)
+        data = data.append(df.iloc[0])
+    data.index=legend_name
+    data = data / 1024.0
+    # print(data)
+
+    # Plot bw
+    data[['read_r', 'read_w']].plot.bar(ax=ax, color=("#5E88C2", "red"), edgecolor='k',  stacked=True, width=0.25, position=1, fontsize=16, alpha=0.6)
+    data[['readnon_r', 'readnon_w']].plot.bar(ax=ax, color=("white", "grey"), edgecolor='k',  stacked=True, width=0.25, position=0, fontsize=16, alpha=0.6)
+    data[['load_r', 'load_w']].plot.bar(ax=ax, color=("white", "#F2AA3F"), edgecolor='k',  stacked=True, width=0.25, position=-1, fontsize=16, alpha=0.6)
+    bars = ax.patches
+    patterns =(' ', ' ', ' ',' ', 'xxx', '...')
+    hatches = [p for p in patterns for i in range(6)]
+    for bar, hatch in zip(bars, hatches):
+        bar.set_hatch(hatch)
+
+    ax.set_axisbelow(True)
+    ax.grid(axis='y', linestyle='-.', linewidth=0.5)    
+    ax.set_ylabel("Total IO (GB)", fontsize=22)
+    ax.legend(["Positive Read - R", "Positive Read - W", "Negative Read - R", "Negative Read - W", "Load - R", "Load - W"], loc="upper left", fontsize=16, framealpha=1)
+    ax.tick_params(axis='y', labelsize=18)
+    ax.tick_params(axis='x', labelsize=20, rotation=30)
+    ax.set_xlim([-0.5, 5.75])
+    fig.savefig('io.pdf', bbox_inches='tight', pad_inches=0.05) 
+    data.index = hashtables
+    
+    # Plot io normalized
+    data['Write'] = data['load_r'] + data['load_w']
+    data['Positive'] = data['read_r'] + data['read_w']
+    data['Negative'] = data['readnon_r'] + data['readnon_w']
+    print(data)
+
+    
+    ax = plt.figure(figsize=(7, 9)).add_subplot(111)
+    df = data
+    # df = data
+    pick_standard = 1
+    df_normalized = df.copy()
+    # for kv in hashtables:
+    #     df_normalized.loc[kv] = df_normalized.loc[kv] / df.iloc[pick_standard]
+    print(df_normalized)
+    df_less = df[['Write', 'Positive', 'Negative']]
+    normalized = df_normalized[['Write', 'Positive', 'Negative']]
+    normalizedT = normalized.T
+    normalizedT.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
+    # plot marker in bar
+    bars = ax.patches
+    patterns =('///', ' ', '///', ' ', '..', 'xx')
+    hatches = [p for p in patterns for i in range(len(normalized))]
+    for bar, hatch in zip(bars, hatches):
+        bar.set_hatch(hatch)
+    
+
+    df_less = df[['load_w', 'read_w', 'readnon_w']]
+    normalized = df_normalized[['load_w', 'read_w', 'readnon_w']]
+    normalizedT = normalized.T
+    normalizedT.plot(ax=ax, kind="bar", rot=0, color='#D9DADC', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=1)
+
+    ax.get_legend().remove()
+    ax.legend(legend_name, fontsize=22)
+    ax.yaxis.grid(linewidth=1, linestyle='--')
+    ax.set_axisbelow(True)
+    ax.set_ylabel('Pmem I/O (GB)', fontsize=26)
+    ax.set_xticklabels(['Write', 'Positive\nRead', 'Negative\nRead'])
+    plt.xticks(rotation=0)
+    plt.savefig('io_normalized.pdf', bbox_inches='tight', pad_inches=0.05)
+
+    return data
 
 def PlotNormalThroughput():
     data = pd.DataFrame(columns=['load','read','readnon'])
@@ -139,15 +180,9 @@ def PlotNormalThroughput():
     # Plot 
     ax = plt.figure(figsize=(7, 9)).add_subplot(111)
     df = data
-    # print(df)
     PlotNormal(df, ax, 'throughput_normalized.pdf')
 
-df = PlotIO()
-df.index = hashtables
-ax = plt.figure(figsize=(10, 7)).add_subplot(111)
-df.columns = ['Write_R', 'Write_W', 'P_Read_R', "P_Read_W", "N_Read_R", "N_Read_W"]
-print(df)
-PlotNormal(df, ax, "io_normalized.pdf", 45, 1, "GB")
+PlotIO()
 
 PlotNormalThroughput()
 
