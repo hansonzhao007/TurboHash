@@ -67,71 +67,10 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
     # ax.set_title(title, fontsize=16)
 
     # draw v line
-    plt.axvline(x=20, color = 'grey', linestyle='--', linewidth=0.5)
-
+    # plt.axvline(x=20, color = 'grey', linestyle='--', linewidth=0.5)
+    ax.yaxis.grid(linewidth=1, linestyle='--')
     fig.savefig(outfile, bbox_inches='tight', pad_inches=0.05)
 
-
-def Plot2(typename, outfile, padding, title, ylabel, divide=1):
-    file_r = typename + "_r.parse"
-    file_w = typename + "_w.parse"
-
-    df_r = pd.read_csv(file_r)
-    df_w = pd.read_csv(file_w)
-
-    df_r.set_index('thread')
-    df_w.set_index('thread')
-
-    df_r[hashtables] = df_r[hashtables] / divide
-    df_w[hashtables] = df_w[hashtables] / divide
-
-    df = df_r + df_w
-    df['thread'] = df['thread'] / 2
-    print(df)
-    fig, ax = plt.subplots(figsize=(4, 3.6))
-    for i in hashtables:
-        df_r.plot(
-                ax=ax, 
-                x='thread',
-                y=i,
-                linewidth=1,
-                # fontsize=14,
-                # marker=markers[i],
-                # markersize=11,
-                # fillstyle='none',
-                color=colors[i],                
-                dashes=[4, 4])
-        df.plot(
-                ax=ax, 
-                x='thread',
-                y=i,
-                linewidth=2,
-                fontsize=14,
-                marker=markers[i],
-                markersize=11,
-                fillstyle='none',
-                color=colors[i])
-    
-    ax.legend(legend_name, fontsize=9, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(-0.03, 0.92, 1.05, 0.1))
-
-    # set y ticks
-    ymin, ymax = ax.get_ylim()
-    ax.set_ylim([0.1, ymax*1.18])
-    for label in ax.yaxis.get_ticklabels()[-2:]: # hidden last ticklabel
-        label.set_visible(False)
-    ax.tick_params(axis="y", direction="inout", pad=padding)
-    for label in ax.yaxis.get_ticklabels():
-        label.set_horizontalalignment('left')
-    ax.set_ylabel(ylabel, fontsize=16)
-    
-    # set x ticks
-    ax.set_xlim([-5, 42])
-    ax.set_xlabel("Number of Threads", fontsize=16)
-
-    # draw v line
-    plt.axvline(x=20, color = 'grey', linestyle='--', linewidth=0.5)
-
-    fig.savefig(outfile, bbox_inches='tight', pad_inches=0.05)
 
 def PlotScalability():
     # Plot throughput
