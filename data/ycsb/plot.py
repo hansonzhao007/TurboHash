@@ -62,7 +62,7 @@ def add_value_labels(ax, spacing, labels, pick_standard):
         i = i + 1
 
 def PlotNormal(df, ax, filename):    
-    pick_standard = 3
+    pick_standard = 1
     normalized = df.copy()
     for kv in hashtables:
         normalized.loc[kv] = normalized.loc[kv] / df.iloc[pick_standard]
