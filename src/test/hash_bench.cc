@@ -470,6 +470,10 @@ public:
                 fresh_db = false;
                 thread = 1;
                 method = &Benchmark::DoRehash;
+            } else if (name == "rehashlat") {
+                fresh_db = false;
+                thread = 1;
+                method = &Benchmark::DoRehashLat;
             } else if (name == "stats") {
                 fresh_db = false;
                 thread = 1;
@@ -533,11 +537,20 @@ public:
     void DoRehash(ThreadState* thread) {   
         INFO("DoRehash. Thread %2d", thread->tid);  
         thread->stats.Start(); 
-        auto time_start = Env::Default()->NowMicros();
         size_t rehash_count = hashtable_->MinorReHashAll();
-        auto duration = Env::Default()->NowMicros();
-        printf("Rehash speed: %.2f Mops/s\n", (double)rehash_count / duration);
         thread->stats.FinishedBatchOp(rehash_count);
+    }
+
+    void DoRehashLat(ThreadState* thread) {   
+        INFO("DoRehashLat. Thread %2d", thread->tid);  
+        thread->stats.Start(); 
+        auto time_start = Env::Default()->NowMicros();
+        for (size_t b = 0; b < FLAGS_bucket_count; ++b) {
+            hashtable_->MinorRehash(b);
+        }
+        auto duration = Env::Default()->NowMicros() - time_start;
+        printf("MinorRehash avglat: %.4f us\n", (double)(duration) / FLAGS_bucket_count);
+        thread->stats.FinishedBatchOp(num_);
     }
 
     void DoStats(ThreadState* thread) {   
