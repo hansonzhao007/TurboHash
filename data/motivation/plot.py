@@ -34,12 +34,17 @@ def PlotMiss(data, bw, r_w, latency, filename, islog):
     seq_r = "seq_" + r_w + "_r"
     seq_w = "seq_" + r_w + "_w"
     ax = axes[0]
-    bw[[rnd_r, rnd_w]].plot.barh(ax=ax, color=("#5E88C2", "red"), edgecolor='k',  stacked=True, width=0.25, position=1, fontsize=14, alpha=0.6)
-    bw[[seq_r, seq_w]].plot.barh(ax=ax, color=("#5E88C2", "red"), edgecolor='k',  stacked=True, width=0.25, position=0, fontsize=14, alpha=0.6)
+    bw['rnd_bandwidth'] = bw[rnd_r] + bw[rnd_w]
+    bw['seq_bandwidth'] = bw[seq_r] + bw[seq_w]
+    bw[['rnd_bandwidth', 'seq_bandwidth']].plot.barh(ax=ax, alpha=0.8, color=("white", "grey"), edgecolor='k', fontsize=14)
+    bars = ax.patches
+    hatches = ''.join(h*len(data) for h in " x")
+    for bar, hatch in zip(bars, hatches):
+        bar.set_hatch(hatch)
     ax.grid(axis='x', linestyle='-.', linewidth=0.5)
     ax.set_axisbelow(True)
     ax.set_xlabel("Bandwidth (GB/s)", fontsize=16)
-    ax.legend(["Read Bandwidth", "Write Bandwidth"], loc="upper left", fontsize=10, framealpha=0)
+    # ax.legend(["Read Bandwidth", "Write Bandwidth"], loc="upper left", fontsize=10, framealpha=0)
     ax.set(yticklabels=data.access_size.values)
     ax.tick_params(axis='y', labelsize=16)
 
