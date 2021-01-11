@@ -44,8 +44,8 @@ DEFINE_uint64(write, 1 * 1000000, "Number of read operations");
 DEFINE_bool(hist, false, "");
 DEFINE_string(benchmarks, "load,readrandom", "");
 
-// #define TYPE_CCEH
-#define TYPE_CLEVEL
+#define TYPE_CCEH
+// #define TYPE_CLEVEL
 // #define TYPE_LEVEL
 // #define TYPE_CLHT
 
@@ -448,7 +448,7 @@ public:
         key_trace_(nullptr) {
         
         remove(FLAGS_filepath.c_str()); // delete the mapped file.
-        pop_ = nvobj::pool<root>::create(FLAGS_filepath.c_str(), LAYOUT, PMEMOBJ_MIN_POOL * 15360, S_IWUSR | S_IRUSR);
+        pop_ = nvobj::pool<root>::create(FLAGS_filepath.c_str(), LAYOUT, PMEMOBJ_MIN_POOL * 20480, S_IWUSR | S_IRUSR);
         auto proot = pop_.root();
         {
             nvobj::transaction::manual tx(pop_);
@@ -987,7 +987,7 @@ public:
         size_t start_offset = thread->tid * interval;
         // Read the latest 20%
         auto key_iterator = key_trace_->iterate_between(start_offset + 0.8 * interval, start_offset + interval);
-        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset + 0.8 * interval, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, (uint64_t)(start_offset + 0.8 * interval), start_offset + interval);
         thread->stats.Start();
         
         while (key_iterator.Valid()) {
