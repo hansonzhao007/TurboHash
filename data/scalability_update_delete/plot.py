@@ -69,23 +69,23 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
     # draw v line
     # plt.axvline(x=20, color = 'grey', linestyle='--', linewidth=0.5)
     ax.yaxis.grid(linewidth=1, linestyle='--')
-    
+
     fig.savefig(outfile, bbox_inches='tight', pad_inches=0.05)
 
 
 def PlotScalability():
     # Plot throughput
-    Plot("scalability_load.parse", "scalability_load.pdf", -8, "Write Throughput", "IOPS (Mops/s)")
+    # Plot("scalability_load.parse", "scalability_load.pdf", -8, "Write Throughput", "IOPS (Mops/s)")
     Plot("scalability_update.parse", "scalability_update.pdf", -10, "Update Throughput", "IOPS (Mops/s)")
     Plot("scalability_delete.parse", "scalability_delete.pdf", -10, "Delete Throughput", "IOPS (Mops/s)")
     
     # Plot IO
-    Plot("scalability_load_io.parse", "scalability_load_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
+    # Plot("scalability_load_io.parse", "scalability_load_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
     Plot("scalability_update_io.parse", "scalability_update_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
     Plot("scalability_delete_io.parse", "scalability_delete_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
     
     # Plot bw
-    Plot("scalability_load_bw.parse", "scalability_load_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
+    # Plot("scalability_load_bw.parse", "scalability_load_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
     Plot("scalability_update_bw.parse", "scalability_update_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
     Plot("scalability_delete_bw.parse", "scalability_delete_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
 
