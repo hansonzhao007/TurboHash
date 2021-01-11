@@ -197,3 +197,5 @@ done
 bash _analysis.sh
 
 python3 plot.py
+
+python3 _plot.py
