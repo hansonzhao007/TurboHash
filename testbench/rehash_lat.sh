@@ -18,4 +18,4 @@ numactl -N 0 sudo ../release/hash_bench --bucket_count=1024 --cell_count=2048 --
 
 numactl -N 0 sudo ../release/hash_bench --bucket_count=512 --cell_count=4096 --thread=8  --benchmarks=load,readrandom,rehashlat --stats_interval=100000000 --num=20000000 --no_rehash=true --read=0 --loadfactor=0.74 | tee  rehashlat4096
 
-numactl -N 0 sudo ../release/hash_bench --bucket_count=258 --cell_count=8192 --thread=8  --benchmarks=load,readrandom,rehashlat --stats_interval=100000000 --num=20000000 --no_rehash=true --read=0 --loadfactor=0.74 | tee  rehashlat8192
+numactl -N 0 sudo ../release/hash_bench --bucket_count=256 --cell_count=8192 --thread=8  --benchmarks=load,readrandom,rehashlat --stats_interval=100000000 --num=20000000 --no_rehash=true --read=0 --loadfactor=0.74 | tee  rehashlat8192
