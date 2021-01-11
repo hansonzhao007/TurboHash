@@ -1,23 +1,20 @@
 #!/bin/bash
 
 
-rm *.parse
-
-
 outfile_update="scalability_update_cceh.parse"
 echo "thread,cceh,cceh30" >> $outfile_update
 
-outfile_update_io="scalability_update_cceh_io.parse"
-outfile_update_io_r="scalability_update_cceh_io_r.parse"
-outfile_update_io_w="scalability_update_cceh_io_w.parse"
+outfile_update_io="scalability_update_io_cceh.parse"
+outfile_update_io_r="scalability_update_io_r_cceh.parse"
+outfile_update_io_w="scalability_update_io_w_cceh.parse"
 
 echo "thread,cceh,cceh30" >> $outfile_update_io
 echo "thread,cceh,cceh30" >> $outfile_update_io_r
 echo "thread,cceh,cceh30" >> $outfile_update_io_w
 
-outfile_update_bw="scalability_update_cceh_bw.parse"
-outfile_update_bw_r="scalability_update_cceh_bw_r.parse"
-outfile_update_bw_w="scalability_update_cceh_bw_w.parse"
+outfile_update_bw="scalability_update_bw_cceh.parse"
+outfile_update_bw_r="scalability_update_bw_r_cceh.parse"
+outfile_update_bw_w="scalability_update_bw_w_cceh.parse"
 
 echo "thread,cceh,cceh30" >> $outfile_update_bw
 echo "thread,cceh,cceh30" >> $outfile_update_bw_r

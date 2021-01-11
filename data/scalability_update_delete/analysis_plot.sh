@@ -98,17 +98,17 @@ do
         while read line; do
             if [ -n "$(echo $line | grep "Start IPMWatcher for")" ]; then   
                 if [[ $index -eq 1 ]]; then                   
-                    oneline_load_r="$oneline_load_r, $update_io"
-                    oneline_load_w="$oneline_load_w, $write_io"
-                    oneline_load="$oneline_load, $total_io"
+                    oneline_load_r="$oneline_load_r,$update_io"
+                    oneline_load_w="$oneline_load_w,$write_io"
+                    oneline_load="$oneline_load,$total_io"
                 elif [[ $index -eq 2 ]]; then
-                    oneline_update_r="$oneline_update_r, $update_io"
-                    oneline_update_w="$oneline_update_w, $write_io"
-                    oneline_update="$oneline_update, $total_io"
+                    oneline_update_r="$oneline_update_r,$update_io"
+                    oneline_update_w="$oneline_update_w,$write_io"
+                    oneline_update="$oneline_update,$total_io"
                 elif [[ $index -eq 4 ]]; then
-                    oneline_delete_r="$oneline_delete_r, $update_io"
-                    oneline_delete_w="$oneline_delete_w, $write_io"
-                    oneline_delete="$oneline_delete, $total_io"
+                    oneline_delete_r="$oneline_delete_r,$update_io"
+                    oneline_delete_w="$oneline_delete_w,$write_io"
+                    oneline_delete="$oneline_delete,$total_io"
                 fi
                 update_io=0.0
                 write_io=0.0
@@ -155,17 +155,17 @@ do
         while read line; do
             if [ -n "$(echo $line | grep "Start IPMWatcher for")" ]; then   
                 if [[ $index -eq 1 ]]; then                   
-                    oneline_load_r="$oneline_load_r, $update_bw"
-                    oneline_load_w="$oneline_load_w, $write_bw"
-                    oneline_load="$oneline_load, $total_bw"
+                    oneline_load_r="$oneline_load_r,$update_bw"
+                    oneline_load_w="$oneline_load_w,$write_bw"
+                    oneline_load="$oneline_load,$total_bw"
                 elif [[ $index -eq 2 ]]; then
-                    oneline_update_r="$oneline_update_r, $update_bw"
-                    oneline_update_w="$oneline_update_w, $write_bw"
-                    oneline_update="$oneline_update, $total_bw"
+                    oneline_update_r="$oneline_update_r,$update_bw"
+                    oneline_update_w="$oneline_update_w,$write_bw"
+                    oneline_update="$oneline_update,$total_bw"
                 elif [[ $index -eq 4 ]]; then
-                    oneline_delete_r="$oneline_delete_r, $update_bw"
-                    oneline_delete_w="$oneline_delete_w, $write_bw"
-                    oneline_delete="$oneline_delete, $total_bw"
+                    oneline_delete_r="$oneline_delete_r,$update_bw"
+                    oneline_delete_w="$oneline_delete_w,$write_bw"
+                    oneline_delete="$oneline_delete,$total_bw"
                 fi
                 update_bw=0.0
                 write_bw=0.0
@@ -193,5 +193,7 @@ do
     echo $oneline_delete_r >> $outfile_delete_bw_r
     echo $oneline_delete_w >> $outfile_delete_bw_w
 done
+
+bash _analysis.sh
 
 python3 plot.py

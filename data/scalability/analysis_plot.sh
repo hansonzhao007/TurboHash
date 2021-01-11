@@ -98,13 +98,13 @@ do
         while read line; do
             if [ -n "$(echo $line | grep "Start IPMWatcher for")" ]; then   
                 if [[ $index -eq 1 ]]; then                   
-                    oneline_load_r="$oneline_load_r, $read_io"
-                    oneline_load_w="$oneline_load_w, $write_io"
-                    oneline_load="$oneline_load, $total_io"
+                    oneline_load_r="$oneline_load_r,$read_io"
+                    oneline_load_w="$oneline_load_w,$write_io"
+                    oneline_load="$oneline_load,$total_io"
                 elif [[ $index -eq 2 ]]; then
-                    oneline_read_r="$oneline_read_r, $read_io"
-                    oneline_read_w="$oneline_read_w, $write_io"
-                    oneline_read="$oneline_read, $total_io"
+                    oneline_read_r="$oneline_read_r,$read_io"
+                    oneline_read_w="$oneline_read_w,$write_io"
+                    oneline_read="$oneline_read,$total_io"
                 fi
                 read_io=0.0
                 write_io=0.0
@@ -120,9 +120,9 @@ do
                 total_io=`echo $write_io + $read_io | bc`
             fi
         done < $datafile
-        oneline_readnon_r="$oneline_readnon_r, $read_io"
-        oneline_readnon_w="$oneline_readnon_w, $write_io"
-        oneline_readnon="$oneline_readnon, $total_io"
+        oneline_readnon_r="$oneline_readnon_r,$read_io"
+        oneline_readnon_w="$oneline_readnon_w,$write_io"
+        oneline_readnon="$oneline_readnon,$total_io"
     done
     echo $oneline_load >> $outfile_load_io
     echo $oneline_load_r >> $outfile_load_io_r
@@ -154,13 +154,13 @@ do
         while read line; do
             if [ -n "$(echo $line | grep "Start IPMWatcher for")" ]; then   
                 if [[ $index -eq 1 ]]; then                   
-                    oneline_load_r="$oneline_load_r, $read_bw"
-                    oneline_load_w="$oneline_load_w, $write_bw"
-                    oneline_load="$oneline_load, $total_bw"
+                    oneline_load_r="$oneline_load_r,$read_bw"
+                    oneline_load_w="$oneline_load_w,$write_bw"
+                    oneline_load="$oneline_load,$total_bw"
                 elif [[ $index -eq 2 ]]; then
-                    oneline_read_r="$oneline_read_r, $read_bw"
-                    oneline_read_w="$oneline_read_w, $write_bw"
-                    oneline_read="$oneline_read, $total_bw"
+                    oneline_read_r="$oneline_read_r,$read_bw"
+                    oneline_read_w="$oneline_read_w,$write_bw"
+                    oneline_read="$oneline_read,$total_bw"
                 fi
                 read_bw=0.0
                 write_bw=0.0
@@ -177,9 +177,9 @@ do
                 total_bw=`echo $write_bw + $read_bw | bc`
             fi
         done < $datafile
-        oneline_readnon_r="$oneline_readnon_r, $read_bw"
-        oneline_readnon_w="$oneline_readnon_w, $write_bw"
-        oneline_readnon="$oneline_readnon, $total_bw"
+        oneline_readnon_r="$oneline_readnon_r,$read_bw"
+        oneline_readnon_w="$oneline_readnon_w,$write_bw"
+        oneline_readnon="$oneline_readnon,$total_bw"
     done
     echo $oneline_load >> $outfile_load_bw
     echo $oneline_load_r >> $outfile_load_bw_r
