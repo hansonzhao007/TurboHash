@@ -67,8 +67,9 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
     # ax.set_title(title, fontsize=16)
 
     # draw v line
-    plt.axvline(x=20, color = 'grey', linestyle='--', linewidth=0.5)
-
+    # plt.axvline(x=20, color = 'grey', linestyle='--', linewidth=0.5)
+    ax.yaxis.grid(linewidth=1, linestyle='--')
+    
     fig.savefig(outfile, bbox_inches='tight', pad_inches=0.05)
 
 
