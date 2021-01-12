@@ -1,3 +1,3 @@
-# Mount a persistent memory (pmem)
+# TurboHash
 
-sudo mount -o dax /dev/pmem0 /mnt/pmem
+## 
