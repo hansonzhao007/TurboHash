@@ -29,12 +29,14 @@ int main()
             exit(1);
         }
         pmem_memset(pmem_addr, 0, file_size, PMEM_F_MEM_NONTEMPORAL);
+        pmem_drain();
     }
 
     {
         util::IPMWatcher watcher("pmem2");
         util::PCMMetric matric("pmem2");
         pmem_memset(pmem_addr, 0, file_size, PMEM_F_MEM_NONTEMPORAL);
+        pmem_drain();
     }
     return 0;
 }
