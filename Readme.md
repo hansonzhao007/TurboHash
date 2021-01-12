@@ -8,7 +8,7 @@ install gflags to run test benchmark
 
 ```
 # compile the benchmarks
-bash build all
+bash buildall.sh
 ```
 
 `CCEH-PMDK`: source code of the implementation of CCEH.
