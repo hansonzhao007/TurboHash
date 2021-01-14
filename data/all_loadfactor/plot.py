@@ -13,12 +13,13 @@ plt.rcParams['axes.linewidth'] = 1.2
 # read data
 hashtables = ('turbo', 'turbo30', 'cceh', 'cceh30', 'clevel30', 'clht30')
 legend_name = ('TURBO16', 'TURBO30', 'CCEH16', 'CCEH30', 'CLEVEL30', 'CLHT30')
+
 markers= {
     'turbo'   : 'o',
     'turbo30' : '.', 
-    'cceh'    : '^', 
-    'cceh30'  : 'v', 
-    'clevel30': 's', 
+    'cceh'    : '|', 
+    'cceh30'  : 'x', 
+    'clevel30': 'd', 
     'clht30'  : ''}
 colors= {
     'turbo'   : '#9B0522',
