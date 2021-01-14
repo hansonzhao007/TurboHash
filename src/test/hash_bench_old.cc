@@ -65,16 +65,15 @@ public:
     size_t TestRehash() {
         size_t inserted_num = 0;
         util::Stats stats;
-        turbo::unordered_map<size_t, std::string> hashtable(FLAGS_bucket_count, FLAGS_cell_count);
+        TurboHash hashtable(FLAGS_bucket_count, FLAGS_cell_count);
         uint64_t i = 0;
-        bool res = true;
         RandomKeyTrace::Iterator key_iterator = key_trace_.trace_at(0, max_count_);
         
         auto time_start = Env::Default()->NowNanos();
-        while (res && i < max_count_) {
-            res = hashtable.Put(key_iterator.Next(), value_);
+        while (i < max_count_) {
+            auto res = hashtable.Put(key_iterator.Next(), value_);
             if ((i++ & 0xFFFFF) == 0) {
-                fprintf(stderr, "insert%*s-%03d-> %s\r", int(i >> 20), " ", int(i >> 20), value_.c_str());fflush(stderr);
+                fprintf(stderr, "insert%*s-%03d\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
             }
         }
         auto time_end = Env::Default()->NowNanos();
@@ -92,20 +91,19 @@ public:
             auto time_start = Env::Default()->NowNanos();
             for (int t = 0; t < FLAGS_thread_read; t++) {
                 workers[t] = std::thread([&, t]
-                {
-                    std::string value;
-                    bool res = true;
+                {                 
                     size_t i = 0;
+                    TurboHash::value_type* res;
                     size_t start_offset = random() % inserted_num;
                     if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
                     auto key_iterator = key_trace_.trace_at(start_offset, inserted_num);
-                    while (kRunning && key_iterator.Valid() && res) {
-                        res = hashtable.Get(key_iterator.Next(), &value);
+                    while (kRunning && key_iterator.Valid()) {
+                        res = hashtable.Find(key_iterator.Next());
                         if ((i++ & 0xFFFFF) == 0) {
-                            fprintf(stderr, "thread: %2d reading%*s-%03d->%s\r", t,  int(i >> 20), " ", int(i >> 20), value.c_str());fflush(stderr);
+                            fprintf(stderr, "thread: %2d reading%*s-%03d->%s\r", t,  int(i >> 20), " ", int(i >> 20), res->second().c_str());fflush(stderr);
                         }
                     }
-                    if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, res ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
+                    if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, res != nullptr ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
                     counts[t] = i ;
                 });
             }
@@ -144,7 +142,7 @@ public:
                             fprintf(stderr, "thread: %2d finding%*s-%03d->%s\r", t,  int(i >> 20), " ", int(i >> 20), record_ptr->second().c_str());fflush(stderr);
                         }
                     }
-                    if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, res ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
+                    if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, record_ptr ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
                     counts[t] = i ;
                 });
             }
@@ -183,7 +181,7 @@ public:
                             fprintf(stderr, "thread: %2d probing%*s-%03d->%s\r", t,  int(i >> 20), " ", int(i >> 20), val_ptr->second().c_str());fflush(stderr);
                         }
                     }
-                    if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, res ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
+                    if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, val_ptr != nullptr ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
                     counts[t] = i ;
                 });
             }
@@ -221,7 +219,7 @@ public:
 
     size_t TurboHashSpeedTest() {
         util::Stats stats;
-        turbo::unordered_map<size_t, std::string> hashtable(FLAGS_bucket_count, FLAGS_cell_count);
+        TurboHash hashtable(FLAGS_bucket_count, FLAGS_cell_count);
         std::string name = "turbo:" + hashtable.ProbeStrategyName();
         size_t max_range = max_count_ * FLAGS_loadfactor;
         {
@@ -267,19 +265,18 @@ public:
                 for (int t = 0; t < FLAGS_thread_read; t++) {
                     workers[t] = std::thread([&, t]
                     {                        
-                        bool res = true;
                         size_t i = 0;
                         size_t start_offset = random() % max_range;
-                        std::string value;
+                        TurboHash::value_type* res;
                         if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
                         auto key_iterator = key_trace_.trace_at(start_offset, max_range);
-                        while (kRunning && key_iterator.Valid() && res) {
-                            res = hashtable.Get(key_iterator.Next(), &value);
+                        while (kRunning && key_iterator.Valid()) {
+                            res = hashtable.Find(key_iterator.Next());
                             if ((i++ & 0xFFFFF) == 0) {
-                                fprintf(stderr, "thread: %2d reading%*s-%03d->%s\r", t,  int(i >> 20), " ", int(i >> 20), value.c_str());fflush(stderr);
+                                fprintf(stderr, "thread: %2d reading%*s-%03d->%s\r", t,  int(i >> 20), " ", int(i >> 20), res->second().c_str());fflush(stderr);
                             }
                         }
-                        if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, res ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
+                        if (FLAGS_print_thread_read) printf("thread: %2d, search res: %s. iter info: %s. running: %s\n", t, res != nullptr ? "true" : "false", key_iterator.Info().c_str(), kRunning ? "true" : "false");
                         counts[t] = i ;
                     });
                 }
@@ -492,8 +489,8 @@ int main(int argc, char *argv[]) {
     // size_t inserted_num = 0;
     // inserted_num = hash_bench.TurboHashSpeedTest();
     // printf("Inserted: %lu\n", inserted_num);
-    hash_bench.HashSpeedTest<robin_hood::unordered_map<size_t, std::string>, std::string >("robin_hood::unordered_map", FLAGS_num);
-    hash_bench.HashSpeedTest<absl::flat_hash_map<size_t, std::string>, std::string >("absl::flat_hash_map", FLAGS_num);
+    // hash_bench.HashSpeedTest<robin_hood::unordered_map<size_t, std::string>, std::string >("robin_hood::unordered_map", FLAGS_num);
+    // hash_bench.HashSpeedTest<absl::flat_hash_map<size_t, std::string>, std::string >("absl::flat_hash_map", FLAGS_num);
     // hash_bench.HashSpeedTest<std::unordered_map<size_t, std::string>, std::string >("std::unordered_map", FLAGS_num);
     hash_bench.TestRehash();
     // hash_bench.CuckooSpeedTest("CuckooHashMap", inserted_num);

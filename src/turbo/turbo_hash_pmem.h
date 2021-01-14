@@ -1081,16 +1081,16 @@ public:
         inline util::BitSet MatchBitSet(uint16_t hash) {
             auto bitset = _mm256_set1_epi16(hash);
             uint16_t mask = _mm256_cmpeq_epi16_mask(bitset, meta_);
-            return util::BitSet(mask & bitmap_);
+            return util::BitSet(mask & bitmap_ & (~bitmap_deleted_));  // valid filter and detetion filter.
         }
 
         // return a bitset, indicating the availabe slot
         inline util::BitSet EmptyBitSet() {
-            return util::BitSet((~bitmap_) & BitMapMask);
+            return util::BitSet( (~bitmap_ | (bitmap_deleted_ & bitmap_)) & BitMapMask );
         }
 
         inline util::BitSet ValidBitSet() {
-            return util::BitSet(bitmap_ & BitMapMask);
+            return util::BitSet(bitmap_ & BitMapMask &(~bitmap_deleted_));
         }
 
         inline bool IsDeleted(int i) {
@@ -1098,7 +1098,7 @@ public:
         }
 
         inline bool Full() {
-            return (bitmap_ & BitMapMask) == BitMapMask;
+            return __builtin_popcount(bitmap_ & BitMapMask) == 13;
         }
 
         inline bool Occupy(int slot_index) {
@@ -2192,19 +2192,24 @@ public:
         return insertSlot(key, value, hash_value);
     }
     
-    // Return the entry if key exists
-    bool Get(const Key& key, T* value)  {
+    value_type* Find(const Key& key)  {
         // calculate hash value of the key
         size_t hash_value = KeyToHash(key);
 
         FindSlotResult res = findSlot(key, hash_value);
         if (res.find) {
-            // find a key in hash table
             value_type* record = (value_type*)res.target_slot;
-            *value = record->second();
-            return true;
+            return record;
         }
-        return false;
+        return nullptr;
+    }
+
+
+    bool Delete(const Key& key) {
+        // calculate hash value of the key
+        size_t hash_value = KeyToHash(key);
+        
+        return deleteSlot(key, hash_value);
     }
 
     value_type* Probe(const Key& key)  {
@@ -2220,24 +2225,20 @@ public:
         return nullptr;
     }
 
-    value_type* Find(const Key& key)  {
-        // calculate hash value of the key
-        size_t hash_value = KeyToHash(key);
+    // // Return the entry if key exists
+    // bool Get(const Key& key, T* value)  {
+    //     // calculate hash value of the key
+    //     size_t hash_value = KeyToHash(key);
 
-        FindSlotResult res = findSlot(key, hash_value);
-        if (res.find) {
-            value_type* record = (value_type*)res.target_slot;
-            return record;
-        }
-        return nullptr;
-    }
-
-    bool Delete(const Key& key) {
-        // calculate hash value of the key
-        size_t hash_value = KeyToHash(key);
-        
-        return deleteSlot(key, hash_value);
-    }
+    //     FindSlotResult res = findSlot(key, hash_value);
+    //     if (res.find) {
+    //         // find a key in hash table
+    //         value_type* record = (value_type*)res.target_slot;
+    //         *value = record->second();
+    //         return true;
+    //     }
+    //     return false;
+    // }
 
     void IterateValidBucket() {
         printf("Iterate Valid Bucket\n");
@@ -2412,51 +2413,9 @@ private:
             if (res.find) { 
                 char* cell_addr = locateCell({res.target_slot.bucket, res.target_slot.cell});
 
-                CellMeta256V2 meta(cell_addr);   // obtain the meta part
+                insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot); // update slot content (including pointer and H1), H2 and bitmap
 
-                if (TURBO_PMEM_LIKELY( !meta.Occupy(res.target_slot.slot) )) { // If the new slot from 'findSlotForInsert' is not occupied, insert directly
-
-                    insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot); // update slot content (including pointer and H1), H2 and bitmap
-
-                    // TODO: use thread_local variable to improve write performance
-                    // if (!res.first.equal_key) {
-                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
-                    // }
-
-                    return true;
-                } 
-                else if (res.target_slot.equal_key) {   // If this is an update request and the backup slot is occupied,
-                                                        // it means the backup slot has changed in current cell. So we 
-                                                        // update the slot location.                    
-                    util::BitSet empty_bitset = meta.EmptyBitSet(); 
-                    if (TURBO_PMEM_UNLIKELY(!empty_bitset)) {
-                        TURBO_PMEM_ERROR(" Cannot update.");
-                        printf("Cannot update.\n");
-                        exit(1);
-                    }
-
-                    res.target_slot.slot = *empty_bitset;
-                    insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot);
-                    return true;
-                } 
-                else { // current new slot has been occupied by another concurrent thread.
-
-                    // Before retry 'findSlotForInsert', find if there is any empty slot for insertion
-                    util::BitSet empty_bitset = meta.EmptyBitSet();
-                    if (empty_bitset.validCount() > 1) {
-                        res.target_slot.slot = *empty_bitset;
-                        insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot);
-                        return true;
-                    }
-
-                    // Current cell has no empty slot for insertion, we retry 'findSlotForInsert'
-                    // This unlikely happens with all previous effort.
-                    TURBO_PMEM_INFO("retry find slot in Bucket " << res.target_slot.bucket <<
-                               ". Cell " << res.target_slot.cell <<
-                               ". Slot " << res.target_slot.slot <<
-                               ". Key: " << key );
-                    retry_find = true;
-                }
+                return true;               
             }
             else { // cannot find a valid slot for insertion, rehash current bucket then retry
                 MinorRehash(res.target_slot.bucket);
@@ -2533,17 +2492,6 @@ private:
                                     },                  
                                 true};
                     }
-                    // else {                                  // two key is not equal, go to next slot
-                    //     #ifdef TURBO_DEBUG_OUT
-                    //     std::cout << "H1 conflict. Slot (" << offset.first 
-                    //                 << " - " << offset.second 
-                    //                 << " - " << i
-                    //                 << ") bitmap: " << meta.BitMapToString() 
-                    //                 << ". Insert key: " << key 
-                    //                 <<  ". Hash: 0x" << std::hex << hash_value << std::dec
-                    //                 << " , Slot key: " << record->first() << std::endl;
-                    //     #endif
-                    // }
                 }
             }
             
@@ -2553,7 +2501,7 @@ private:
                     // return an empty slot for new insertion            
                     return {{   offset.first,           /* bucket */
                                 offset.second,          /* cell */
-                                *empty_bitset,          /* pick a slot, empty_bitset.pickOne() */ 
+                                *empty_bitset,
                                 partial_hash.H1_,       /* H1 */
                                 partial_hash.H2_,       /* H2 */
                                 false                   /* equal_key */
@@ -2610,14 +2558,13 @@ private:
 
                     if (SlotKeyEqual<Key, is_key_flat>{}(key, record)) 
                     {                                  
-                        return {slot, !meta.IsDeleted(i)}; // check if the deleted bit is set
+                        return {slot, true};
                     }                
                 }
             }
 
             // If this cell still has more than one empty slot, then it means the key does't exist.
-            util::BitSet empty_bitset = meta.EmptyBitSet();
-            if (empty_bitset.validCount() > 1) {
+            if (!meta.Full()) {
                 return {nullptr, false};
             }
             
@@ -2661,8 +2608,7 @@ private:
             }
 
             // If this cell still has more than one empty slot, then it means the key does't exist.
-            util::BitSet empty_bitset = meta.EmptyBitSet();
-            if (empty_bitset.validCount() > 1) {
+            if (!meta.Full()) {
                 return false;
             }
             
@@ -2696,8 +2642,7 @@ private:
             }
 
             // If this cell still has more than one empty slot, then it means the key does't exist.
-            util::BitSet empty_bitset = meta.EmptyBitSet();
-            if (empty_bitset.validCount() > 1) {
+            if (!meta.Full()) {
                 return {nullptr, false};
             }
             

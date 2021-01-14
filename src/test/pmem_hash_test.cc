@@ -32,16 +32,14 @@ int main() {
         printf("update %lu kv\n", find);
 
         auto read_fun = [&hashtable] {
-            bool succ = true;
-            std::string value;
             size_t find = 0;
-            for (size_t i = 0; i < COUNT && succ; i++) {
+            for (size_t i = 0; i < COUNT; i++) {
                 std::string key = "key" + std::to_string(i);
-                succ = hashtable->Get(key, &value);
+                auto res = hashtable->Find(key);
                 if (i < 10 || (i & 0x7FF) == 0) {
-                    INFO("Get key: %s. value: %s\n", key.c_str(), value.c_str());
+                    INFO("Get key: %s. value: %s\n", key.c_str(), res->second().c_str());
                 }
-                if ((succ)) find++;
+                if ((res)) find++;
             }
             printf("find %lu key\n", find);
         };

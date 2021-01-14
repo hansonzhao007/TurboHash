@@ -559,6 +559,7 @@ public:
         double load_factor = hashtable_->LoadFactor();
         char buf[100];
         snprintf(buf, sizeof(buf), "load factor: %f", load_factor);
+        printf("%s\n", hashtable_->PrintBucketMeta(0).c_str());
         thread->stats.AddMessage(buf);
     }
 

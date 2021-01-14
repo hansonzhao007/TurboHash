@@ -1,1 +1,1 @@
-numactl -N 0 sudo ./hash_bench --thread=16 --benchmarks=load,readrandom,rehash,readrandom --stats_interval=10000000 --num=160000000 --no_rehash=true --cell_count=64 bucket_count=131072 --loadfactor=0.74
+numactl -N 0 sudo ../release/hash_bench --thread=16 --benchmarks=load,readrandom,rehash,readrandom --stats_interval=10000000 --num=160000000 --no_rehash=true --cell_count=64 bucket_count=131072 --loadfactor=0.74
