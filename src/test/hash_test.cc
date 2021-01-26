@@ -41,7 +41,7 @@ int main() {
             }
             if ((res != nullptr)) find++;
         }
-        printf("inserted %lu kv, hashtable size: %lu, capacity: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->Capacity(), hashtable->LoadFactor());
+        printf("find %lu kv, hashtable size: %lu, capacity: %lu, loadfactor: %f\n", find, hashtable->Size(), hashtable->Capacity(), hashtable->LoadFactor());
     };
     read_fun();
     // printf("------- Iterate hash table with %lu entries ------\n", hashtable->Size());
@@ -51,11 +51,11 @@ int main() {
     // hashtable->IterateValidBucket();
     
     // printf("------- rehash all bucket and repeat search ------\n");
-    // hashtable->MinorReHashAll();
-    // read_fun();
+    hashtable->MinorReHashAll();
+    read_fun();
 
-    // hashtable->MinorReHashAll();
-    // read_fun();
+    hashtable->MinorReHashAll();
+    read_fun();
 
     // hashtable->MinorReHashAll();
     // read_fun();

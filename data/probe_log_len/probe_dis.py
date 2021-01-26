@@ -40,6 +40,6 @@ for i in range(1, 10):
     ax.set_xlim(-0.5, 15)
     ax.set_yscale('log')
     ax.set_ylabel('Frequency', fontsize=20, color='k')
-    ax.set_xlabel("Probe Distance (Number of Cells)", fontsize=20)
+    ax.set_xlabel("Probe Distance (Number of Buckets)", fontsize=20)
     ax.set_title("Probe Distance Histogram with Loadfactor " + str(i * 10) + "%")
     plt.savefig(filename + ".pdf", bbox_inches='tight', pad_inches=0)
