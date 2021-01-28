@@ -1323,6 +1323,10 @@ public:
         inline T second(void) {
             return HashSlot::entry;
         }
+
+        inline Key compareKey(void) {
+            return HashSlot::H1;
+        }
     };
 
     /**
@@ -1371,6 +1375,10 @@ public:
             char* addr = HashSlot::entry;
             size_t value_size = *reinterpret_cast<size_t*>(addr);
             return util::Slice(addr + sizeof(size_t), value_size);
+        }
+
+        inline Key compareKey(void) {
+            return HashSlot::H1;
         }
     };
 
@@ -1422,6 +1430,10 @@ public:
         inline T second(void) {
             return DecodeInRecord2<false, true, false, Key, T>::Decode(HashSlot::entry);
         }
+
+        inline util::Slice compareKey(void) {
+            return DecodeInRecord2<false, true, true, Key, T>::Decode(HashSlot::entry);
+        }
     };
 
     /**
@@ -1467,6 +1479,10 @@ public:
 
         inline T second(void) {
             return DecodeInRecord2<false, false, false, Key, T>::Decode(HashSlot::entry);
+        }
+
+        inline util::Slice compareKey(void) {
+            return DecodeInRecord2<false, false, true, Key, T>::Decode(HashSlot::entry);
         }
     };
 
@@ -2441,7 +2457,7 @@ private:
     template<typename T1>
     struct SlotKeyEqual<T1, false>: public WrapKeyEqual<KeyEqual> {
         bool operator()(const Key& key, value_type* record_ptr) {
-            return WKeyEqual::operator()( key, record_ptr->first() );
+            return WKeyEqual::operator()( key, record_ptr->compareKey() );
         }
     };
 
