@@ -601,7 +601,6 @@ public:
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
         while (!duration.Done(batch) && key_iterator.Valid()) {
@@ -630,7 +629,6 @@ public:
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
         while (!duration.Done(batch) && key_iterator.Valid()) {
@@ -659,7 +657,6 @@ public:
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {
@@ -688,7 +685,6 @@ public:
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {
@@ -742,7 +738,6 @@ public:
 
     void DoWriteLat(ThreadState* thread) {
         INFO("DoWriteLat");
-        uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             ERROR("DoWriteLat lack key_trace_ initialization.");
             return;

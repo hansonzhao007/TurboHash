@@ -71,7 +71,7 @@ public:
         
         auto time_start = Env::Default()->NowNanos();
         while (i < max_count_) {
-            auto res = hashtable.Put(key_iterator.Next(), value_);
+            hashtable.Put(key_iterator.Next(), value_);
             if ((i++ & 0xFFFFF) == 0) {
                 fprintf(stderr, "insert%*s-%03d\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
             }
@@ -93,7 +93,7 @@ public:
                 workers[t] = std::thread([&, t]
                 {                 
                     size_t i = 0;
-                    TurboHash::value_type* res;
+                    TurboHash::value_type* res = nullptr;
                     size_t start_offset = random() % inserted_num;
                     if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
                     auto key_iterator = key_trace_.trace_at(start_offset, inserted_num);
@@ -131,7 +131,7 @@ public:
                 workers[t] = std::thread([&, t]
                 {
                     std::string value;
-                    TurboHash::value_type* record_ptr;
+                    TurboHash::value_type* record_ptr = nullptr;
                     size_t i = 0;
                     size_t start_offset = random() % inserted_num;
                     if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);
@@ -170,7 +170,7 @@ public:
                 workers[t] = std::thread([&, t]
                 {
                     std::string value;
-                    TurboHash::value_type* val_ptr;
+                    TurboHash::value_type* val_ptr = nullptr;
                     size_t i = 0;
                     size_t start_offset = random() % inserted_num;
                     if (FLAGS_print_thread_read) printf("thread %2d trace offset: %10lu\n", t, start_offset);

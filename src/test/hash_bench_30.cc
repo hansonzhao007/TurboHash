@@ -59,7 +59,7 @@ DEFINE_string(benchmarks, "load,overwrite,readrandom", "");
 typedef turbo_pmem::unordered_map<std::string, std::string> Hashtable;
 static bool kIsPmem = true;
 #else
-typedef turbo::unordered_map<size_t, size_t> Hashtable;
+typedef turbo::unordered_map<std::string, std::string> Hashtable;
 static bool kIsPmem = false;
 #endif
 
@@ -449,7 +449,6 @@ public:
                 method = &Benchmark::DoRead;                
             } else if (name == "readnon") {
                 fresh_db = false;
-                key_trace_->Randomize();
                 method = &Benchmark::DoReadNon;                
             } else if (name == "readlat") {
                 fresh_db = false;
@@ -567,7 +566,6 @@ public:
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
         while (!duration.Done(batch) && key_iterator.Valid()) {
@@ -594,17 +592,14 @@ public:
             return;
         }
         size_t start_offset = random() % trace_size_;
-        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        auto key_iterator = key_trace_->nontrace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
         while (!duration.Done(batch) && key_iterator.Valid()) {
             uint64_t j = 0;
-            for (; j < batch && key_iterator.Valid(); j++) {      
-                std::string key = key_iterator.Next();
-                key[0] = 'a';                 
-                auto record_ptr = hashtable_->Find(key);
+            for (; j < batch && key_iterator.Valid(); j++) {               
+                auto record_ptr = hashtable_->Find(key_iterator.Next());
                 if (likely(record_ptr == nullptr)) {
                     not_find++;
                 }
@@ -626,7 +621,6 @@ public:
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {       
@@ -652,22 +646,19 @@ public:
             return;
         }
         size_t start_offset = random() % trace_size_;
-        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        auto key_iterator = key_trace_->nontrace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {
-            std::string key = key_iterator.Next();
-            key[0] = 'a';
             auto time_start = Env::Default()->NowNanos();
-            auto record_ptr = hashtable_->Find(key);
+            auto record_ptr = hashtable_->Find(key_iterator.Next());
             auto time_duration = Env::Default()->NowNanos() - time_start;
             thread->stats.hist_.Add(time_duration);
             if (likely(record_ptr == nullptr)) {
                 not_find++;
             } else {
-                printf("find key : %lu, val : %lu", record_ptr->first(), record_ptr->second());
+                printf("find key: %s, val : %s", record_ptr->first().c_str(), record_ptr->second().c_str());
                 exit(1);
             }
         }
@@ -708,7 +699,6 @@ public:
 
     void DoWriteLat(ThreadState* thread) {
         INFO("DoWriteLat");
-        uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             ERROR("DoWriteLat lack key_trace_ initialization.");
             return;
@@ -1120,10 +1110,10 @@ private:
                    INFO("Key type:              %s\n", type_name<Hashtable::key_type>().c_str());
         fprintf(stdout, "Val type:              %s\n", type_name<Hashtable::mapped_type>().c_str());
                    INFO("Val type:              %s\n", type_name<Hashtable::mapped_type>().c_str());
-        fprintf(stdout, "Keys:                  %lu bytes each\n", KEY_LEN);
-                   INFO("Keys:                  %lu bytes each\n", KEY_LEN);
-        fprintf(stdout, "Values:                %lu bytes each\n", KEY_LEN);
-                   INFO("Values:                %lu bytes each\n", KEY_LEN);
+        fprintf(stdout, "Keys:                  %u bytes each\n", KEY_LEN);
+                   INFO("Keys:                  %u bytes each\n", KEY_LEN);
+        fprintf(stdout, "Values:                %u bytes each\n", KEY_LEN);
+                   INFO("Values:                %u bytes each\n", KEY_LEN);
         fprintf(stdout, "Entries:               %lu\n", (uint64_t)num_);
                    INFO("Entries:               %lu\n", (uint64_t)num_);
         fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);   

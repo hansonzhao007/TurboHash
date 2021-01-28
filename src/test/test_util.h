@@ -12,7 +12,7 @@ auto rng = std::default_random_engine {};
 
 class RandomKeyTrace {
 public:
-    RandomKeyTrace(size_t count, int seed = random()) {
+    RandomKeyTrace(size_t count) {
         count_ = count;
         keys_.resize(count);
         for (size_t i = 0; i < count; i++) {
@@ -110,7 +110,7 @@ public:
 
 class RandomKeyTraceString {
 public:
-    RandomKeyTraceString(size_t count, int seed = random()) {
+    RandomKeyTraceString(size_t count) {
         count_ = count;
         keys_.resize(count);
         for (size_t i = 0; i < count; i++) {
@@ -119,6 +119,10 @@ public:
             keys_[i] = std::string(buf, KEY_LEN);
         }
         Randomize();
+        keys_non_ = keys_;
+        for (size_t i = 0; i < count; i++) {
+            keys_non_[i][0] = 'a';
+        }
     }
 
     ~RandomKeyTraceString() {
@@ -195,6 +199,10 @@ public:
         return Iterator(&keys_, start_index, range);
     }
 
+    Iterator nontrace_at(size_t start_index, size_t range) {
+        return Iterator(&keys_non_, start_index, range);
+    }
+
     RangeIterator Begin(void) {
         return RangeIterator(&keys_, 0, keys_.size());
     }
@@ -205,6 +213,7 @@ public:
 
     size_t count_;
     std::vector<std::string> keys_;
+    std::vector<std::string> keys_non_;
 };
 
 enum YCSBOpType {kYCSB_Write, kYCSB_Read, kYCSB_Query, kYCSB_ReadModifyWrite};

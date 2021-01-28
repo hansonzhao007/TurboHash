@@ -634,7 +634,6 @@ public:
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
         while (!duration.Done(batch) && key_iterator.Valid()) {
@@ -660,16 +659,14 @@ public:
             return;
         }
         size_t start_offset = random() % trace_size_;
-        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        auto key_iterator = key_trace_->nontrace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
         while (!duration.Done(batch) && key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {      
-                std::string key = key_iterator.Next();
-                key[0] = 'a';
+                std::string& key = key_iterator.Next();
                 auto ret = Find({key.data(), key.size()}, thread->tid);
                 if (!ret.found) {
                     not_find++;
@@ -690,7 +687,6 @@ public:
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {   
@@ -716,15 +712,12 @@ public:
             return;
         }
         size_t start_offset = random() % trace_size_;
-        auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
+        auto key_iterator = key_trace_->nontrace_at(start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {        
-            std::string key = key_iterator.Next();
-            key[0] = 'a';
-
+            std::string& key = key_iterator.Next();
             auto time_start = NowNanos();
             auto ret = Find({key.data(), key.size()}, thread->tid);
             if (!ret.found) {
