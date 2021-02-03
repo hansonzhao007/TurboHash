@@ -17,4 +17,4 @@ db_test(hello_libpmem)
 db_test(pmem_hash_test)
 db_test(pmem_hash_recover_test)
 
-db_exe(mem_bench)
+# db_exe(mem_bench)
