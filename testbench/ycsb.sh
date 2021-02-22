@@ -11,7 +11,7 @@ t=20
 
 # numactl -N $SOCKET_NO sudo ../CCEH-PMDK/ycsb_bench --thread=$t --benchmarks=load,ycsbd,ycsba,ycsbb,ycsbc,ycsbf --stats_interval=10000000 --read=10000000 --num=120000000 | tee ycsb.cceh
 
-numactl -N $SOCKET_NO sudo ../Clevel-Hashing/release/tests/ycsb_bench --thread=$t --benchmarks=load,ycsbd,ycsba,ycsbb,ycsbc,ycsbf --stats_interval=10000000 --read=10000000 --num=120000000 | tee ycsb.clht30
+numactl -N $SOCKET_NO sudo ../Clevel-Hashing/release/tests/ycsb_bench --thread=$t --benchmarks=load,ycsbd,ycsba,ycsbb,ycsbc,ycsbf --stats_interval=10000000 --read=10000000 --num=120000000 | tee ycsb.cceh30
 
 
 
