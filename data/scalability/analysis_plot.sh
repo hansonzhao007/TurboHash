@@ -6,9 +6,9 @@ rm *.parse
 outfile_load="scalability_load.parse"
 outfile_read="scalability_read.parse"
 outfile_readnon="scalability_readnon.parse"
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_load
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_read
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_readnon
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_read
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_readnon
 
 outfile_load_io="scalability_load_io.parse"
 outfile_load_io_r="scalability_load_io_r.parse"
@@ -19,15 +19,15 @@ outfile_read_io_w="scalability_read_io_w.parse"
 outfile_readnon_io="scalability_readnon_io.parse"
 outfile_readnon_io_r="scalability_readnon_io_r.parse"
 outfile_readnon_io_w="scalability_readnon_io_w.parse"
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_load_io
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_load_io_r
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_load_io_w
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_read_io
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_read_io_r
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_read_io_w
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_readnon_io
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_readnon_io_r
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_readnon_io_w
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_io
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_io_r
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_io_w
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_read_io
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_read_io_r
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_read_io_w
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_readnon_io
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_readnon_io_r
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_readnon_io_w
 
 outfile_load_bw="scalability_load_bw.parse"
 outfile_load_bw_r="scalability_load_bw_r.parse"
@@ -38,15 +38,15 @@ outfile_read_bw_w="scalability_read_bw_w.parse"
 outfile_readnon_bw="scalability_readnon_bw.parse"
 outfile_readnon_bw_r="scalability_readnon_bw_r.parse"
 outfile_readnon_bw_w="scalability_readnon_bw_w.parse"
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_load_bw
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_load_bw_r
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_load_bw_w
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_read_bw
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_read_bw_r
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_read_bw_w
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_readnon_bw
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_readnon_bw_r
-echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30" >> $outfile_readnon_bw_w
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_bw
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_bw_r
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_bw_w
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_read_bw
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_read_bw_r
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_read_bw_w
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_readnon_bw
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_readnon_bw_r
+echo "thread,cceh,cceh30,clevel30,clht30,turbo,turbo30,dash" >> $outfile_readnon_bw_w
 
 for t in 1 2 4 8 16 20 24 28 32 36 40
 do
@@ -54,9 +54,10 @@ do
     oneline_load="$t"
     oneline_read="$t"
     oneline_readnon="$t"
-    for i in cceh cceh30 clevel30 clht30 turbo turbo30
+    for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
     do
         datafile="thread.${i}_${t}"
+        echo $datafile
         while read line; do
             if [ -n "$(echo $line | grep "load ")" ]; then          
                 tmp=`echo $line | awk '{print$5}'`
@@ -73,6 +74,7 @@ do
                 oneline_readnon="$oneline_readnon,$tmp"
             fi
         done < $datafile
+        echo $oneline_load                
     done
     echo $oneline_load >> $outfile_load
     echo $oneline_read >> $outfile_read
@@ -88,7 +90,7 @@ do
     oneline_read_w="$t"
     oneline_readnon_r="$t"
     oneline_readnon_w="$t"
-    for i in cceh cceh30 clevel30 clht30 turbo turbo30
+    for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
     do
         datafile="thread.${i}_${t}"
         read_io=0.0
@@ -144,7 +146,7 @@ do
     oneline_read_w="$t"
     oneline_readnon_r="$t"
     oneline_readnon_w="$t"
-    for i in cceh cceh30 clevel30 clht30 turbo turbo30
+    for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
     do
         datafile="thread.${i}_${t}"
         read_bw=0.0
@@ -192,4 +194,4 @@ do
     echo $oneline_readnon_w >> $outfile_readnon_bw_w
 done
 
-python3 plot.py
+# python3 plot.py

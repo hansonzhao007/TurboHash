@@ -8,26 +8,38 @@ import numpy as np
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
 # import matplotlib as mpl
-plt.rcParams["font.family"] = "serif"
-plt.rcParams['axes.linewidth'] = 1.2
+plt.rcParams['axes.linewidth'] = 2
+
 
 hashtables = ['turbo', 'turbo30', 'clevel30', 'clht30']
 legend_name = ('TURBO16', 'TURBO30', 'CLEVEL30', 'CLHT30')
 
 markers= {
-    'turbo'   : 'o',
-    'turbo30' : '.', 
-    'cceh'    : '|', 
+    'turbo'   : 'o',     
+    'cceh'    : '|',
+    'dash'    : '^',
+    'turbo30' : '.',
     'cceh30'  : 'x', 
     'clevel30': 'd', 
     'clht30'  : ''}
+
+dashes= {
+    'turbo'   : [2, 0],
+    'cceh'    : [2, 0],
+    'dash'    : [2, 0],
+    'turbo30' : [3, 2],
+    'cceh30'  : [3, 2],
+    'clevel30': [3, 2],
+    'clht30'  : [3, 2]}
+
 colors= {
-    'turbo'   : '#9B0522',
-    'turbo30' : '#F37F82', 
-    'cceh'    : '#83C047', 
-    'cceh30'  : '#0E5932', 
+    'turbo'   : '#9B0522',     
+    'cceh'    : '#83C047',
+    'dash'    : '#f7cd6b',
+    'turbo30' : '#F37F82',
+    'cceh30'  : '#7e72b5', 
     'clevel30': '#3182BD', 
-    'clht30'  : '#BDBDBD'}
+    'clht30'  : '#808084'}
     
 def Plot(filename, outfile, padding, title, ylabel, divide=1):
     df = pd.read_csv(filename)
@@ -43,11 +55,12 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
             linewidth=2,
             fontsize=14,
             marker=markers[i],
-            markersize=11,
+            dashes=dashes[i],
+            markersize=8,
             fillstyle='none',
             color=colors[i])
     
-    ax.legend(legend_name, fontsize=9, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(-0.03, 0.92, 1.05, 0.1))
+    ax.legend(legend_name, fontsize=9, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(-0.01, 0.92, 1.03, 0.1))
     # ax.legend(legend_name, fontsize=9, fancybox=True, framealpha=0.5, edgecolor='k')
 
     # set y ticks
@@ -68,7 +81,7 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
 
     # draw v line
     # plt.axvline(x=20, color = 'grey', linestyle='--', linewidth=0.5)
-    ax.yaxis.grid(linewidth=1, linestyle='--')
+    # ax.yaxis.grid(linewidth=1, linestyle='--')
 
     fig.savefig(outfile, bbox_inches='tight', pad_inches=0.05)
 
@@ -76,17 +89,17 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
 def PlotScalability():
     # Plot throughput
     # Plot("scalability_load.parse", "scalability_load.pdf", -8, "Write Throughput", "IOPS (Mops/s)")
-    Plot("scalability_update.parse", "scalability_update.pdf", -10, "Update Throughput", "IOPS (Mops/s)")
+    # Plot("scalability_update.parse", "scalability_update.pdf", -10, "Update Throughput", "IOPS (Mops/s)")
     Plot("scalability_delete.parse", "scalability_delete.pdf", -10, "Delete Throughput", "IOPS (Mops/s)")
     
     # Plot IO
     # Plot("scalability_load_io.parse", "scalability_load_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
-    Plot("scalability_update_io.parse", "scalability_update_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
+    # Plot("scalability_update_io.parse", "scalability_update_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
     Plot("scalability_delete_io.parse", "scalability_delete_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
     
     # Plot bw
     # Plot("scalability_load_bw.parse", "scalability_load_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
-    Plot("scalability_update_bw.parse", "scalability_update_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
+    # Plot("scalability_update_bw.parse", "scalability_update_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
     Plot("scalability_delete_bw.parse", "scalability_delete_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
 
 PlotScalability()

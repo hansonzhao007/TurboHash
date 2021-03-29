@@ -6,9 +6,9 @@ rm *.parse
 outfile_load="scalability_load.parse"
 outfile_update="scalability_update.parse"
 outfile_delete="scalability_delete.parse"
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_load
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_update
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_delete
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_update
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_delete
 
 outfile_load_io="scalability_load_io.parse"
 outfile_load_io_r="scalability_load_io_r.parse"
@@ -19,15 +19,15 @@ outfile_update_io_w="scalability_update_io_w.parse"
 outfile_delete_io="scalability_delete_io.parse"
 outfile_delete_io_r="scalability_delete_io_r.parse"
 outfile_delete_io_w="scalability_delete_io_w.parse"
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_load_io
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_load_io_r
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_load_io_w
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_update_io
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_update_io_r
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_update_io_w
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_delete_io
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_delete_io_r
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_delete_io_w
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_io
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_io_r
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_io_w
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_update_io
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_update_io_r
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_update_io_w
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_delete_io
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_delete_io_r
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_delete_io_w
 
 outfile_load_bw="scalability_load_bw.parse"
 outfile_load_bw_r="scalability_load_bw_r.parse"
@@ -38,15 +38,15 @@ outfile_update_bw_w="scalability_update_bw_w.parse"
 outfile_delete_bw="scalability_delete_bw.parse"
 outfile_delete_bw_r="scalability_delete_bw_r.parse"
 outfile_delete_bw_w="scalability_delete_bw_w.parse"
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_load_bw
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_load_bw_r
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_load_bw_w
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_update_bw
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_update_bw_r
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_update_bw_w
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_delete_bw
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_delete_bw_r
-echo "thread,clevel30,clht30,turbo,turbo30" >> $outfile_delete_bw_w
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_bw
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_bw_r
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_load_bw_w
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_update_bw
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_update_bw_r
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_update_bw_w
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_delete_bw
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_delete_bw_r
+echo "thread,clevel30,clht30,turbo,turbo30,dash" >> $outfile_delete_bw_w
 
 for t in 1 2 4 8 16 20 24 28 32 36 40
 do
@@ -54,7 +54,7 @@ do
     oneline_load="$t"
     oneline_update="$t"
     oneline_delete="$t"
-    for i in clevel30 clht30 turbo turbo30
+    for i in clevel30 clht30 turbo turbo30 dash
     do
         datafile="thread_update_delete.${i}_${t}"
         while read line; do
@@ -88,7 +88,7 @@ do
     oneline_update_w="$t"
     oneline_delete_r="$t"
     oneline_delete_w="$t"
-    for i in clevel30 clht30 turbo turbo30
+    for i in clevel30 clht30 turbo turbo30 dash
     do
         datafile="thread_update_delete.${i}_${t}"
         update_io=0.0
@@ -145,7 +145,7 @@ do
     oneline_update_w="$t"
     oneline_delete_r="$t"
     oneline_delete_w="$t"
-    for i in clevel30 clht30 turbo turbo30
+    for i in clevel30 clht30 turbo turbo30 dash
     do
         datafile="thread_update_delete.${i}_${t}"
         update_bw=0.0
@@ -194,8 +194,8 @@ do
     echo $oneline_delete_w >> $outfile_delete_bw_w
 done
 
-bash _analysis.sh
+# bash analysis_cceh.sh
 
-python3 plot.py
+# python3 plot_update.py
 
-python3 _plot.py
+# python3 plot_delete.py

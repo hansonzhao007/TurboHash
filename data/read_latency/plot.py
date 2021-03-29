@@ -7,11 +7,18 @@ import numpy as np
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
 # import matplotlib as mpl
-plt.rcParams["font.family"] = "serif"
-plt.rcParams['axes.linewidth'] = 1.2
+plt.rcParams['axes.linewidth'] = 2
+plt.rcParams['hatch.linewidth'] = 2  # previous pdf hatch linewidth
 
 hashtables = ('turbo', 'cceh', 'turbo30', 'cceh30', 'clevel30', 'clht30')
 legend_name = ('TURBO16', 'CCEH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
+colors= {
+    'turbo'   : '#9B0522',
+    'turbo30' : '#F37F82', 
+    'cceh'    : '#83C047', 
+    'cceh30'  : '#0E5932', 
+    'clevel30': '#3182BD', 
+    'clht30'  : '#BDBDBD' }
 
 def PlotIO():
     fig, ax = plt.subplots(figsize=(4, 3.6))
@@ -176,13 +183,16 @@ def PlotNormal(df, ax, filename):
         normalized.loc[kv] = normalized.loc[kv] / df.iloc[pick_standard]
     normalized = normalized.T
     print(normalized)
-    normalized.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
+    normalized.plot(ax=ax, kind="bar", rot=0, color="white", width=0.75, edgecolor='k', linewidth=2, fontsize=26, alpha=1)
     # plot marker in bar
     bars = ax.patches
-    patterns =('//', ' ', '\\\\', ' ', '..', 'xx')
+    patterns =('//', ' ', '\\\\', '--', '..', 'xx')
+    patterns_color = list(colors.values())
+    hatches_color = [p for p in patterns_color for i in range(len(normalized))]
     hatches = [p for p in patterns for i in range(len(normalized))]
-    for bar, hatch in zip(bars, hatches):
+    for bar, hatch, color in zip(bars, hatches, hatches_color):
         bar.set_hatch(hatch)
+        bar.set_edgecolor(color)
     
     labels = (df).values.tolist()[pick_standard] 
     print(labels)

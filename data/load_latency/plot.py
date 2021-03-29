@@ -7,11 +7,21 @@ import numpy as np
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
 # import matplotlib as mpl
-plt.rcParams["font.family"] = "serif"
-plt.rcParams['axes.linewidth'] = 1.2
+# plt.rcParams["font.family"] = "serif"
+plt.rcParams['axes.linewidth'] = 2
+plt.rcParams['hatch.linewidth'] = 2  # previous pdf hatch linewidth
 
 hashtables = ('turbo', 'cceh', 'turbo30', 'cceh30', 'clevel30', 'clht30')
 legend_name = ('TURBO16', 'CCEH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
+
+colors= {
+    'turbo'   : '#9B0522',     
+    'cceh'    : '#83C047',
+    # 'dash'    : '#f7cd6b',
+    'turbo30' : '#F37F82',
+    'cceh30'  : '#7e72b5', 
+    'clevel30': '#3182BD', 
+    'clht30'  : '#808084'}
 
 def PlotIO():
     fig, ax = plt.subplots(figsize=(4, 3.6))
@@ -92,15 +102,29 @@ def PlotNormal(df, ax, filename):
         normalized.loc[kv] = normalized.loc[kv] / df.iloc[pick_standard]
     normalized = normalized.T
     print(normalized)
-    normalized.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
+    normalized.plot(ax=ax, kind="bar", rot=0, color="white", width=0.75, edgecolor='k', linewidth=2, fontsize=26, alpha=1)
     # plot marker in bar
     bars = ax.patches
-    patterns =('//', ' ', '\\\\', ' ', '..', 'xx')
+    patterns =('//', ' ', '\\\\', '--', '..', 'xx')
+    patterns_color = list(colors.values())
+    hatches_color = [p for p in patterns_color for i in range(len(normalized))]
     hatches = [p for p in patterns for i in range(len(normalized))]
-    for bar, hatch in zip(bars, hatches):
-        bar.set_hatch(hatch)
+    i=0
+    for bar, hatch, color in zip(bars, hatches, hatches_color):
+        # bar.set_alpha(0.1)
+        if (i <= 5):
+            bar.set_alpha(0.8)
+            bar.set_color(color)
+            bar.set_edgecolor('white')
+        else:
+            bar.set_edgecolor(color)
+        bar.set_hatch(hatch)        
+        i=i+1
+        
 
-    labels = (df).values.tolist()[pick_standard] 
+        
+
+    labels = (df).values.tolist()[pick_standard]
     print(labels)
     # amplification1 = normalized['cceh'].tolist()
     # amplification2 = normalized['cceh30'].tolist()
@@ -112,7 +136,7 @@ def PlotNormal(df, ax, filename):
     ax.yaxis.grid(linewidth=1, linestyle='--')
     ax.set_axisbelow(True)
     ax.set_ylabel('Normalized Latency', fontsize=22)
-    ax.set_ylim([0.1, 12.9])
+    ax.set_ylim([0.1, 14.9])
     plt.savefig(filename, bbox_inches='tight', pad_inches=0.05, dpi=600)
 
 def PlotNormalLat():
