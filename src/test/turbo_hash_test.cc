@@ -9,7 +9,6 @@
 #include <iostream>
 
 #include "turbo/turbo_hash.h"
-#include "util/robin_hood.h"
 
 #include "gflags/gflags.h"
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
