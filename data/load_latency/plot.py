@@ -95,7 +95,7 @@ def PlotNormal(df, ax, filename):
     normalized.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
     # plot marker in bar
     bars = ax.patches
-    patterns =('///', ' ', '///', ' ', '..', 'xx')
+    patterns =('//', ' ', '\\\\', ' ', '..', 'xx')
     hatches = [p for p in patterns for i in range(len(normalized))]
     for bar, hatch in zip(bars, hatches):
         bar.set_hatch(hatch)
@@ -113,7 +113,7 @@ def PlotNormal(df, ax, filename):
     ax.set_axisbelow(True)
     ax.set_ylabel('Normalized Latency', fontsize=22)
     ax.set_ylim([0.1, 12.9])
-    plt.savefig(filename, bbox_inches='tight', pad_inches=0.05)
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0.05, dpi=600)
 
 def PlotNormalLat():
     data_positive = pd.DataFrame(columns=['avg','std','min','median','max','p50','p75','p99','p999','p9999','non'])
