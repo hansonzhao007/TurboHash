@@ -45,9 +45,9 @@ DEFINE_bool(hist, false, "");
 DEFINE_string(benchmarks, "load,readrandom", "");
 
 // #define TYPE_CCEH
-#define TYPE_CLEVEL
+// #define TYPE_CLEVEL
 // #define TYPE_LEVEL
-// #define TYPE_CLHT
+#define TYPE_CLHT
 
 // #define DEBUG_RESIZING 1
 
@@ -838,7 +838,7 @@ public:
     }
 
     void DoDelete(ThreadState* thread) {
-        #if defined TYPE_LEVEL || defined TYPE_CLHT || defined TYPE_LEVEL
+        #if defined TYPE_CLEVEL || defined TYPE_CLHT || defined TYPE_LEVEL
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
             perror("DoOverWrite lack key_trace_ initialization.");
