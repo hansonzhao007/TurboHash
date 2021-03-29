@@ -6,14 +6,11 @@
 #include <libcuckoo/cuckoohash_map.hh>
 #endif
 
-#include "util/env.h"
 #include "turbo/turbo_hash.h"
-#include "util/robin_hood.h"
-#include "util/io_report.h"
-#include "util/trace.h"
 #include "util/perf_util.h"
 
-#include "absl/container/flat_hash_map.h"
+#include "util/slice.h"
+#include "util/time.h"
 
 #include "test_util.h"
 
@@ -64,19 +61,18 @@ public:
 
     size_t TestRehash() {
         size_t inserted_num = 0;
-        util::Stats stats;
         TurboHash hashtable(FLAGS_bucket_count, FLAGS_cell_count);
         uint64_t i = 0;
         RandomKeyTrace::Iterator key_iterator = key_trace_.trace_at(0, max_count_);
         
-        auto time_start = Env::Default()->NowNanos();
+        auto time_start = util::NowNanos();
         while (i < max_count_) {
             hashtable.Put(key_iterator.Next(), value_);
             if ((i++ & 0xFFFFF) == 0) {
                 fprintf(stderr, "insert%*s-%03d\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
             }
         }
-        auto time_end = Env::Default()->NowNanos();
+        auto time_end = util::NowNanos();
 
         std::string name = "turbo:" + hashtable.ProbeStrategyName();
         inserted_num = i;
@@ -88,7 +84,7 @@ public:
             std::vector<size_t> counts(FLAGS_thread_read, 0);
             kRunning = true;
             if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
-            auto time_start = Env::Default()->NowNanos();
+            auto time_start = util::NowNanos();
             for (int t = 0; t < FLAGS_thread_read; t++) {
                 workers[t] = std::thread([&, t]
                 {                 
@@ -111,7 +107,7 @@ public:
             {
                 t.join();
             });
-            auto time_end = Env::Default()->NowNanos();
+            auto time_end = util::NowNanos();
             size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
             PrintSpeed("Get " + name, hashtable.LoadFactor(), hashtable.Size(), read_count, time_end - time_start, true);
             if (FLAGS_print_thread_read)
@@ -126,7 +122,7 @@ public:
             std::vector<size_t> counts(FLAGS_thread_read, 0);
             kRunning = true;
             if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
-            auto time_start = Env::Default()->NowNanos();
+            auto time_start = util::NowNanos();
             for (int t = 0; t < FLAGS_thread_read; t++) {
                 workers[t] = std::thread([&, t]
                 {
@@ -150,7 +146,7 @@ public:
             {
                 t.join();
             });
-            auto time_end = Env::Default()->NowNanos();
+            auto time_end = util::NowNanos();
             size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
             PrintSpeed("Find " + name, hashtable.LoadFactor(), hashtable.Size(), read_count, time_end - time_start, true);
             if (FLAGS_print_thread_read)
@@ -165,7 +161,7 @@ public:
             std::vector<size_t> counts(FLAGS_thread_read, 0);
             kRunning = true;
             if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
-            auto time_start = Env::Default()->NowNanos();
+            auto time_start = util::NowNanos();
             for (int t = 0; t < FLAGS_thread_read; t++) {
                 workers[t] = std::thread([&, t]
                 {
@@ -189,7 +185,7 @@ public:
             {
                 t.join();
             });
-            auto time_end = Env::Default()->NowNanos();
+            auto time_end = util::NowNanos();
             size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
             PrintSpeed("Probe " + name, hashtable.LoadFactor(), hashtable.Size(), read_count, time_end - time_start, true);
             if (FLAGS_print_thread_read)
@@ -204,9 +200,9 @@ public:
         probe_fun();
 
         // printf("Start Rehashing\n");
-        // time_start = Env::Default()->NowMicros();
+        // time_start = util::NowMicros();
         // hashtable.MinorReHashAll();
-        // time_end   = Env::Default()->NowMicros();
+        // time_end   = util::NowMicros();
         // printf("rehash speed (%lu entries): %f Mops/s. duration: %.2f s.\n", hashtable.Size(), (double)hashtable.Size() / (time_end - time_start), (double)(time_end - time_start) / 1000000.0 );
 
         // read_fun();
@@ -218,7 +214,6 @@ public:
 
 
     size_t TurboHashSpeedTest() {
-        util::Stats stats;
         TurboHash hashtable(FLAGS_bucket_count, FLAGS_cell_count);
         std::string name = "turbo:" + hashtable.ProbeStrategyName();
         size_t max_range = max_count_ * FLAGS_loadfactor;
@@ -226,7 +221,7 @@ public:
             std::vector<std::thread> workers(FLAGS_thread_write);
             std::vector<size_t> counts(FLAGS_thread_write, 0);
             kRunning = true;
-            auto time_start = Env::Default()->NowNanos();
+            auto time_start = util::NowNanos();
             for (int t = 0; t < FLAGS_thread_write; t++) {
                 workers[t] = std::thread([&, t] {
                     // Env::PinCore(kThreadIDs[t]);
@@ -247,7 +242,7 @@ public:
             {
                 t.join();
             });
-            auto time_end = Env::Default()->NowNanos();
+            auto time_end = util::NowNanos();
             size_t write_count = std::accumulate(counts.begin(), counts.end(), 0);
             printf("Total put: %lu\n", write_count);
             PrintSpeed(name, hashtable.LoadFactor(), hashtable.Size(), write_count, time_end - time_start, false);
@@ -261,7 +256,7 @@ public:
                 std::vector<size_t> counts(FLAGS_thread_read, 0);
                 kRunning = true;
                 if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
-                auto time_start = Env::Default()->NowNanos();
+                auto time_start = util::NowNanos();
                 for (int t = 0; t < FLAGS_thread_read; t++) {
                     workers[t] = std::thread([&, t]
                     {                        
@@ -284,7 +279,7 @@ public:
                 {
                     t.join();
                 });
-                auto time_end = Env::Default()->NowNanos();
+                auto time_end = util::NowNanos();
                 size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
                 PrintSpeed(name, hashtable.LoadFactor(), hashtable.Size(), read_count, time_end - time_start, true);
                 if (FLAGS_print_thread_read)
@@ -305,14 +300,14 @@ public:
         uint64_t i = 0;
         map.reserve(inserted_num);
         auto key_iterator = key_trace_.trace_at(0, inserted_num);
-        auto time_start = Env::Default()->NowNanos();
+        auto time_start = util::NowNanos();
         while (key_iterator.Valid()) {
             map.insert({key_iterator.Next(), value_});
             if ((i++ & 0xFFFFF) == 0) {
                 fprintf(stderr, "inserting%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
             }
         }
-        auto time_end = Env::Default()->NowNanos();
+        auto time_end = util::NowNanos();
         PrintSpeed(name.c_str(), map.load_factor(), map.size(), inserted_num, time_end - time_start, false);
 
         {
@@ -321,7 +316,7 @@ public:
             kRunning = true;
             key_trace_.Randomize();
             if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
-            time_start = Env::Default()->NowNanos();
+            time_start = util::NowNanos();
             for (int t = 0; t < FLAGS_thread_read; t++) {            
                 workers[t] = std::thread([&, t]
                 {
@@ -346,7 +341,7 @@ public:
             {
                 t.join();
             });
-            time_end = Env::Default()->NowNanos();
+            time_end = util::NowNanos();
             size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
             PrintSpeed(name.c_str(), map.load_factor(), map.size(), read_count, time_end - time_start, true);
             if (FLAGS_print_thread_read)
@@ -361,7 +356,7 @@ public:
             kRunning = true;
             key_trace_.Randomize();
             if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
-            time_start = Env::Default()->NowNanos();
+            time_start = util::NowNanos();
             for (int t = 0; t < FLAGS_thread_read; t++) {            
                 workers[t] = std::thread([&, t]
                 {
@@ -384,7 +379,7 @@ public:
             {
                 t.join();
             });
-            time_end = Env::Default()->NowNanos();
+            time_end = util::NowNanos();
             size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
             PrintSpeed("Probe " + name, map.load_factor(), map.size(), read_count, time_end - time_start, true);
             if (FLAGS_print_thread_read)
@@ -400,21 +395,21 @@ public:
         uint64_t i = 0;
         map.reserve(inserted_num);
         auto key_iterator = key_trace_.trace_at(0, inserted_num);
-        auto time_start = Env::Default()->NowNanos();
+        auto time_start = util::NowNanos();
         while (key_iterator.Valid()) {
             map.insert(key_iterator.Next(), value_);
             if ((i++ & 0xFFFFF) == 0) {
                 fprintf(stderr, "inserting%*s-%03d->\r", int(i >> 20), " ", int(i >> 20));fflush(stderr);
             }
         }
-        auto time_end = Env::Default()->NowNanos();
+        auto time_end = util::NowNanos();
         PrintSpeed(name.c_str(), map.load_factor(), map.size(), i, time_end - time_start, false);
 
         std::vector<std::thread> workers(FLAGS_thread_read);
         std::vector<size_t> counts(FLAGS_thread_read, 0);
         kRunning = true;
         if (FLAGS_readtime != 0) alarm(FLAGS_readtime);  // set an alarm for 6 seconds from now
-        time_start = Env::Default()->NowNanos();
+        time_start = util::NowNanos();
         for (int t = 0; t < FLAGS_thread_read; t++) {
             workers[t] = std::thread([&, t]
             {
@@ -440,7 +435,7 @@ public:
         {
             t.join();
         });
-        time_end = Env::Default()->NowNanos();
+        time_end = util::NowNanos();
         size_t read_count = std::accumulate(counts.begin(), counts.end(), 0);
         PrintSpeed(name.c_str(), map.load_factor(), map.size(), read_count, time_end - time_start, true);
     

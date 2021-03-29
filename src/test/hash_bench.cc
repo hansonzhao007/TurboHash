@@ -12,17 +12,12 @@
 /* --------- Different HashTable --------*/
 #include "turbo/turbo_hash.h"
 #include "turbo/turbo_hash_pmem.h"
-#include "util/robin_hood.h"
-#include "absl/container/flat_hash_map.h"
 
-#include "util/env.h"
-#include "util/robin_hood.h"
-#include "util/io_report.h"
 #include "util/perf_util.h"
 #include "util/histogram.h"
 #include "util/pmm_util.h"
-
-#include "absl/container/flat_hash_map.h"
+#include "util/logger.h"
+#include "util/slice.h"
 
 #include "test_util.h"
 
@@ -32,6 +27,9 @@ using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
 
 using namespace util;
+
+#define likely(x)       (__builtin_expect(false || (x), true))
+#define unlikely(x)     (__builtin_expect(x, 0))
 
 #define IS_PMEM 1
 
@@ -89,7 +87,7 @@ public:
         tid_(id){ Start(); }
     
     void Start() {
-        start_ = Env::Default()->NowMicros();
+        start_ = util::NowMicros();
         next_report_time_ = start_ + FLAGS_report_interval * 1000000;
         next_report_ = 100;
         last_op_finish_ = start_;
@@ -115,16 +113,16 @@ public:
     }
     
     void Stop() {
-        finish_ = Env::Default()->NowMicros();
+        finish_ = util::NowMicros();
         seconds_ = (finish_ - start_) * 1e-6;;
     }
 
     void StartSingleOp() {
-        last_op_finish_ = Env::Default()->NowMicros();
+        last_op_finish_ = util::NowMicros();
     }
 
     void PrintSpeed() {
-        uint64_t now = Env::Default()->NowMicros();
+        uint64_t now = util::NowMicros();
         int64_t usecs_since_last = now - last_report_finish_;
 
         std::string cur_time = TimeToString(now/1000000);
@@ -166,7 +164,7 @@ public:
     }
     
     inline void FinishedBatchOp(size_t batch) {
-        double now = Env::Default()->NowNanos();
+        double now = util::NowNanos();
         last_op_finish_ = now;
         done_ += batch;
         if (unlikely(done_ >= next_report_)) {
@@ -187,14 +185,14 @@ public:
             fflush(stdout);
         }
 
-        if (FLAGS_report_interval != 0 && Env::Default()->NowMicros() > next_report_time_) {
+        if (FLAGS_report_interval != 0 && util::NowMicros() > next_report_time_) {
             next_report_time_ += FLAGS_report_interval * 1000000;
             PrintSpeed(); 
         }
     }
 
     inline void FinishedSingleOp() {
-        double now = Env::Default()->NowNanos();
+        double now = util::NowNanos();
         last_op_finish_ = now;
 
         done_++;
@@ -216,7 +214,7 @@ public:
             fflush(stdout);
         }
 
-        if (FLAGS_report_interval != 0 && Env::Default()->NowMicros() > next_report_time_) {
+        if (FLAGS_report_interval != 0 && util::NowMicros() > next_report_time_) {
             next_report_time_ += FLAGS_report_interval * 1000000;
             PrintSpeed(); 
         }
@@ -318,7 +316,7 @@ public:
         max_ops_= max_ops;
         ops_per_stage_ = (ops_per_stage > 0) ? ops_per_stage : max_ops;
         ops_ = 0;
-        start_at_ = Env::Default()->NowMicros();
+        start_at_ = util::NowMicros();
     }
 
     inline int64_t GetStage() { return std::min(ops_, max_ops_ - 1) / ops_per_stage_; }
@@ -331,7 +329,7 @@ public:
         // Recheck every appx 1000 ops (exact iff increment is factor of 1000)
         auto granularity = 1000;
         if ((ops_ / granularity) != ((ops_ - increment) / granularity)) {
-            uint64_t now = Env::Default()->NowMicros();
+            uint64_t now = util::NowMicros();
             return ((now - start_at_) / 1000000) >= max_seconds_;
         } else {
             return false;
@@ -544,11 +542,11 @@ public:
     void DoRehashLat(ThreadState* thread) {   
         INFO("DoRehashLat. Thread %2d", thread->tid);  
         thread->stats.Start(); 
-        auto time_start = Env::Default()->NowMicros();
+        auto time_start = util::NowMicros();
         for (size_t b = 0; b < FLAGS_bucket_count; ++b) {
             hashtable_->MinorRehash(b);
         }
-        auto duration = Env::Default()->NowMicros() - time_start;
+        auto duration = util::NowMicros() - time_start;
         printf("MinorRehash avglat: %.4f us\n", (double)(duration) / FLAGS_bucket_count);
         thread->stats.FinishedBatchOp(num_);
     }
@@ -661,9 +659,9 @@ public:
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {
             size_t key = key_iterator.Next();
-            auto time_start = Env::Default()->NowNanos();
+            auto time_start = util::NowNanos();
             auto record_ptr = hashtable_->Find(key);
-            auto time_duration = Env::Default()->NowNanos() - time_start;
+            auto time_duration = util::NowNanos() - time_start;
             thread->stats.hist_.Add(time_duration);
 
             if (unlikely(record_ptr == nullptr)) {
@@ -689,9 +687,9 @@ public:
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {
             size_t key = key_iterator.Next() + num_;
-            auto time_start = Env::Default()->NowNanos();
+            auto time_start = util::NowNanos();
             auto record_ptr = hashtable_->Find(key);
-            auto time_duration = Env::Default()->NowNanos() - time_start;
+            auto time_duration = util::NowNanos() - time_start;
             thread->stats.hist_.Add(time_duration);
             if (likely(record_ptr == nullptr)) {
                 not_find++;
@@ -750,9 +748,9 @@ public:
         
         while (key_iterator.Valid()) {            
             size_t key = key_iterator.Next();
-            auto time_start = Env::Default()->NowNanos();
+            auto time_start = util::NowNanos();
             bool res = hashtable_->Put(key, key);
-            auto time_duration = Env::Default()->NowNanos() - time_start;
+            auto time_duration = util::NowNanos() - time_start;
             thread->stats.hist_.Add(time_duration);
             if (!res) {
                 INFO("Hash Table Full!!!\n");

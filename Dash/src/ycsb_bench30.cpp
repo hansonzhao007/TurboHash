@@ -1,64 +1,57 @@
-#include <immintrin.h>
-#include <cstdlib>
+#include <iterator>
+#include <vector>
+#include <sstream>
+#include <cstdio>
+#include <cassert>
+#include <time.h>
+#include <sys/time.h>
 #include <thread>               // std::thread
 #include <mutex>                // std::mutex
 #include <condition_variable>   // std::condition_variable
-#include "typename.h"
+#include <ctime>
+#include <cstdlib>
+#include <unistd.h>
+#include <iostream>
+#include <fstream>
+#include <algorithm>
+#include <bitset>
+#include <immintrin.h>
 
-#ifdef CUCKOO
-#include <libcuckoo/cuckoohash_map.hh>
-#endif
+#include "../util/System.hpp"
+#include "../util/key_generator.hpp"
+#include "../util/uniform.hpp"
 
-/* --------- Different HashTable --------*/
-#include "turbo/turbo_hash.h"
-#include "turbo/turbo_hash_pmem.h"
-
-#include "util/histogram.h"
-#include "util/pmm_util.h"
-#include "util/logger.h"
-#include "util/slice.h"
+#include "Hash.h"
+#include "allocator.h"
+#include "ex_finger.h"
+#include "lh_finger.h"
+#include "libpmemobj.h"
 
 #include "test_util.h"
+#include "histogram.h"
+#include <gflags/gflags.h>
 
-#include "gflags/gflags.h"
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
 
-using namespace util;
 
-#define likely(x)       (__builtin_expect(false || (x), true))
-#define unlikely(x)     (__builtin_expect(x, 0))
+DEFINE_int64(pool_size, 1024ul * 1024ul * 1024ul * 10ul, "pool size. default 10GB");
+DEFINE_string(filepath, "/mnt/pmem/dash.data", "");
 
-#define IS_PMEM 1
-
-// For hash table 
-DEFINE_bool(use_existing_db, false, "");
-DEFINE_bool(no_rehash, false, "control hash table do not do rehashing during insertion");
-DEFINE_uint64(cell_count, 16, "");
-DEFINE_uint64(bucket_count, 128 << 10, "bucket count");
-DEFINE_double(loadfactor, 0.72, "default loadfactor for turbohash.");
+DEFINE_int32(segments, 64, "the initial number of segments in extendible hashing");
 DEFINE_uint32(batch, 1000000, "report batch");
+
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
 DEFINE_uint32(thread, 1, "");
 DEFINE_uint64(report_interval, 0, "Report interval in seconds");
 DEFINE_uint64(stats_interval, 10000000, "Report interval in ops");
-DEFINE_uint64(num, 100 * 1000000LU, "Number of total record");
-DEFINE_uint64(read,  100000000, "Number of read operations");
-DEFINE_uint64(write, 100000000, "Number of read operations");
-
+DEFINE_uint64(value_size, 8, "The value size");
+DEFINE_uint64(num, 1 * 1000000LU, "Number of total record");
+DEFINE_uint64(read,  1 * 1000000, "Number of read operations");
+DEFINE_uint64(write, 1 * 1000000, "Number of read operations");
 DEFINE_bool(hist, false, "");
-
-DEFINE_string(benchmarks, "load,overwrite,readrandom", "");
-
-
-#ifdef IS_PMEM
-typedef turbo_pmem::unordered_map<std::string, std::string> Hashtable;
-static bool kIsPmem = true;
-#else
-typedef turbo::unordered_map<std::string, std::string> Hashtable;
-static bool kIsPmem = false;
-#endif
+DEFINE_string(benchmarks, "load,readrandom", "");
 
 
 namespace {
@@ -72,7 +65,7 @@ public:
     double next_report_time_;
     double last_op_finish_;
     unsigned last_level_compaction_num_;
-    HistogramImpl hist_;
+    util::HistogramImpl hist_;
 
     uint64_t done_;
     uint64_t last_report_done_;
@@ -85,7 +78,7 @@ public:
         tid_(id){ Start(); }
     
     void Start() {
-        start_ = util::NowMicros();
+        start_ = NowMicros();
         next_report_time_ = start_ + FLAGS_report_interval * 1000000;
         next_report_ = 100;
         last_op_finish_ = start_;
@@ -111,16 +104,16 @@ public:
     }
     
     void Stop() {
-        finish_ = util::NowMicros();
+        finish_ = NowMicros();
         seconds_ = (finish_ - start_) * 1e-6;;
     }
 
     void StartSingleOp() {
-        last_op_finish_ = util::NowMicros();
+        last_op_finish_ = NowMicros();
     }
 
     void PrintSpeed() {
-        uint64_t now = util::NowMicros();
+        uint64_t now = NowMicros();
         int64_t usecs_since_last = now - last_report_finish_;
 
         std::string cur_time = TimeToString(now/1000000);
@@ -133,17 +126,7 @@ public:
                 (usecs_since_last / 1000000.0),
                 done_ / ((now - start_) / 1000000.0),
                 (now - last_report_finish_) / 1000000.0,
-                (now - start_) / 1000000.0);
-        INFO( "%s ... thread %d: (%lu,%lu) ops and "
-                "( %.1f,%.1f ) ops/second in (%.6f,%.6f) seconds\n",
-                cur_time.c_str(), 
-                tid_,
-                done_ - last_report_done_, done_,
-                (done_ - last_report_done_) /
-                (usecs_since_last / 1000000.0),
-                done_ / ((now - start_) / 1000000.0),
-                (now - last_report_finish_) / 1000000.0,
-                (now - start_) / 1000000.0);
+                (now - start_) / 1000000.0);       
         last_report_finish_ = now;
         last_report_done_ = done_;
         fflush(stdout);
@@ -162,7 +145,7 @@ public:
     }
     
     inline void FinishedBatchOp(size_t batch) {
-        double now = util::NowNanos();
+        double now = NowNanos();
         last_op_finish_ = now;
         done_ += batch;
         if (unlikely(done_ >= next_report_)) {
@@ -183,14 +166,14 @@ public:
             fflush(stdout);
         }
 
-        if (FLAGS_report_interval != 0 && util::NowMicros() > next_report_time_) {
+        if (FLAGS_report_interval != 0 && NowNanos()> next_report_time_) {
             next_report_time_ += FLAGS_report_interval * 1000000;
             PrintSpeed(); 
         }
     }
 
     inline void FinishedSingleOp() {
-        double now = util::NowNanos();
+        double now = NowNanos();
         last_op_finish_ = now;
 
         done_++;
@@ -212,7 +195,7 @@ public:
             fflush(stdout);
         }
 
-        if (FLAGS_report_interval != 0 && util::NowMicros() > next_report_time_) {
+        if (FLAGS_report_interval != 0 && NowNanos()> next_report_time_) {
             next_report_time_ += FLAGS_report_interval * 1000000;
             PrintSpeed(); 
         }
@@ -252,12 +235,6 @@ public:
         double throughput = (double)done_/elapsed;
         
         printf( "%-12s : %11.3f micros/op %lf Mops/s;%s%s\n",
-                name.ToString().c_str(),
-                elapsed * 1e6 / done_,
-                throughput/1024/1024,
-                (extra.empty() ? "" : " "),
-                extra.c_str());
-        INFO(   "%-12s : %11.3f micros/op %lf Mops/s;%s%s\n",
                 name.ToString().c_str(),
                 elapsed * 1e6 / done_,
                 throughput/1024/1024,
@@ -314,7 +291,7 @@ public:
         max_ops_= max_ops;
         ops_per_stage_ = (ops_per_stage > 0) ? ops_per_stage : max_ops;
         ops_ = 0;
-        start_at_ = util::NowMicros();
+        start_at_ = NowMicros();
     }
 
     inline int64_t GetStage() { return std::min(ops_, max_ops_ - 1) / ops_per_stage_; }
@@ -327,7 +304,7 @@ public:
         // Recheck every appx 1000 ops (exact iff increment is factor of 1000)
         auto granularity = 1000;
         if ((ops_ / granularity) != ((ops_ - increment) / granularity)) {
-            uint64_t now = util::NowMicros();
+            uint64_t now = NowMicros();
             return ((now - start_at_) / 1000000) >= max_seconds_;
         } else {
             return false;
@@ -364,41 +341,47 @@ static std::string TrimSpace(std::string s) {
 #endif
 
 }
+
 class Benchmark {
 
+using key_t = string_key *;
 public:
     uint64_t num_;
     int value_size_;
     size_t reads_;
     size_t writes_;
-    Hashtable* hashtable_ = nullptr;
     RandomKeyTraceString* key_trace_;
     size_t trace_size_;
-    size_t initial_capacity_;
+    Hash<key_t> *hashtable_;
     Benchmark():
         num_(FLAGS_num),
-        value_size_(KEY_LEN),
+        value_size_(FLAGS_value_size),
         reads_(FLAGS_read),
         writes_(FLAGS_write),
-        key_trace_(nullptr) {
+        key_trace_(nullptr),
+        hashtable_(nullptr) {
+        
+        remove(FLAGS_filepath.c_str()); // delete the mapped file.
+        
+        // Step 1: create and open the pool
+        Allocator::Initialize(FLAGS_filepath.c_str(), FLAGS_pool_size);
 
+        // Step 2: Allocate the initial space for the hash table on PM and get the
+        // root; we use Dash-EH in this case.
+        hashtable_ = reinterpret_cast<Hash<key_t> *>(
+            Allocator::GetRoot(sizeof(extendible::Finger_EH<key_t>)));
+
+        // Step 3: Initialize the hash table                
+        new (hashtable_) extendible::Finger_EH<key_t>(
+            FLAGS_segments, Allocator::Get()->pm_pool_);
         }
+
     ~Benchmark() {
-        if (hashtable_ != nullptr) {
-            delete hashtable_;
-        }
+        
     }
-    void Run() {
-        initial_capacity_ = FLAGS_bucket_count * FLAGS_cell_count * (Hashtable::CellMeta::SlotCount() - 1) ;
-        size_t rehash_threshold = initial_capacity_ * FLAGS_loadfactor;
 
-        // If do not rehash, we control the distinct key to the minimum between the FLAGS_num and the rehash threshold.
-        if (FLAGS_no_rehash) {
-            trace_size_ = std::min(FLAGS_num, rehash_threshold);
-            num_ = trace_size_;
-        } else {
-            trace_size_ = FLAGS_num;
-        }
+    void Run() {
+        trace_size_ = FLAGS_num;
         printf("key trace size: %lu\n", trace_size_);
         key_trace_ = new RandomKeyTraceString(trace_size_);
         if (reads_ == 0) {
@@ -429,23 +412,20 @@ public:
                 fresh_db = true;
                 print_hist = true;
                 method = &Benchmark::DoWriteLat;                
+            } else if (name == "allloadfactor") {
+                fresh_db = true;
+                method = &Benchmark::DoLoadFactor;                
             } else if (name == "overwrite") {
                 fresh_db = false;
                 key_trace_->Randomize();
                 method = &Benchmark::DoOverWrite;                
-            } else if (name == "delete") {
-                fresh_db = false;
-                key_trace_->Randomize();
-                method = &Benchmark::DoDelete;                
-            } else if (name == "allloadfactor") {
-                fresh_db = true;
-                method = &Benchmark::DoLoadFactor;                
             } else if (name == "readrandom") {
                 fresh_db = false;
                 key_trace_->Randomize();
                 method = &Benchmark::DoRead;                
             } else if (name == "readnon") {
                 fresh_db = false;
+                key_trace_->Randomize();
                 method = &Benchmark::DoReadNon;                
             } else if (name == "readlat") {
                 fresh_db = false;
@@ -457,18 +437,6 @@ public:
                 print_hist = true;
                 key_trace_->Randomize();
                 method = &Benchmark::DoReadNonLat;                
-            } else if (name == "rehash") {
-                fresh_db = false;
-                thread = 1;
-                method = &Benchmark::DoRehash;
-            } else if (name == "rehashlat") {
-                fresh_db = false;
-                thread = 1;
-                method = &Benchmark::DoRehashLat;
-            } else if (name == "stats") {
-                fresh_db = false;
-                thread = 1;
-                method = &Benchmark::DoStats;
             } else if (name == "ycsba") {
                 fresh_db = false;
                 key_trace_->Randomize();
@@ -490,86 +458,31 @@ public:
                 method = &Benchmark::YCSBF;                
             } 
 
-            #ifdef IS_PMEM
-            if (fresh_db) {
-                if (FLAGS_use_existing_db) {
-                    fprintf(stdout, "%-12s : skipped (--use_existing_db is true)\n", name.c_str());
-                    method = nullptr;
-                } else {
-                    remove("/mnt/pmem/turbo_hash_pmem_basemd");
-                    remove("/mnt/pmem/turbo_hash_pmem_desc");
-                    remove("/mnt/pmem/turbo_hash_pmem_sb");
-                    hashtable_ = new Hashtable();
-                    hashtable_->Initialize(FLAGS_bucket_count, FLAGS_cell_count);
-                }
-            } else {
-                if (hashtable_ == nullptr && FLAGS_use_existing_db) {
-                    hashtable_ = new Hashtable();
-                    hashtable_->Recover();
-                }
-            }
-            #else
-            if (fresh_db) {
-                hashtable_ = new Hashtable(FLAGS_bucket_count, FLAGS_cell_count);
-            } else if (hashtable_ == nullptr) {
-                perror("Hash table not initialized.");
-                exit(1);
-            }
-            #endif
-
-            #ifdef IS_PMEM
             IPMWatcher watcher(name);
-            #endif
             if (method != nullptr) RunBenchmark(thread, name, method, print_hist);
         }
     }
 
-    void DoRehash(ThreadState* thread) {   
-        INFO("DoRehash. Thread %2d", thread->tid);  
-        thread->stats.Start(); 
-        size_t rehash_count = hashtable_->MinorReHashAll();
-        thread->stats.FinishedBatchOp(rehash_count);
-    }
-
-
-    void DoRehashLat(ThreadState* thread) {   
-        INFO("DoRehashLat. Thread %2d", thread->tid);  
-        thread->stats.Start(); 
-        auto time_start = util::NowMicros();
-        for (size_t b = 0; b < FLAGS_bucket_count; ++b) {
-            hashtable_->MinorRehash(b);
-        }
-        auto duration = util::NowMicros() - time_start;
-        printf("MinorRehash avglat: %.4f us\n", (double)(duration) / FLAGS_bucket_count);
-        thread->stats.FinishedBatchOp(num_);
-    }
-
-    void DoStats(ThreadState* thread) {   
-        INFO("DoRehash. Thread %2d", thread->tid);  
-        thread->stats.Start(); 
-        double load_factor = hashtable_->LoadFactor();
-        char buf[100];
-        snprintf(buf, sizeof(buf), "load factor: %f", load_factor);
-        thread->stats.AddMessage(buf);
-    }
-
     void DoRead(ThreadState* thread) {
-        INFO("DoRead");
+        auto epoch_guard = Allocator::AquireEpochGuard();
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            ERROR("DoRead lack key_trace_ initialization.");
+            perror("DoRead lack key_trace_ initialization.");
             return;
         }
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
+        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
         while (!duration.Done(batch) && key_iterator.Valid()) {
             uint64_t j = 0;
-            for (; j < batch && key_iterator.Valid(); j++) {                         
-                auto record_ptr = hashtable_->Find(key_iterator.Next());
-                if (unlikely(record_ptr == nullptr)) {
+            for (; j < batch && key_iterator.Valid(); j++) {                          
+                auto& ikey = key_iterator.Next();
+                string_key k = {(int)ikey.size(), ikey.data()};
+                auto ret = hashtable_->Get(&k, true);
+                if (ret == NONE) {
                     not_find++;
                 }
             }
@@ -577,27 +490,29 @@ public:
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
-        INFO("DoRead thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
         thread->stats.AddMessage(buf);
     }
 
     void DoReadNon(ThreadState* thread) {
-        INFO("DoReadNon");
+        auto epoch_guard = Allocator::AquireEpochGuard();
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            ERROR("DoReadNon lack key_trace_ initialization.");
+            perror("DoRead lack key_trace_ initialization.");
             return;
         }
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->nontrace_at(start_offset, trace_size_);
         size_t not_find = 0;
+        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();        
         while (!duration.Done(batch) && key_iterator.Valid()) {
             uint64_t j = 0;
-            for (; j < batch && key_iterator.Valid(); j++) {               
-                auto record_ptr = hashtable_->Find(key_iterator.Next());
-                if (likely(record_ptr == nullptr)) {
+            for (; j < batch && key_iterator.Valid(); j++) {                          
+                auto& ikey = key_iterator.Next();
+                string_key k = {(int)ikey.size(), ikey.data()};
+                auto ret = hashtable_->Get(&k, true);
+                if (ret == NONE) {
                     not_find++;
                 }
             }
@@ -605,71 +520,74 @@ public:
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
-        INFO("DoReadNon thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
         thread->stats.AddMessage(buf);
     }
 
     void DoReadLat(ThreadState* thread) {
-        INFO("DoReadLat");
+        auto epoch_guard = Allocator::AquireEpochGuard();
         if (key_trace_ == nullptr) {
-            ERROR("DoReadLat lack key_trace_ initialization.");
+            perror("DoReadLat lack key_trace_ initialization.");
             return;
         }
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->trace_at(start_offset, trace_size_);
         size_t not_find = 0;
+        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
-        while (!duration.Done(1) && key_iterator.Valid()) {       
-            auto time_start = util::NowNanos();
-            auto record_ptr = hashtable_->Find(key_iterator.Next());
-            auto time_duration = util::NowNanos() - time_start;
-            thread->stats.hist_.Add(time_duration);
+        while (!duration.Done(1) && key_iterator.Valid()) {
+            std::string& ikey = key_iterator.Next();
 
-            if (unlikely(record_ptr == nullptr)) {
+            auto time_start = NowNanos();
+            string_key k = {(int)ikey.size(), ikey.data()};
+            auto ret = hashtable_->Get(&k, true);
+            auto time_duration = NowNanos() - time_start;
+
+            thread->stats.hist_.Add(time_duration);
+            if (ret == NONE) {
                 not_find++;
-            }       
+            }
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
-        INFO("DoReadLat thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
         thread->stats.AddMessage(buf);
     }
 
     void DoReadNonLat(ThreadState* thread) {
-        INFO("DoReadNonLat");
+        auto epoch_guard = Allocator::AquireEpochGuard();
         if (key_trace_ == nullptr) {
-            ERROR("DoReadNonLat lack key_trace_ initialization.");
+            perror("DoReadLat lack key_trace_ initialization.");
             return;
         }
         size_t start_offset = random() % trace_size_;
         auto key_iterator = key_trace_->nontrace_at(start_offset, trace_size_);
         size_t not_find = 0;
+        uint64_t data_offset;
         Duration duration(FLAGS_readtime, reads_);
         thread->stats.Start();
         while (!duration.Done(1) && key_iterator.Valid()) {
-            auto time_start = util::NowNanos();
-            auto record_ptr = hashtable_->Find(key_iterator.Next());
-            auto time_duration = util::NowNanos() - time_start;
+            std::string& ikey = key_iterator.Next();
+
+            auto time_start = NowNanos();
+            string_key k = {(int)ikey.size(), ikey.data()};
+            auto ret = hashtable_->Get(&k, true);
+            auto time_duration = NowNanos() - time_start;
+            
             thread->stats.hist_.Add(time_duration);
-            if (likely(record_ptr == nullptr)) {
+            if (ret == NONE) {
                 not_find++;
-            } else {
-                printf("find key: %s, val : %s", record_ptr->first().c_str(), record_ptr->second().c_str());
-                exit(1);
             }
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
-        INFO("DoReadNonLat thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
         thread->stats.AddMessage(buf);
     }
 
     void DoWrite(ThreadState* thread) {
-        INFO("DoWrite");
+        auto epoch_guard = Allocator::AquireEpochGuard();
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            ERROR("DoWrite lack key_trace_ initialization.");
+            perror("DoWrite lack key_trace_ initialization.");
             return;
         }
         size_t interval = num_ / FLAGS_thread;
@@ -677,16 +595,27 @@ public:
         auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
         printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
         thread->stats.Start();
+        std::string val(value_size_, 'v');
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
-                std::string& key = key_iterator.Next(); 
-                bool res = hashtable_->Put(key, key);
-                if (!res) {
-                    INFO("Hash Table Full!!!\n");
-                    printf("Hash Table Full!!!\n");
-                    goto write_end;
-                }
+                auto& ikey = key_iterator.Next();
+
+                // store key
+                PMEMoid ptr_k;
+                Allocator::Allocate(&ptr_k, kCacheLineSize,
+                                    (sizeof(string_key) + KEY_LEN), NULL,
+                                    NULL);                
+                string_key * k = reinterpret_cast<string_key *>(pmemobj_direct(ptr_k));
+                k->length = KEY_LEN;
+                memcpy(k->key, ikey.data(), KEY_LEN);
+                // store val
+                PMEMoid ptr_v;
+                Allocator::Allocate(&ptr_v, kCacheLineSize, KEY_LEN, NULL, NULL);
+                void* val_p = pmemobj_direct(ptr_v);
+                memcpy(val_p, ikey.data(), KEY_LEN);
+
+                hashtable_->Insert(k, (char*)val_p, true);
             }
             thread->stats.FinishedBatchOp(j);
         }
@@ -695,9 +624,10 @@ public:
     }
 
     void DoWriteLat(ThreadState* thread) {
-        INFO("DoWriteLat");
+        auto epoch_guard = Allocator::AquireEpochGuard();
+        uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            ERROR("DoWriteLat lack key_trace_ initialization.");
+            perror("DoWriteLat lack key_trace_ initialization.");
             return;
         }
         size_t interval = num_ / FLAGS_thread;
@@ -705,30 +635,37 @@ public:
         auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
         printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
         thread->stats.Start();
-        while (key_iterator.Valid()) {                      
-            std::string& key = key_iterator.Next();
-            auto time_start = util::NowNanos();
-            bool res = hashtable_->Put(key, key);
-            auto time_duration = util::NowNanos() - time_start;
-            thread->stats.hist_.Add(time_duration);
-            
-            if (!res) {
-                INFO("Hash Table Full!!!\n");
-                printf("Hash Table Full!!!\n");
-                goto write_end;
-            }
+        while (key_iterator.Valid()) {
+            auto& ikey = key_iterator.Next();  
 
+            auto time_start = NowNanos();
+            // store key
+            PMEMoid ptr_k;
+            Allocator::Allocate(&ptr_k, kCacheLineSize,
+                                (sizeof(string_key) + KEY_LEN), NULL,
+                                NULL);                
+            string_key * k = reinterpret_cast<string_key *>(pmemobj_direct(ptr_k));
+            k->length = KEY_LEN;
+            memcpy(k->key, ikey.data(), KEY_LEN);
+            // store val
+            PMEMoid ptr_v;
+            Allocator::Allocate(&ptr_v, kCacheLineSize, KEY_LEN, NULL, NULL);
+            void* val_p = pmemobj_direct(ptr_v);
+            memcpy(val_p, ikey.data(), KEY_LEN);
+
+            hashtable_->Insert(k, (char*)val_p, true);
+            auto time_duration = NowNanos() - time_start;
+            thread->stats.hist_.Add(time_duration);   
         }
         write_end:
         return;
     }
 
-    // Print out load factor every 1 million insertion
     void DoLoadFactor(ThreadState* thread) {
-        INFO("DoLoadFactor");
+        auto epoch_guard = Allocator::AquireEpochGuard();
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            ERROR("DoLoadFactor lack key_trace_ initialization.");
+            perror("DoLoadFactor lack key_trace_ initialization.");
             return;
         }
         size_t interval = num_ / FLAGS_thread;
@@ -740,27 +677,36 @@ public:
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
-                std::string& key = key_iterator.Next();                  
-                bool res = hashtable_->Put(key, key);
-                if (!res) {
-                    INFO("Hash Table Full!!!\n");
-                    printf("Hash Table Full!!!\n");
-                    goto write_end;
-                }
+                auto& ikey = key_iterator.Next();
+                // store key
+                PMEMoid ptr_k;
+                Allocator::Allocate(&ptr_k, kCacheLineSize,
+                                    (sizeof(string_key) + KEY_LEN), NULL,
+                                    NULL);                
+                string_key * k = reinterpret_cast<string_key *>(pmemobj_direct(ptr_k));
+                k->length = KEY_LEN;
+                memcpy(k->key, ikey.data(), KEY_LEN);
+                // store val
+                PMEMoid ptr_v;
+                Allocator::Allocate(&ptr_v, kCacheLineSize, KEY_LEN, NULL, NULL);
+                void* val_p = pmemobj_direct(ptr_v);
+                memcpy(val_p, ikey.data(), KEY_LEN);
+
+                hashtable_->Insert(k, (char*)val_p, true);
                 inserted++;
             }
             thread->stats.FinishedBatchOp(j);
-            printf("Load factor: %.3f\n", (double)inserted / hashtable_->Capacity());
+            printf("Load factor: %.3f\n", hashtable_->getNumber());
         }
         write_end:
         return;
     }
 
     void DoOverWrite(ThreadState* thread) {
-        INFO("DoOverWrite");
+        auto epoch_guard = Allocator::AquireEpochGuard();
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            ERROR("DoOverWrite lack key_trace_ initialization.");
+            perror("DoOverWrite lack key_trace_ initialization.");
             return;
         }
         size_t interval = num_ / FLAGS_thread;
@@ -768,17 +714,25 @@ public:
         auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
         printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
         thread->stats.Start();
+        std::string val(value_size_, 'v');
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
-                std::string& key = key_iterator.Next();                  
-                bool res = hashtable_->Put(key, key);
-                if (!res) {
-                    INFO("Hash Table Full!!!\n");
-                    printf("Hash Table Full!!!\n");
-                    goto write_end;
-                    
-                }
+                auto& ikey = key_iterator.Next(); 
+                // store key
+                PMEMoid ptr_k;
+                Allocator::Allocate(&ptr_k, kCacheLineSize,
+                                    (sizeof(string_key) + KEY_LEN), NULL,
+                                    NULL);                
+                string_key * k = reinterpret_cast<string_key *>(pmemobj_direct(ptr_k));
+                k->length = KEY_LEN;
+                memcpy(k->key, ikey.data(), KEY_LEN);
+                // store val
+                PMEMoid ptr_v;
+                Allocator::Allocate(&ptr_v, kCacheLineSize, KEY_LEN, NULL, NULL);
+                void* val_p = pmemobj_direct(ptr_v);
+                memcpy(val_p, ikey.data(), KEY_LEN);
+                hashtable_->Insert(k, (char*)val_p, true);                 
             }
             thread->stats.FinishedBatchOp(j);
         }
@@ -786,42 +740,12 @@ public:
         return;
     }
 
-    void DoDelete(ThreadState* thread) {
-        INFO("DoDelete");
-        uint64_t batch = FLAGS_batch;
-        if (key_trace_ == nullptr) {
-            ERROR("DoDelete lack key_trace_ initialization.");
-            return;
-        }
-        size_t interval = num_ / FLAGS_thread;
-        size_t start_offset = thread->tid * interval;
-        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
-        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
-        thread->stats.Start();
-        size_t deleted = 0;
-        while (key_iterator.Valid()) {
-            uint64_t j = 0;
-            for (; j < batch && key_iterator.Valid(); j++) {   
-                auto& key = key_iterator.Next();
-                auto res = hashtable_->Delete(key);
-                if (res) {
-                    deleted++;
-                }
-            }
-            thread->stats.FinishedBatchOp(j);
-        }
-        char buf[100];
-        snprintf(buf, sizeof(buf), "(num: %lu, deleted: %lu)", interval, deleted);
-        INFO("(num: %lu, deleted: %lu)", interval, deleted);
-        thread->stats.AddMessage(buf);
-        return;
-    }
 
-    void YCSBA(ThreadState* thread) {
-        INFO("YCSBA");
+    void YCSBA(ThreadState* thread) {    
+        auto epoch_guard = Allocator::AquireEpochGuard();    
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            ERROR("YCSBA lack key_trace_ initialization.");
+            perror("YCSBA lack key_trace_ initialization.");
             return;
         }
         size_t find = 0;
@@ -835,12 +759,27 @@ public:
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
-                auto& key = key_iterator.Next();
+                auto& ikey = key_iterator.Next();
                 if (thread->ycsb_gen.NextA() == kYCSB_Write) {
-                    hashtable_->Put(key, key);
+                    // store key
+                    PMEMoid ptr_k;
+                    Allocator::Allocate(&ptr_k, kCacheLineSize,
+                                        (sizeof(string_key) + KEY_LEN), NULL,
+                                        NULL);                
+                    string_key * k = reinterpret_cast<string_key *>(pmemobj_direct(ptr_k));
+                    k->length = KEY_LEN;
+                    memcpy(k->key, ikey.data(), KEY_LEN);
+                    // store val
+                    PMEMoid ptr_v;
+                    Allocator::Allocate(&ptr_v, kCacheLineSize, KEY_LEN, NULL, NULL);
+                    void* val_p = pmemobj_direct(ptr_v);
+                    memcpy(val_p, ikey.data(), KEY_LEN);
+                    
+                    hashtable_->Insert(k, (char*)val_p, true);
                     insert++;
                 } else {
-                    hashtable_->Find(key);
+                    string_key k = {(int)ikey.size(), ikey.data()};
+                    auto ret = hashtable_->Get(&k, true);
                     find++;
                 }
             }
@@ -848,16 +787,64 @@ public:
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(insert: %lu, read: %lu)", insert, find);
-        INFO("(insert: %lu, read: %lu)", insert, find);
         thread->stats.AddMessage(buf);
         return;
     }
 
     void YCSBB(ThreadState* thread) {
-        INFO("YCSBB");
+        auto epoch_guard = Allocator::AquireEpochGuard();
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            ERROR("YCSBB lack key_trace_ initialization.");
+            perror("YCSBB lack key_trace_ initialization.");
+            return;
+        }
+        size_t find = 0;
+        size_t insert = 0;
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
+        thread->stats.Start();
+        
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                auto& ikey = key_iterator.Next();
+                if (thread->ycsb_gen.NextB() == kYCSB_Write) {
+                    // store key
+                    PMEMoid ptr_k;
+                    Allocator::Allocate(&ptr_k, kCacheLineSize,
+                                        (sizeof(string_key) + KEY_LEN), NULL,
+                                        NULL);                
+                    string_key * k = reinterpret_cast<string_key *>(pmemobj_direct(ptr_k));
+                    k->length = KEY_LEN;
+                    memcpy(k->key, ikey.data(), KEY_LEN);
+                    // store val
+                    PMEMoid ptr_v;
+                    Allocator::Allocate(&ptr_v, kCacheLineSize, KEY_LEN, NULL, NULL);
+                    void* val_p = pmemobj_direct(ptr_v);
+                    memcpy(val_p, ikey.data(), KEY_LEN);
+                    hashtable_->Insert(k, (char*)val_p, true);                 
+                    insert++;
+                } else {
+                    string_key k = {(int)ikey.size(), ikey.data()};
+                    auto ret = hashtable_->Get(&k, true);                    
+                    find++;
+                }
+            }
+            thread->stats.FinishedBatchOp(j);
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(insert: %lu, read: %lu)", insert, find);
+        thread->stats.AddMessage(buf);
+        return;
+    }
+
+    void YCSBC(ThreadState* thread) {
+        auto epoch_guard = Allocator::AquireEpochGuard();
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror("YCSBC lack key_trace_ initialization.");
             return;
         }
         size_t find = 0;
@@ -872,61 +859,25 @@ public:
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
                 auto& key = key_iterator.Next();
-                if (thread->ycsb_gen.NextB() == kYCSB_Write) {
-                    hashtable_->Put(key, key);
-                    insert++;
-                } else {
-                    hashtable_->Find(key);
-                    find++;
-                }
-            }
-            thread->stats.FinishedBatchOp(j);
-        }
-        char buf[100];
-        snprintf(buf, sizeof(buf), "(insert: %lu, read: %lu)", insert, find);
-        INFO("(insert: %lu, read: %lu)", insert, find);
-        thread->stats.AddMessage(buf);
-        return;
-    }
-
-    void YCSBC(ThreadState* thread) {
-        INFO("YCSBC");
-        uint64_t batch = FLAGS_batch;
-        if (key_trace_ == nullptr) {
-            ERROR("YCSBC lack key_trace_ initialization.");
-            return;
-        }
-        size_t find = 0;
-        size_t insert = 0;
-        size_t interval = num_ / FLAGS_thread;
-        size_t start_offset = thread->tid * interval;
-        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
-        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
-        thread->stats.Start();
-        
-        while (key_iterator.Valid()) {
-            uint64_t j = 0;
-            for (; j < batch && key_iterator.Valid(); j++) {   
-                auto& key = key_iterator.Next();                
-                auto res = hashtable_->Find(key);
-                if (res != nullptr) {
+                string_key k = {(int)key.size(), key.data()};             
+                auto ret = hashtable_->Get(&k, true);
+                if (ret != NONE) {
                     find++;
                 }                
             }
             thread->stats.FinishedBatchOp(j);
         }
         char buf[100];
-        snprintf(buf, sizeof(buf), "(insert: %lu, read: %lu)", insert, find);
-        INFO("(insert: %lu, read: %lu)", insert, find);
+        snprintf(buf, sizeof(buf), "(insert: %lu, read: %lu)", insert, find);        
         thread->stats.AddMessage(buf);
         return;
     }
 
     void YCSBD(ThreadState* thread) {
-        INFO("YCSBD");
+        auto epoch_guard = Allocator::AquireEpochGuard();
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            ERROR("YCSBD lack key_trace_ initialization.");
+            perror("YCSBD lack key_trace_ initialization.");
             return;
         }
         size_t find = 0;
@@ -941,26 +892,26 @@ public:
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
-                auto& key = key_iterator.Next();                
-                auto res = hashtable_->Find(key);
-                if (res != nullptr) {
+                auto& key = key_iterator.Next();
+                string_key k = {(int)key.size(), key.data()};             
+                auto ret = hashtable_->Get(&k, true);
+                if (ret != NONE) {
                     find++;
-                }
+                }  
             }
             thread->stats.FinishedBatchOp(j);
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(insert: %lu, read: %lu)", insert, find);
-        INFO("(insert: %lu, read: %lu)", insert, find);
         thread->stats.AddMessage(buf);
         return;
     }
 
     void YCSBF(ThreadState* thread) {
-        INFO("YCSBF");
+        auto epoch_guard = Allocator::AquireEpochGuard();
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
-            ERROR("YCSBF lack key_trace_ initialization.");
+            perror("YCSBF lack key_trace_ initialization.");
             return;
         }
         size_t find = 0;
@@ -974,15 +925,31 @@ public:
         while (key_iterator.Valid()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid(); j++) {   
-                auto& key = key_iterator.Next();
-                if (thread->ycsb_gen.NextF() == kYCSB_Read) {              
-                    auto res = hashtable_->Find(key);
-                    if (res != nullptr) {
+                auto& ikey = key_iterator.Next();
+                if (thread->ycsb_gen.NextF() == kYCSB_Read) {                     
+                    string_key k = {(int)ikey.size(), ikey.data()};             
+                    auto ret = hashtable_->Get(&k, true);                                 
+                    if (ret != NONE) {
                         find++;
-                    }
+                    }  
                 } else {
-                    hashtable_->Find(key);
-                    hashtable_->Put(key, key);
+                    string_key gk = {(int)ikey.size(), ikey.data()};
+                    hashtable_->Get(&gk, true);
+                    // store key
+                    PMEMoid ptr_k;
+                    Allocator::Allocate(&ptr_k, kCacheLineSize,
+                                        (sizeof(string_key) + KEY_LEN), NULL,
+                                        NULL);                
+                    string_key * k = reinterpret_cast<string_key *>(pmemobj_direct(ptr_k));
+                    k->length = KEY_LEN;
+                    memcpy(k->key, ikey.data(), KEY_LEN);
+                    // store val
+                    PMEMoid ptr_v;
+                    Allocator::Allocate(&ptr_v, kCacheLineSize, KEY_LEN, NULL, NULL);
+                    void* val_p = pmemobj_direct(ptr_v);
+                    memcpy(val_p, ikey.data(), KEY_LEN);
+
+                    hashtable_->Insert(k, (char*)val_p, true);
                     insert++;
                 }
             }
@@ -990,7 +957,6 @@ public:
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(read_modify: %lu, read: %lu)", insert, find);
-        INFO("(read_modify: %lu, read: %lu)", insert, find);
         thread->stats.AddMessage(buf);
         return;
     }
@@ -1098,61 +1064,29 @@ private:
     }
 
     void PrintHeader() {
-                   INFO("------------------------------------------------\n");
         fprintf(stdout, "------------------------------------------------\n");                   
         PrintEnvironment();
-        fprintf(stdout, "Pmem:                  %s\n", kIsPmem ? "true" : "false");
-                   INFO("Pmem:                  %s\n", kIsPmem ? "true" : "false");
-        fprintf(stdout, "Key type:              %s\n", type_name<Hashtable::key_type>().c_str());
-                   INFO("Key type:              %s\n", type_name<Hashtable::key_type>().c_str());
-        fprintf(stdout, "Val type:              %s\n", type_name<Hashtable::mapped_type>().c_str());
-                   INFO("Val type:              %s\n", type_name<Hashtable::mapped_type>().c_str());
-        fprintf(stdout, "Keys:                  %u bytes each\n", KEY_LEN);
-                   INFO("Keys:                  %u bytes each\n", KEY_LEN);
-        fprintf(stdout, "Values:                %u bytes each\n", KEY_LEN);
-                   INFO("Values:                %u bytes each\n", KEY_LEN);
+        fprintf(stdout, "HashType:              %s\n", "DASH");
+        fprintf(stdout, "Init Segment:          %lu\n", (uint64_t)FLAGS_segments);
         fprintf(stdout, "Entries:               %lu\n", (uint64_t)num_);
-                   INFO("Entries:               %lu\n", (uint64_t)num_);
-        fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);   
-                   INFO("Trace size:            %lu\n", (uint64_t)trace_size_);        
+        fprintf(stdout, "Trace size:            %lu\n", (uint64_t)trace_size_);                      
         fprintf(stdout, "Read:                  %lu \n", (uint64_t)FLAGS_read);
-                   INFO("Read:                  %lu \n", (uint64_t)FLAGS_read);
         fprintf(stdout, "Write:                 %lu \n", (uint64_t)FLAGS_write);
-                   INFO("Write:                 %lu \n", (uint64_t)FLAGS_write);
         fprintf(stdout, "Thread:                %lu \n", (uint64_t)FLAGS_thread);
-                   INFO("Thread:                %lu \n", (uint64_t)FLAGS_thread);           
-        fprintf(stdout, "Hash key flat:         %s \n", Hashtable::is_key_flat ? "true" : "false");         
-                   INFO("Hash key flat:         %s \n", Hashtable::is_key_flat ? "true" : "false");         
-        fprintf(stdout, "Hash val flat:         %s \n", Hashtable::is_value_flat ? "true" : "false");         
-                   INFO("Hash val flat:         %s \n", Hashtable::is_value_flat ? "true" : "false");         
-        fprintf(stdout, "Hash Buckets:          %lu \n", (uint64_t)FLAGS_bucket_count);         
-                   INFO("Hash Buckets:          %lu \n", (uint64_t)FLAGS_bucket_count);
-        fprintf(stdout, "Hash Cell in Bucket:   %lu \n", (uint64_t)FLAGS_cell_count);
-                   INFO("Hash Cell in Bucket:   %lu \n", (uint64_t)FLAGS_cell_count);
-        fprintf(stdout, "Hash Slot in Cell:     %u \n", Hashtable::CellMeta::SlotCount());
-                   INFO("Hash Slot in Cell:     %u \n", Hashtable::CellMeta::SlotCount());
-        fprintf(stdout, "Hash init capacity:    %lu \n", (uint64_t)initial_capacity_);
-                   INFO("Hash init capacity:    %lu \n", (uint64_t)initial_capacity_);
-        fprintf(stdout, "Hash table size:       %lu MB\n", FLAGS_bucket_count * FLAGS_cell_count * Hashtable::CellMeta::CellSize() / 1024 / 1024);
-                   INFO("Hash table size:       %lu MB\n", FLAGS_bucket_count * FLAGS_cell_count * Hashtable::CellMeta::CellSize() / 1024 / 1024);
-        fprintf(stdout, "Hash loadfactor:       %.2f \n", FLAGS_loadfactor);
-                   INFO("Hash loadfactor:       %.2f \n", FLAGS_loadfactor);
-        fprintf(stdout, "Cell Type:             %s \n", Hashtable::CellMeta::Name().c_str()); 
-                   INFO("Cell Type:             %s \n", Hashtable::CellMeta::Name().c_str()); 
         fprintf(stdout, "Report interval:       %lu s\n", (uint64_t)FLAGS_report_interval);
-                   INFO("Report interval:       %lu s\n", (uint64_t)FLAGS_report_interval);
         fprintf(stdout, "Stats interval:        %lu records\n", (uint64_t)FLAGS_stats_interval);
-                   INFO("Stats interval:        %lu records\n", (uint64_t)FLAGS_stats_interval);
         fprintf(stdout, "benchmarks:            %s\n", FLAGS_benchmarks.c_str());
-                   INFO("benchmarks:            %s\n", FLAGS_benchmarks.c_str());
-        fprintf(stdout, "------------------------------------------------\n");                                      
-                   INFO("------------------------------------------------\n");
+        fprintf(stdout, "------------------------------------------------\n");
     }
 };
 
 int main(int argc, char *argv[])
 {
     ParseCommandLineFlags(&argc, &argv, true);
+    
+	int sds_write_value = 0;
+	pmemobj_ctl_set(NULL, "sds.at_create", &sds_write_value);
+
     Benchmark benchmark;
     benchmark.Run();
     return 0;
