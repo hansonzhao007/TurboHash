@@ -418,6 +418,10 @@ public:
                 fresh_db = false;
                 key_trace_->Randomize();
                 method = &Benchmark::DoOverWrite;                
+            } else if (name == "delete") {
+                fresh_db = false;
+                key_trace_->Randomize();
+                method = &Benchmark::DoDelete;                
             } else if (name == "readrandom") {
                 fresh_db = false;
                 key_trace_->Randomize();
@@ -679,6 +683,35 @@ public:
         return;
     }
 
+    void DoDelete(ThreadState* thread) {
+        auto epoch_guard = Allocator::AquireEpochGuard();    
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            printf("DoDelete lack key_trace_ initialization.");
+            return;
+        }
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval / 1000 * 999);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
+        thread->stats.Start();
+        size_t deleted = 0;
+        while (key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {   
+                size_t key = key_iterator.Next();
+                auto res = hashtable_->Delete(key, true);
+                if (res) {
+                    deleted++;
+                }
+            }
+            thread->stats.FinishedBatchOp(j);
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(num: %lu, deleted: %lu)", interval, deleted);
+        thread->stats.AddMessage(buf);
+        return;
+    }
 
     void YCSBA(ThreadState* thread) {    
         auto epoch_guard = Allocator::AquireEpochGuard();    

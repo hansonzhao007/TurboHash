@@ -44,8 +44,8 @@ DEFINE_uint64(write, 1 * 1000000, "Number of read operations");
 DEFINE_bool(hist, false, "");
 DEFINE_string(benchmarks, "load,readrandom", "");
 
-#define TYPE_CCEH
-// #define TYPE_CLEVEL
+// #define TYPE_CCEH
+#define TYPE_CLEVEL
 // #define TYPE_LEVEL
 // #define TYPE_CLHT
 
