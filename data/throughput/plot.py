@@ -72,7 +72,7 @@ def PlotNormal(df, ax, filename, rotation = 0, pick = 1, units="Mops/s", ytitle=
     normalized.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
     # plot marker in bar
     bars = ax.patches
-    patterns =('///', ' ', '///', ' ', '..', 'xx')
+    patterns =('//', ' ', '\\\\', ' ', '..', 'xx')
     hatches = [p for p in patterns for i in range(len(normalized))]
     for bar, hatch in zip(bars, hatches):
         bar.set_hatch(hatch)
@@ -88,7 +88,7 @@ def PlotNormal(df, ax, filename, rotation = 0, pick = 1, units="Mops/s", ytitle=
     ax.set_ylabel(ytitle, fontsize=26)
     # ax.set_ylim([0.1, 11.9])
     plt.xticks(rotation=rotation)
-    plt.savefig(filename, bbox_inches='tight', pad_inches=0.05)
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0.05, dpi=600)
 
 
 def PlotIO():
@@ -145,8 +145,8 @@ def PlotIO():
     normalizedT.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
     # plot marker in bar
     bars = ax.patches
-    patterns =('///', ' ', '///', ' ', '..', 'xx')
-    hatches = [p for p in patterns for i in range(len(normalized))]
+    patterns =('//', ' ', '\\\\', ' ', '..', 'xx')
+    hatches = [p for p in patterns for i in range(len(normalizedT))]
     for bar, hatch in zip(bars, hatches):
         bar.set_hatch(hatch)
     
@@ -163,7 +163,7 @@ def PlotIO():
     ax.set_ylabel('Pmem I/O (GB)', fontsize=26)
     ax.set_xticklabels(['Write', 'Positive\nRead', 'Negative\nRead'])
     plt.xticks(rotation=0)
-    plt.savefig('io_normalized.pdf', bbox_inches='tight', pad_inches=0.05)
+    plt.savefig('io_normalized.pdf', bbox_inches='tight', pad_inches=0.05, dpi=600)
 
     return data
 

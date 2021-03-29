@@ -6,9 +6,9 @@
 #include <algorithm>
 #include <atomic>
 #include <unistd.h>
-#include "util/env.h"
+
+#include "util/time.h"
 #include "turbo/hash_function.h"
-using namespace util;
 
 // static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23};
 std::string print_binary(uint32_t bitmap)
@@ -61,12 +61,12 @@ int main() {
     {
         std::atomic<int> tmp(0);
         std::vector<std::thread> workers2;
-        auto start_time = Env::Default()->NowNanos();
+        auto start_time = util::NowNanos();
         for (int i = 0; i < kThreadNum; i++) {
             // each worker add 10000,
             workers2.push_back(std::thread([kLoops, &tmp]() 
             {   
-                // util::Env::Default()->PinCore(kThreadIDs[i]);
+                // util::util::PinCore(kThreadIDs[i]);
                 int loop = kLoops;
                 while (loop--) {
                     tmp.fetch_add(1, std::memory_order_relaxed);
@@ -77,7 +77,7 @@ int main() {
         {
             t.join();
         });
-        auto end_time = Env::Default()->NowNanos();
+        auto end_time = util::NowNanos();
         printf("fetchadd Speed: %f Mops/s. sum: %d\n", (double)(kLoops * kThreadNum)  / (end_time - start_time) * 1000.0, tmp.load());
     }
 
@@ -85,7 +85,7 @@ int main() {
         int sum = 0;
         std::vector<std::thread> workers2;        
         turbo::util::AtomicSpinLock locks;
-        auto start_time = Env::Default()->NowNanos();
+        auto start_time = util::NowNanos();
         for (int i = 0; i < kThreadNum; i++) {
             // each worker add 10000,
             workers2.push_back(std::thread([&locks, kLoops, &sum]() 
@@ -102,7 +102,7 @@ int main() {
         {
             t.join();
         });
-        auto end_time = Env::Default()->NowNanos();
+        auto end_time = util::NowNanos();
         printf("AtomicSpinLock Speed: %f Mops/s. sum: %d\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0, sum);
     }
     
@@ -110,13 +110,13 @@ int main() {
         *lock_value = 0;
         int sum = 0;
         std::vector<std::thread> workers;
-        auto start_time = Env::Default()->NowNanos();
+        auto start_time = util::NowNanos();
         
         for (int i = 0; i < kThreadNum; i++) {
             // each worker add 10000,
             workers.push_back(std::thread([kLoops, &lock_value, &sum]() 
             {   
-                // util::Env::Default()->PinCore(kThreadIDs[i]);
+                // util::util::PinCore(kThreadIDs[i]);
                 size_t loop = kLoops;
                 while (loop--) {
                     turbo::util::SpinLockScope<0> lock_scope((uint32_t*)lock_value);
@@ -128,7 +128,7 @@ int main() {
         {
             t.join();
         });
-        auto end_time = Env::Default()->NowNanos();
+        auto end_time = util::NowNanos();
         printf("SpinLockScope Speed: %f Mops/s. sum: %d\n", (double)(kLoops * kThreadNum) / (end_time - start_time) * 1000.0, sum);
     }
 

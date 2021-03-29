@@ -71,7 +71,7 @@ def PlotNormal(df, ax, filename):
     normalized.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
     # plot marker in bar
     bars = ax.patches
-    patterns =('///', ' ', '///', ' ', '..', 'xx')
+    patterns =('//', ' ', '\\\\', ' ', '..', 'xx')
     hatches = [p for p in patterns for i in range(len(normalized))]
     for bar, hatch in zip(bars, hatches):
         bar.set_hatch(hatch)
@@ -88,7 +88,7 @@ def PlotNormal(df, ax, filename):
     ax.yaxis.grid(linewidth=1, linestyle='--')
     ax.set_axisbelow(True)
     ax.set_ylabel('Normalized Throughput', fontsize=22)
-    plt.savefig(filename, bbox_inches='tight', pad_inches=0.05)
+    plt.savefig(filename, bbox_inches='tight', pad_inches=0.05, dpi=600)
 
 def PlotNormalYCSB():
     data = pd.DataFrame(columns=['load','ycsba','ycsbb','ycsbc','ycsbd','ycsbf'])

@@ -26,9 +26,8 @@
 #include <xmmintrin.h>
 #include <sstream>
 #include <thread>
-#include "repeat_macro.h"
+#include "time.h"
 #include "cpucounters.h"
-#include "util/env.h"
 #define force_inline __attribute__((always_inline)) inline
 
 #define _mm_clwb(addr)\
@@ -482,7 +481,7 @@ public:
     IPMWatcher(const std::string& name): file_name_("ipm_" + name + ".txt") {
         printf("\033[32mStart IPMWatcher for %s\n\033[0m", name.c_str());
         metrics_before_ = Profiler();
-        start_time_ = Env::Default()->NowMicros();
+        start_time_ = util::NowMicros();
     }
 
     ~IPMWatcher() {
@@ -493,7 +492,7 @@ public:
 
     void Report() {
         finished_ = true;
-        duration_ = (Env::Default()->NowMicros() - start_time_) / 1000000.0;
+        duration_ = (util::NowMicros() - start_time_) / 1000000.0;
         metrics_after_ = Profiler();
         IPMMetric metric_merge;
         for (size_t i = 0; i < metrics_before_.size(); ++i) {
@@ -538,8 +537,8 @@ public:
 
     std::vector<IPMInfo> Profiler() const {
         std::vector<IPMInfo> infos;
-        Env::Default()->Execute("/opt/intel/ipmwatch/bin64/ipmwatch -l >" + file_name_);
-        std::string results = Env::Default()->Execute("grep -w \'DIMM.\' " + file_name_);
+        util::Execute("/opt/intel/ipmwatch/bin64/ipmwatch -l >" + file_name_);
+        std::string results = util::Execute("grep -w \'DIMM.\' " + file_name_);
         std::stringstream ss(results);
         while (!ss.eof()) {
             std::string res;
@@ -606,10 +605,10 @@ class PCMMetric {
 public:
     PCMMetric(const std::string name): name_(name) {
         before_sstate_ = getSystemCounterState();
-        start_time_ = Env::Default()->NowMicros();
+        start_time_ = util::NowMicros();
     }
     ~PCMMetric() {
-        double duration = (Env::Default()->NowMicros() - start_time_) / 1000000.0;
+        double duration = (util::NowMicros() - start_time_) / 1000000.0;
         after_sstate_ = getSystemCounterState();
         std::cout 
                 << "PCM Metrics: " << name_

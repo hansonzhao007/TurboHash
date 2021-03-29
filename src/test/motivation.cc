@@ -2,7 +2,6 @@
 #include <cstdlib>
 #include "turbo/hash_function.h"
 
-#include "util/env.h"
 #include "util/perf_util.h"
 #include "util/pmm_util.h"
 
@@ -127,11 +126,11 @@ void AccessCacheLineSize() {
         #endif
         util::PCMMetric metric("rnd_read");
         debug_perf_switch();
-        auto time_start = Env::Default()->NowNanos();
+        auto time_start = util::NowNanos();
         for (uint64_t i = 0; i < repeat; i++) {
             RndAccess(addr, size_mask, interval);
         }
-        auto time_end   = Env::Default()->NowNanos();
+        auto time_end   = util::NowNanos();
         double duration = time_end - time_start;
         fprintf(file, "%f, ", duration / repeat);
         fprintf(stderr, "%lu\r", kBuff);
@@ -144,11 +143,11 @@ void AccessCacheLineSize() {
         #endif
         util::PCMMetric metric("seq_read");
         debug_perf_switch();
-        auto time_start = Env::Default()->NowNanos();
+        auto time_start = util::NowNanos();
         for (uint64_t i = 0; i < repeat; i++) {
             ConAccess(addr, size_mask2);
         }
-        auto time_end   = Env::Default()->NowNanos();
+        auto time_end   = util::NowNanos();
         double duration = time_end - time_start;
         fprintf(file, "%f, ", duration / repeat);
         fprintf(stderr, "%lu\r", kBuff);
@@ -160,11 +159,11 @@ void AccessCacheLineSize() {
         #endif
         util::PCMMetric metric("rnd_write");
         debug_perf_switch();
-        auto time_start = Env::Default()->NowNanos();
+        auto time_start = util::NowNanos();
         for (uint64_t i = 0; i < repeat; i++) {
             RndWrite(addr, size_mask, interval);
         }
-        auto time_end   = Env::Default()->NowNanos();
+        auto time_end   = util::NowNanos();
         double duration = time_end - time_start;
         fprintf(file, "%f, ", duration / repeat);
         fprintf(stderr, "%lu\r", kBuff);
@@ -176,11 +175,11 @@ void AccessCacheLineSize() {
         #endif
         util::PCMMetric metric("seq_write");
         debug_perf_switch();
-        auto time_start = Env::Default()->NowNanos();
+        auto time_start = util::NowNanos();
         for (uint64_t i = 0; i < repeat; i++) {
             ConWrite(addr, size_mask2);
         }
-        auto time_end   = Env::Default()->NowNanos();
+        auto time_end   = util::NowNanos();
         double duration = time_end - time_start;
         fprintf(file, "%f, ", duration / repeat);
         fprintf(stderr, "%lu\r", kBuff);

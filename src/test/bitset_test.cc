@@ -1,6 +1,5 @@
 #include <immintrin.h>
 #include <cstdlib>
-#include "util/env.h"
 #include "util/pmm_util.h"
 
 #include "turbo/turbo_hash.h"
@@ -18,19 +17,19 @@ int main() {
         printf("has bit in pos: %d\n", i);
     }
     volatile size_t hash_val;
-    auto time_start = util::Env::Default()->NowMicros();
+    auto time_start = util::NowMicros();
     for (size_t i = 0; i < 100000000; i++) {
         hash_val = turbo::hash<size_t>{}(i);
     }
-    auto time_duration = util::Env::Default()->NowMicros();
+    auto time_duration = util::NowMicros();
     printf("duration for 100 million std::hash<size_t>: %f. %lu\n", time_duration / 1000000.0, hash_val);
 
     std::string value(15, 'a');
-    time_start = util::Env::Default()->NowMicros();
+    time_start = util::NowMicros();
     for (size_t i = 0; i < 100000000; i++) {
         hash_val = turbo::hash<std::string>{}(value);
     }
-    time_duration = util::Env::Default()->NowMicros();
+    time_duration = util::NowMicros();
     printf("duration for 100 million std::hash<std::string>: %f. %lu\n", time_duration / 1000000.0, hash_val);
     
 

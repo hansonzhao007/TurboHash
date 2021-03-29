@@ -332,7 +332,7 @@ static std::string TrimSpace(std::string s) {
 
 }
 
-#define POOL_SIZE (10737418240) // 10GB
+#define POOL_SIZE (10737418240L * 10L) // 100GB
 class Benchmark {
 
 public:

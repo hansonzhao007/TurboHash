@@ -1,5 +1,4 @@
 # ----- Dram hash test ----
-db_test(trace_test)
 db_test(bitset_test)
 db_test(spinlock_test)
 db_test(hash_test)
