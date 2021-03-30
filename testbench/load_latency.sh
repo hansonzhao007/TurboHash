@@ -5,17 +5,17 @@ SOCKET_NO=0
 
 numactl -N $SOCKET_NO sudo ../Dash/release/ycsb_bench  --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.dash
 
-numactl -N $SOCKET_NO sudo ../release/hash_bench  --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 --bucket_count=65536 --cell_count=16 --no_rehash=false | tee load_latency.turbo
+# numactl -N $SOCKET_NO sudo ../release/hash_bench  --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 --bucket_count=65536 --cell_count=16 --no_rehash=false | tee load_latency.turbo
 
-numactl -N $SOCKET_NO sudo ../release/hash_bench_30  --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 --bucket_count=65536 --cell_count=16 --no_rehash=false | tee load_latency.turbo30
+# numactl -N $SOCKET_NO sudo ../release/hash_bench_30  --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 --bucket_count=65536 --cell_count=16 --no_rehash=false | tee load_latency.turbo30
 
-numactl -N $SOCKET_NO sudo ../CCEH-PMDK/ycsb_bench --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.cceh
+# numactl -N $SOCKET_NO sudo ../CCEH-PMDK/ycsb_bench --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.cceh
 
-numactl -N $SOCKET_NO sudo ../Clevel-Hashing/release/tests/ycsb_bench_cceh30 --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.cceh30
+# numactl -N $SOCKET_NO sudo ../Clevel-Hashing/release/tests/ycsb_bench_cceh30 --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.cceh30
 
-numactl -N $SOCKET_NO sudo ../Clevel-Hashing/release/tests/ycsb_bench_clevel30 --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.clevel30
+# numactl -N $SOCKET_NO sudo ../Clevel-Hashing/release/tests/ycsb_bench_clevel30 --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.clevel30
 
-numactl -N $SOCKET_NO sudo ../Clevel-Hashing/release/tests/ycsb_bench_clht30 --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.clht30
+# numactl -N $SOCKET_NO sudo ../Clevel-Hashing/release/tests/ycsb_bench_clht30 --thread=16 --benchmarks=loadlat --stats_interval=10000000 --read=10000000 --num=100000000 | tee load_latency.clht30
 
 
 
