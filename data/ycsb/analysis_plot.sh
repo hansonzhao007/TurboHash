@@ -9,7 +9,7 @@ do
     outfile="ycsb_${i}.parse"
     oneline=""
     index=0
-    echo "load,ycsba,ycsbb,ycsbc,ycsbd,ycsbf" >> $outfile
+    echo "load,ycsbd,ycsba,ycsbb,ycsbc,ycsbf" >> $outfile
     while read line; do
         if [ -n "$(echo $line | grep "load ")" ]; then  
             iops=`echo $line |  awk '{print $5}'`
