@@ -2377,14 +2377,14 @@ private:
         // locate the target slot
         HashSlot* slot  = locateSlot(cell_addr, info.slot);
 
-        // store the key value to slot
-        value_type* record = (value_type*)slot;
-        record->Store(hash_value, key, value, record_allocator_);
-       
         // set H2
         H2Tag* h2_tag_ptr   = locateH2Tag(cell_addr, info.slot);
         *h2_tag_ptr         = info.H2;
 
+        // store the key value to slot, contain sfence
+        value_type* record = (value_type*)slot;
+        record->Store(hash_value, key, value, record_allocator_);
+       
         // obtain bitmap and set bitmap
         //  0 - 15: valid_bitmap zone
         // 16 - 31: delete_bitmap zone

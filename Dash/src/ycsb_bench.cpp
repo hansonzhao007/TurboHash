@@ -692,7 +692,7 @@ public:
         }
         size_t interval = num_ / FLAGS_thread;
         size_t start_offset = thread->tid * interval;
-        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval / 1000 * 999);
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval / 100 * 95);
         printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
         thread->stats.Start();
         size_t deleted = 0;
