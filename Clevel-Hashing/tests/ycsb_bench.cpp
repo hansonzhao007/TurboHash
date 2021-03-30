@@ -45,9 +45,9 @@ DEFINE_bool(hist, false, "");
 DEFINE_string(benchmarks, "load,readrandom", "");
 
 // #define TYPE_CCEH
-#define TYPE_CLEVEL
+// #define TYPE_CLEVEL
 // #define TYPE_LEVEL
-// #define TYPE_CLHT
+#define TYPE_CLHT
 
 // #define DEBUG_RESIZING 1
 
@@ -448,7 +448,7 @@ public:
         key_trace_(nullptr) {
         
         remove(FLAGS_filepath.c_str()); // delete the mapped file.
-        pop_ = nvobj::pool<root>::create(FLAGS_filepath.c_str(), LAYOUT, PMEMOBJ_MIN_POOL * 20480, S_IWUSR | S_IRUSR);
+        pop_ = nvobj::pool<root>::create(FLAGS_filepath.c_str(), LAYOUT, PMEMOBJ_MIN_POOL * 40960, S_IWUSR | S_IRUSR);
         auto proot = pop_.root();
         {
             nvobj::transaction::manual tx(pop_);
