@@ -572,26 +572,30 @@ public:
     }
 
     inline YCSBOpType NextA() {
+        static uint64_t rnd_num = 0;
         // ycsba: 50% reads, 50% writes
-        uint32_t rnd_num = wyhash32();
-
+        rnd_num++;
         if ((rnd_num & 0x1) == 0) {
             return kYCSB_Read;
         } else {
             return kYCSB_Write;
         }
+        
     }
 
     inline YCSBOpType NextB() {
+        static uint64_t rnd_num = 0;
         // ycsbb: 95% reads, 5% writes
         // 51/1024 = 0.0498
-        uint32_t rnd_num = wyhash32();
+        rnd_num++;
+        rnd_num &= 1023;
 
-        if ((rnd_num & 1023) < 51) {
+        if (rnd_num < 51) {
             return kYCSB_Write;
         } else {
             return kYCSB_Read;
         }
+        
     }
 
     inline YCSBOpType NextC() {
@@ -604,13 +608,13 @@ public:
     }
 
     inline YCSBOpType NextF() {
+        static uint64_t rnd_num = 0;
         // ycsba: 50% reads, 50% writes
-        uint32_t rnd_num = wyhash32();
-
+        rnd_num++;
         if ((rnd_num & 0x1) == 0) {
             return kYCSB_Read;
         } else {
             return kYCSB_ReadModifyWrite;
-        }
+        }        
     }
 };
