@@ -4,7 +4,7 @@
 rm *.parse
 
 # Parse the latency frequency
-for i in cceh cceh30 clevel30 clht30 turbo turbo30
+for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
 do
     index=0
     datafile="load_latency.${i}"
@@ -29,7 +29,7 @@ done
 
 
 # Parse the latency statistics
-for i in cceh cceh30 clevel30 clht30 turbo turbo30
+for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
 do
     index=0
     datafile="load_latency.${i}"
@@ -65,7 +65,7 @@ done
 
 
 # Parse the io
-for i in cceh cceh30 clevel30 clht30 turbo turbo30
+for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
 do
     
     datafile="load_latency.${i}"

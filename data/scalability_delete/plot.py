@@ -10,9 +10,9 @@ from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
 # import matplotlib as mpl
 plt.rcParams['axes.linewidth'] = 2
 
-hashtables = ['turbo', 'cceh', 'turbo30', 'cceh30', 'clevel30', 'clht30']
-legend_name = ('TURBO16', 'CCEH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
 
+hashtables = ['turbo', 'dash', 'turbo30', 'clevel30', 'clht30']
+legend_name = ('TURBO16', 'DASH16', 'TURBO30', 'CLEVEL30', 'CLHT30')
 
 markers= {
     'turbo'   : 'o',     
@@ -40,16 +40,10 @@ colors= {
     'cceh30'  : '#7e72b5', 
     'clevel30': '#3182BD', 
     'clht30'  : '#808084'}
-     
-def Plot(filename, outfile, padding, title, ylabel, divide=1):
-    file1 = filename + ".parse"
-    file2 = filename + "_cceh.parse"
-    df1 = pd.read_csv(file1)
-    df2 = pd.read_csv(file2)
-    df = pd.concat([df1, df2], axis=1, join="inner")
-    df.drop(df.columns[5], axis=1, inplace=True)
     
-    df['thread'] = [1,2,4,8,16,20,24,28,32,36,40]
+def Plot(filename, outfile, padding, title, ylabel, divide=1):
+    df = pd.read_csv(filename)
+    df.set_index('thread')
     df[hashtables] = df[hashtables] / divide
     print(df)
     fig, ax = plt.subplots(figsize=(4, 3.6))
@@ -67,6 +61,7 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
             color=colors[i])
     
     ax.legend(legend_name, fontsize=9, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(-0.01, 0.92, 1.03, 0.1))
+    # ax.legend(legend_name, fontsize=9, fancybox=True, framealpha=0.5, edgecolor='k')
 
     # set y ticks
     ymin, ymax = ax.get_ylim()
@@ -93,13 +88,19 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
 
 def PlotScalability():
     # Plot throughput
-    Plot("scalability_update", "scalability_update.pdf", -10, "Update Throughput", "IOPS (Mops/s)")
+    # Plot("scalability_load.parse", "scalability_load.pdf", -8, "Write Throughput", "IOPS (Mops/s)")
+    # Plot("scalability_update.parse", "scalability_update.pdf", -10, "Update Throughput", "IOPS (Mops/s)")
+    Plot("scalability_delete.parse", "scalability_delete.pdf", -10, "Delete Throughput", "IOPS (Mops/s)")
     
     # Plot IO
-    Plot("scalability_update_io", "scalability_update_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
+    # Plot("scalability_load_io.parse", "scalability_load_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
+    # Plot("scalability_update_io.parse", "scalability_update_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
+    Plot("scalability_delete_io.parse", "scalability_delete_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)
     
     # Plot bw
-    Plot("scalability_update_bw", "scalability_update_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
+    # Plot("scalability_load_bw.parse", "scalability_load_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
+    # Plot("scalability_update_bw.parse", "scalability_update_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
+    Plot("scalability_delete_bw.parse", "scalability_delete_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
 
 PlotScalability()
 

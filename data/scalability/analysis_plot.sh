@@ -194,4 +194,4 @@ do
     echo $oneline_readnon_w >> $outfile_readnon_bw_w
 done
 
-# python3 plot.py
+python3 plot.py

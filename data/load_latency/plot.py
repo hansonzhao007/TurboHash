@@ -11,13 +11,13 @@ from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
 plt.rcParams['axes.linewidth'] = 2
 plt.rcParams['hatch.linewidth'] = 2  # previous pdf hatch linewidth
 
-hashtables = ('turbo', 'cceh', 'turbo30', 'cceh30', 'clevel30', 'clht30')
-legend_name = ('TURBO16', 'CCEH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
+hashtables = ('turbo', 'cceh', 'dash', 'turbo30', 'cceh30', 'clevel30', 'clht30')
+legend_name = ('TURBO16', 'CCEH16', 'DASH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
 
 colors= {
     'turbo'   : '#9B0522',     
     'cceh'    : '#83C047',
-    # 'dash'    : '#f7cd6b',
+    'dash'    : '#f7cd6b',
     'turbo30' : '#F37F82',
     'cceh30'  : '#7e72b5', 
     'clevel30': '#3182BD', 
@@ -105,20 +105,20 @@ def PlotNormal(df, ax, filename):
     normalized.plot(ax=ax, kind="bar", rot=0, color="white", width=0.75, edgecolor='k', linewidth=2, fontsize=26, alpha=1)
     # plot marker in bar
     bars = ax.patches
-    patterns =('//', ' ', '\\\\', '--', '..', 'xx')
+    patterns =('//', ' ', '\\\\', '//', '..', 'xx', ' ')
     patterns_color = list(colors.values())
     hatches_color = [p for p in patterns_color for i in range(len(normalized))]
     hatches = [p for p in patterns for i in range(len(normalized))]
     i=0
     for bar, hatch, color in zip(bars, hatches, hatches_color):
         # bar.set_alpha(0.1)
-        if (i <= 5):
+        if (i <= 8):
             bar.set_alpha(0.8)
             bar.set_color(color)
-            bar.set_edgecolor('white')
+            bar.set_edgecolor('k')
         else:
             bar.set_edgecolor(color)
-        bar.set_hatch(hatch)        
+        bar.set_hatch(hatch)
         i=i+1
         
 
