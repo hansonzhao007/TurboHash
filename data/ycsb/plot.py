@@ -64,10 +64,10 @@ def add_value_labels(ax, spacing, labels, pick_standard):
             ax.annotate(                
                 label,                      # Use `label` as label
                 (x_value, y_value),         # Place label at end of the bar
-                xytext=(-7, space),          # Vertically shift label by `space`
+                xytext=(-8, space),          # Vertically shift label by `space`
                 textcoords="offset points", # Interpret `xytext` as offset in points
                 ha='center',                # Horizontally center label
-                va=va, rotation=90, fontsize=12)                      # Vertically align label differently for
+                va=va, rotation=90, fontsize=10.5)                      # Vertically align label differently for
                                             # positive and negative values.
             j = j + 1
         i = i + 1
@@ -79,7 +79,7 @@ def PlotNormal(df, ax, filename):
         normalized.loc[kv] = normalized.loc[kv] / df.iloc[pick_standard]
     normalized = normalized.T
     print(normalized)
-    normalized.plot(ax=ax, kind="bar", rot=0, color='White', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
+    normalized.plot(ax=ax, kind="bar", rot=0, color='White', width=0.85, edgecolor='k', linewidth=1.7, fontsize=26, alpha=1)
     # plot marker in bar
     bars = ax.patches
     patterns =('//', ' ', '\\\\', '//', '..', 'xx', ' ')
@@ -106,8 +106,8 @@ def PlotNormal(df, ax, filename):
     # add_value_labels(ax, 7, amplification1, 1)
     # draw legend
     ax.get_legend().remove()
-    ax.legend(legend_name, fontsize=14, loc='upper left', ncol=3) #, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(0, 1.22, 1, 0))
-    ax.yaxis.grid(linewidth=1, linestyle='--')
+    ax.legend(legend_name, fontsize=14, loc='upper left', edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=4, bbox_to_anchor=(0, 1.2, 1, 0))
+    ax.yaxis.grid(linewidth=0.5, dashes=[8,8], color='gray', alpha=0.5)
     ax.set_axisbelow(True)
     ax.set_ylabel('Normalized Throughput', fontsize=22)
     plt.savefig(filename, bbox_inches='tight', pad_inches=0.05, dpi=600)
@@ -123,7 +123,7 @@ def PlotNormalYCSB():
     data.index = hashtables
     data.columns = ['Load', 'A', 'B', 'C', 'D', 'F']
     # Plot positive
-    ax = plt.figure(figsize=(9, 5)).add_subplot(111)
+    ax = plt.figure(figsize=(9, 4.5)).add_subplot(111)
     df = data
     print(df)
     PlotNormal(df, ax, 'ycsb.pdf')

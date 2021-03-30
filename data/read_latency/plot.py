@@ -41,7 +41,7 @@ def PlotIO():
     data[['readlat_r', 'readlat_w']].plot.bar(ax=ax, color=("#5E88C2", "red"), edgecolor='k',  stacked=True, width=0.25, position=1, fontsize=16, alpha=0.6)
     data[['readnonlat_r', 'readnonlat_w']].plot.bar(ax=ax, color=("white", "grey"), edgecolor='k',  stacked=True, width=0.25, position=0, fontsize=16, alpha=0.6)
     ax.set_axisbelow(True)
-    ax.grid(axis='y', linestyle='-.', linewidth=0.5)    
+    ax.yaxis.grid(linewidth=0.5, dashes=[8,8], color='gray', alpha=0.5) 
     ax.set_ylabel("Total IO (GB)", fontsize=16)
     ax.legend(["Positive Read", "Positive Write", "Negative Read", "Negative Write"], loc="upper left", fontsize=10, framealpha=1)
     ax.tick_params(axis='y', labelsize=16)
@@ -164,9 +164,11 @@ def add_value_labels(ax, spacing, labels, pick_standard):
 
             # Use Y value as label and format number with one decimal place
             label = "{:.1f}".format(labels[j])
-            if not unit:
-                label = label + " ns"
-                unit = True
+            label = label + " ns"
+            unit = True
+            # if not unit:
+            #     label = label + " ns"
+            #     unit = True
             # Create annotation
             ax.annotate(
                 label,                      # Use `label` as label
@@ -213,7 +215,7 @@ def PlotNormal(df, ax, filename):
     # draw legend
     ax.get_legend().remove()
     ax.legend(legend_name, fontsize=14) #, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(0, 1.22, 1, 0))
-    ax.yaxis.grid(linewidth=1, linestyle='--')
+    ax.yaxis.grid(linewidth=0.5, dashes=[8,8], color='gray', alpha=0.5)
     ax.set_axisbelow(True)
     ax.set_ylabel('Normalized Latency', fontsize=22)
     ax.set_ylim([0.1, 12.9])
