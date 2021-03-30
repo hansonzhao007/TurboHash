@@ -66,7 +66,7 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
     # set y ticks
     ymin, ymax = ax.get_ylim()
     ax.set_ylim([0.1, ymax*1.18])
-    for label in ax.yaxis.get_ticklabels()[-2:]: # hidden last ticklabel
+    for label in ax.yaxis.get_ticklabels()[-3:]: # hidden last ticklabel
         label.set_visible(False)
     ax.tick_params(axis="y", direction="inout", pad=padding)
     for label in ax.yaxis.get_ticklabels():
