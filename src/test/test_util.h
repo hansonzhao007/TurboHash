@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <fstream>
 #include <random>
+#include <thread>
 
 #define KEY_LEN ((15))
 
@@ -236,26 +237,29 @@ public:
     }
 
     inline YCSBOpType NextA() {
+        static thread_local uint64_t rnd_num = 0;
         // ycsba: 50% reads, 50% writes
-        uint32_t rnd_num = wyhash32();
 
         if ((rnd_num & 0x1) == 0) {
             return kYCSB_Read;
         } else {
             return kYCSB_Write;
         }
+        rnd_num++;
     }
 
     inline YCSBOpType NextB() {
+        static thread_local uint64_t rnd_num = 0;
         // ycsbb: 95% reads, 5% writes
         // 51/1024 = 0.0498
-        uint32_t rnd_num = wyhash32();
 
         if ((rnd_num & 1023) < 51) {
             return kYCSB_Write;
         } else {
             return kYCSB_Read;
         }
+        rnd_num++;
+        rnd_num &= 1023;
     }
 
     inline YCSBOpType NextC() {
@@ -268,13 +272,14 @@ public:
     }
 
     inline YCSBOpType NextF() {
+        static thread_local uint64_t rnd_num = 0;
         // ycsba: 50% reads, 50% writes
-        uint32_t rnd_num = wyhash32();
-
+        
         if ((rnd_num & 0x1) == 0) {
             return kYCSB_Read;
         } else {
             return kYCSB_ReadModifyWrite;
         }
+        rnd_num++;
     }
 };

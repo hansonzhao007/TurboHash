@@ -3,7 +3,7 @@
 rm *.parse
 
 # Parse the throughput
-for i in cceh cceh30 clevel30 clht30 turbo turbo30
+for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
 do
     datafile="ycsb.${i}"
     outfile="ycsb_${i}.parse"
