@@ -117,8 +117,4 @@ do
     echo $oneline_update_w >> $outfile_update_bw_w   
 done
 
-# bash analysis_cceh.sh
-
-# python3 plot_update.py
-
-# python3 plot_delete.py
+python3 plot.py

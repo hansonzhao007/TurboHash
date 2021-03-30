@@ -63,12 +63,12 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
             fillstyle='none',
             color=colors[i])
     
-    ax.legend(legend_name, fontsize=9, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(-0.01, 0.92, 1.03, 0.1))
+    ax.legend(legend_name, fontsize=9, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(-0.01, 0.765, 1.03, 0.1))
 
     # set y ticks
     ymin, ymax = ax.get_ylim()
     ax.set_ylim([0.1, ymax*1.18])
-    for label in ax.yaxis.get_ticklabels()[-2:]: # hidden last ticklabel
+    for label in ax.yaxis.get_ticklabels()[-3:]: # hidden last ticklabel
         label.set_visible(False)
     ax.tick_params(axis="y", direction="inout", pad=padding)
     for label in ax.yaxis.get_ticklabels():
