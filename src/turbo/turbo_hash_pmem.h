@@ -2623,6 +2623,10 @@ private:
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         BucketMetaDram* bucket_meta = locateBucket(bucket_i);
+        
+        // Obtain the bucket lock
+        BucketLockScope meta_lock(bucket_meta);
+
         ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
