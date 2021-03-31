@@ -1,4 +1,5 @@
-#include "turbo/turbo_hash.h"
+#include "turbo/turbo_hash_pmem.h"
+// #include "turbo/turbo_hash.h"
 #include "util/logger.h"
 
 #include "gflags/gflags.h"
@@ -6,12 +7,24 @@ using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
 
+#ifdef TURBO_HASH_H_
+using HashTable = turbo::unordered_map<std::string, std::string>;
+#define hashnamespace turbo
+#elif defined TURBO_HASH_PMEM_H_
+using HashTable = turbo_pmem::unordered_map<std::string, std::string>;
+#define hashnamespace turbo_pmem
+#endif
 
 int main() {
-    turbo::unordered_map<std::string, std::string> map;
-
+    remove("/mnt/pmem/turbo_hash_pmem_basemd");
+    remove("/mnt/pmem/turbo_hash_pmem_desc");
+    remove("/mnt/pmem/turbo_hash_pmem_sb");
     const size_t COUNT = 100000;
-    auto* hashtable = new turbo::unordered_map<std::string, std::string> (8, 128);
+
+    
+    auto* hashtable = new HashTable(8, 128);
+   
+    
     printf("------- Iterate empty hash table ------\n");
     printf("hashtable size: %lu, capacity: %lu, loadfactor: %f\n", hashtable->Size(), hashtable->Capacity(), hashtable->LoadFactor());
     hashtable->IterateAll();
@@ -57,14 +70,8 @@ int main() {
     hashtable->MinorReHashAll();
     read_fun();
 
-    // hashtable->MinorReHashAll();
-    // read_fun();
-
-    // hashtable->MinorReHashAll();
-    // read_fun();
-
     {
-        typedef turbo::unordered_map<int, double> MyHash;
+        typedef hashnamespace::unordered_map<int, double> MyHash;
         MyHash mapi(2, 32);
         // MyHash::HashSlot slot;
         // decltype(slot.entry) entry;
@@ -85,7 +92,7 @@ int main() {
     }
 
     {
-        typedef turbo::unordered_map<double, std::string> MyHash;
+        typedef hashnamespace::unordered_map<double, std::string> MyHash;
         MyHash mapi(2, 32);
         INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {
@@ -103,7 +110,7 @@ int main() {
     }
 
     {
-        typedef turbo::unordered_map<std::string, double> MyHash;
+        typedef hashnamespace::unordered_map<std::string, double> MyHash;
         MyHash mapi(2, 32);
         INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {
@@ -120,7 +127,7 @@ int main() {
     }
 
     {
-        typedef turbo::unordered_map<int, int> MyHash;
+        typedef hashnamespace::unordered_map<int, int> MyHash;
         MyHash mapi(2, 16);
         INFO("HashSlot size: %lu\n", sizeof(MyHash::HashSlot));
         for (int i = 0; i < 100; i++) {

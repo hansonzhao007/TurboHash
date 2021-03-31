@@ -1721,6 +1721,10 @@ public:
         // Do nothing
     }
 
+    TurboHashTable(uint32_t bucket_count, uint32_t cell_count) {
+        Initialize(bucket_count, cell_count);
+    }
+
     ~TurboHashTable() {
         RP_close();
     }
@@ -1855,6 +1859,10 @@ public:
         return sum;
     }
 
+    size_t Size() {
+        // TODO
+        return 0;
+    }
     /** MinorReHashAll
      *  @note: not thread safe. This global rehashing will double the hash table capacity.
      *  ! 
@@ -2474,6 +2482,8 @@ private:
     */
     inline FindSlotForInsertResult findSlotForInsert(const Key& key, PartialHash& partial_hash) {        
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
+        int64_t  cell_to_insert = -1;
+        uint8_t  slot_to_insert = 0;
         BucketMetaDram* bucket_meta = locateBucket(bucket_i);
         ProbeWithinBucket probe(H1ToHash(partial_hash.H1_), bucket_meta->CellCountMask(), bucket_i);
 
@@ -2511,22 +2521,40 @@ private:
                 }
             }
             
-            // If there is more than one empty slot, return one.
+            // If there is more than one empty slot, this cell can accept insertion
             util::BitSet empty_bitset = meta.EmptyBitSet(); 
-            if (empty_bitset.validCount() > 1) {                    
-                    // return an empty slot for new insertion            
-                    return {{   offset.first,           /* bucket */
-                                offset.second,          /* cell */
-                                *empty_bitset,
-                                partial_hash.H1_,       /* H1 */
-                                partial_hash.H2_,       /* H2 */
-                                false                   /* equal_key */
-                                }, 
-                            true};                
+            if (empty_bitset.validCount() > 1) {
+                    cell_to_insert = offset.second;
+                    slot_to_insert = *empty_bitset;                                          
             }
-            
+
+            // Reach to the search path end
+            if (!meta.Full()) {
+                // return an empty slot for new insertion            
+                return {{   offset.first,           /* bucket */
+                            offset.second,          /* cell */
+                            *empty_bitset,
+                            partial_hash.H1_,       /* H1 */
+                            partial_hash.H2_,       /* H2 */
+                            false                   /* equal_key */
+                            }, 
+                        true};    
+            }
+                        
             // probe the next cell in the same bucket
             probe.next(); 
+        }
+
+        // We can insert to deleted slot
+        if (cell_to_insert != -1) {
+            return {{   bucket_i,
+                        cell_to_insert,
+                        slot_to_insert,
+                        partial_hash.H1_,
+                        partial_hash.H2_,
+                        false
+                    },
+                    true};
         }
 
         #ifdef TURBO_DEBUG_OUT
