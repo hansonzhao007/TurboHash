@@ -5,8 +5,8 @@
 cmake_minimum_required(VERSION 3.11)
 
 # THIS HAS TO COME BEFORE THE PROJECT LINE
-set(CMAKE_C_COMPILER "clang")
-set(CMAKE_CXX_COMPILER "clang++")
+# set(CMAKE_C_COMPILER "clang")
+# set(CMAKE_CXX_COMPILER "clang++")
 # THIS HAS TO COME BEFORE THE PROJECT LINE
 
 project(dash VERSION 0.0.1 LANGUAGES C CXX)
