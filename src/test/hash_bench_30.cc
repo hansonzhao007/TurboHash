@@ -5,10 +5,6 @@
 #include <condition_variable>   // std::condition_variable
 #include "typename.h"
 
-#ifdef CUCKOO
-#include <libcuckoo/cuckoohash_map.hh>
-#endif
-
 /* --------- Different HashTable --------*/
 #include "turbo/turbo_hash.h"
 #include "turbo/turbo_hash_pmem.h"
