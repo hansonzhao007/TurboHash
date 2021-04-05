@@ -16,7 +16,7 @@
 #include "ex_finger.h"
 
 // pool path and name
-static const char *pool_name = "/mnt/pmem0/pmem_hash.data";
+static const char *pool_name = "/mnt/pmem/pmem_hash.data";
 // pool size
 static const size_t pool_size = 1024ul * 1024ul * 1024ul * 10ul;
 

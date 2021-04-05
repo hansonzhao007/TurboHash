@@ -39,7 +39,7 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 DEFINE_int64(pool_size, 1024ul * 1024ul * 1024ul * 64ul, "pool size. default 64GB");
 DEFINE_string(filepath, "/mnt/pmem/dash.data", "");
 
-DEFINE_int32(segments, 12 * 1024, "the initial number of segments in extendible hashing. 12k has about 11 million capacity.");
+DEFINE_int32(segments, 8 * 1024, "the initial number of segments in extendible hashing. 8k has about 8 million capacity.");
 DEFINE_uint32(batch, 1000000, "report batch");
 
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
