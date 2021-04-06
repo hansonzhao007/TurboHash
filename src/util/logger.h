@@ -140,7 +140,7 @@ PosixLogger* NewLogger(const std::string& filename) {
     }
 }
 
-static PosixLogger* logger_ = NewLogger("log.log");
+static PosixLogger* logger_ = NewLogger("log" + std::to_string(time(0)) + ".log");
 
 #define __FILENAME__ ((strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__))
 

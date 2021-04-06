@@ -567,6 +567,7 @@ public:
                 auto record_ptr = hashtable_->Find(key_iterator.Next());
                 if (unlikely(record_ptr == nullptr)) {
                     not_find++;
+                    INFO("Not find key: %s\n", (*key_iterator).c_str());
                 }
             }
             thread->stats.FinishedBatchOp(j);

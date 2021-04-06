@@ -508,14 +508,60 @@ public:
 
 }; // end of class AtomicBitOps
 
-static inline bool turbo_bit_spin_try_lock(uint32_t *lock, int bit_pos) {
+// #define CAS(_p, _u, _v)                                             \
+//   (__atomic_compare_exchange_n(_p, _u, _v, false, __ATOMIC_ACQUIRE, \
+//                                __ATOMIC_ACQUIRE))
+
+
+// static inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
+// {
+//     uint32_t old_value = 0;
+//     uint32_t new_value = 0;
+//     do {
+//         while (true)  {
+//             old_value = __atomic_load_n(lock, __ATOMIC_ACQUIRE);
+//             if (!(old_value & (1 << bit_pos))) {
+//                 // not lock yet
+//                 break;
+//             }
+//             TURBO_CPU_RELAX();
+//         }
+//         new_value = old_value | (1 << bit_pos);
+//     } while (!CAS(lock, &old_value, new_value));
+// }
+
+// // return true if try lock succ
+// static inline bool turbo_bit_spin_try_lock(uint32_t *lock, int bit_pos) {
+//     uint32_t v = __atomic_load_n(lock, __ATOMIC_ACQUIRE);
+//     if (v & (1 << bit_pos)) {
+//         return false;
+//     }
+//     auto old_value = v;
+//     auto new_value = v | (1 << bit_pos);
+//     return CAS(lock, &old_value, new_value);
+// }
+
+// static inline void turbo_bit_spin_unlock(uint32_t *lock, int bit_pos)
+// {
+//     uint32_t v = *lock;
+//     v &= ~(1 << bit_pos);
+//     __atomic_store_n(lock, v, __ATOMIC_RELEASE);
+// }
+
+// // If locked, return true
+// static inline bool turbo_lockbusy(uint32_t *lock, int bit_pos) {
+//     uint32_t lock_value = __atomic_load_n(lock, __ATOMIC_ACQUIRE);   
+//     return lock_value & (1 << bit_pos);
+// }
+
+
+static inline bool turbo_bit_spin_try_lock(uint32_t *lock, int bit_pos) 
+{
     return AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_SPINLOCK_FREE;
 }
-
 static inline bool turbo_lockbusy(uint32_t *lock, int bit_pos) {
     return (*lock) & (1 << bit_pos);
 }
-
 static inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
 {
     while(1) {
@@ -526,7 +572,6 @@ static inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
         while (turbo_lockbusy(lock, bit_pos)) __builtin_ia32_pause();
     }
 }
-
 static inline void turbo_bit_spin_unlock(uint32_t *lock, int bit_pos)
 {
     TURBO_BARRIER();
@@ -1489,6 +1534,7 @@ public:
             data_ = a.data_;
         }
 
+        
         inline char* Address() {
             return (char*)(data_ >> 16);
         }
@@ -1521,10 +1567,40 @@ public:
             return util::turbo_lockbusy((uint32_t*)(&data_), 0);
         }
 
+        inline bool TryRehashLock(void) {
+            return util::turbo_bit_spin_try_lock((uint32_t*)(&data_), 1);
+        }
+
+        inline void RehashLock(void) {
+            util::turbo_bit_spin_lock((uint32_t*)(&data_), 1);
+        }
+
+        inline void RehashUnlock(void) {
+            util::turbo_bit_spin_unlock((uint32_t*)(&data_), 1);
+        }
+
+        inline bool IsRehashLocked(void) {
+            return util::turbo_lockbusy((uint32_t*)(&data_), 1);
+        }
+
         // LSB
         // | 1 bit lock | 7 bit reserved | 8 bit cell mask | 48 bit address |
         uint64_t data_;
         
+    };
+
+
+    class BucketLockScope {
+    public:
+        BucketLockScope(BucketMeta* bucket_meta) :
+            meta_(bucket_meta) {
+            meta_->Lock();
+        }
+
+        ~BucketLockScope() {
+            meta_->Unlock();
+        }
+        BucketMeta* meta_;
     };
 
     /** Usage: iterator every slot in the bucket, return the pointer in the slot
@@ -1957,13 +2033,14 @@ public:
         std::string res;
         char buffer[1024];
         BucketMeta* bucket_meta = locateBucket(bucket_i);
+        char* search_bucket_addr    = bucket_meta->Address();
         sprintf(buffer, "----- bucket %10u -----\n", bucket_i);
         res += buffer;
         ProbeWithinBucket probe(0, bucket_meta->CellCountMask(), bucket_i);
         uint32_t i = 0;
         int count_sum = 0;
         while (probe) {
-            char* cell_addr = locateCell(probe.offset());
+            char* cell_addr = locateCell(search_bucket_addr, probe.offset());
             CellMeta256V2 meta(cell_addr);
             int count = meta.OccupyCount();
             sprintf(buffer, "\t%4u - 0x%12lx: %s. Cell valid slot count: %d. ", i++, (uint64_t)cell_addr, meta.BitMapToString().c_str(), count);            
@@ -1988,13 +2065,14 @@ public:
         std::string res;
         char buffer[1024];
         BucketMeta* bucket_meta = locateBucket(bucket_i);
+        char* search_bucket_addr    = bucket_meta->Address();
         ProbeWithinBucket probe(0, bucket_meta->CellCountMask(), bucket_i);
         uint32_t i = 0;
         int count_sum = 0;
         size_t probe_sum = 0;
         size_t cur_probe = 0;
         while (probe) {
-            char* cell_addr = locateCell(probe.offset());
+            char* cell_addr = locateCell(search_bucket_addr, probe.offset());
             CellMeta256V2 meta(cell_addr);
             int count = meta.OccupyCount();            
             if (count < meta.SlotCount() - 1) {
@@ -2048,8 +2126,8 @@ private:
 
     // offset.first: bucket index
     // offset.second: cell index
-    inline char* locateCell(const std::pair<size_t, size_t>& offset) {
-        return  buckets_[offset.first].Address() +      // locate the bucket
+    inline char* locateCell(char* bucket_addr, const std::pair<size_t, size_t>& offset) {
+        return  bucket_addr +      // locate the bucket
                 (offset.second << kCellSizeLeftShift);  // locate the cell cell
     }
   
@@ -2123,85 +2201,90 @@ private:
     after_rehash:
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
         BucketMeta* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
-        // BucketLockScope meta_lock(bucket_meta);
-        while (bucket_meta->IsLocked()) {
+
+        while (bucket_meta->IsRehashLocked()) {
             TURBO_CPU_RELAX();
         }
+        
+        FindSlotForInsertResult res = findSlotForInsert(key, partial_hash);
 
-        bool retry_find = false;
-        do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
+        // find a valid slot in target cell
+        if (res.find) {            
+            // Obtain the bucket lock
+            BucketLockScope meta_lock(bucket_meta);
 
-            FindSlotForInsertResult res = findSlotForInsert(key, partial_hash);
+            // it is possible after obtain the bucket lock. the bucket already be rehashed. we need to compare the old address in res with current one
+            char* bucket_addr    = bucket_meta->Address();
+            if (bucket_addr != res.search_bucket_addr) {
+                goto after_rehash;
+            }
 
-            // find a valid slot in target cell
-            if (res.find) { 
-                char* cell_addr = locateCell({res.target_slot.bucket, res.target_slot.cell});
+            char* cell_addr = locateCell(bucket_addr, {res.target_slot.bucket, res.target_slot.cell});            
+            
+            CellMeta256V2 meta(cell_addr);   // obtain the meta part
 
-                util::SpinLockScope<0> lock_scope(cell_addr); // Lock current cell
+            if (TURBO_LIKELY( !meta.Occupy(res.target_slot.slot) )) { 
+                // If the new slot from 'findSlotForInsert' is not occupied, insert directly
 
-                CellMeta256V2 meta(cell_addr);   // obtain the meta part
+                insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot); // update slot content (including pointer and H1), H2 and bitmap
 
-                if (TURBO_LIKELY( !meta.Occupy(res.target_slot.slot) )) { 
-                    // If the new slot from 'findSlotForInsert' is not occupied, insert directly
+                // TODO: use thread_local variable to improve write performance
+                // if (!res.target_slot.equal_key) {
+                //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                // }
 
-                    insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot); // update slot content (including pointer and H1), H2 and bitmap
+                return true;
+            } else if (res.target_slot.equal_key) {
+                // If this is an update request and the backup slot is occupied,
+                // it means the backup slot has changed in current cell. So we 
+                // update the slot location.
+                util::BitSet empty_bitset = meta.EmptyBitSet(); 
+                if (TURBO_UNLIKELY(!empty_bitset)) {
+                    TURBO_ERROR(" Cannot update.");
+                    printf("Cannot update.\n");
+                    exit(1);
+                }
 
-                    // TODO: use thread_local variable to improve write performance
-                    // if (!res.target_slot.equal_key) {
-                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
-                    // }
+                res.target_slot.slot = *empty_bitset;
+                insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot);
+                return true;
+            } else { 
+                // current new slot has been occupied by another concurrent thread.
 
-                    return true;
-                } else if (res.target_slot.equal_key) {
-                    // If this is an update request and the backup slot is occupied,
-                    // it means the backup slot has changed in current cell. So we 
-                    // update the slot location.
-                    util::BitSet empty_bitset = meta.EmptyBitSet(); 
-                    if (TURBO_UNLIKELY(!empty_bitset)) {
-                        TURBO_ERROR(" Cannot update.");
-                        printf("Cannot update.\n");
-                        exit(1);
-                    }
-
+                // Before retry 'findSlotForInsert', find if there is any empty slot for insertion
+                util::BitSet empty_bitset = meta.EmptyBitSet();
+                if (empty_bitset.validCount() > 1) {
                     res.target_slot.slot = *empty_bitset;
                     insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot);
                     return true;
-                } else { 
-                    // current new slot has been occupied by another concurrent thread.
-
-                    // Before retry 'findSlotForInsert', find if there is any empty slot for insertion
-                    util::BitSet empty_bitset = meta.EmptyBitSet();
-                    if (empty_bitset.validCount() > 1) {
-                        res.target_slot.slot = *empty_bitset;
-                        insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot);
-                        return true;
-                    }
-
-                    // Current cell has no empty slot for insertion, we retry 'findSlotForInsert'
-                    // This unlikely happens with all previous effort.
-                    TURBO_INFO("retry find slot in Bucket " << res.target_slot.bucket <<
-                               ". Cell " << res.target_slot.cell <<
-                               ". Slot " << res.target_slot.slot <<
-                               ". Key: " << key );
-                    retry_find = true;
                 }
+
+                // Current cell has no empty slot for insertion, we retry 'findSlotForInsert'
+                // This unlikely happens with all previous effort.
+                TURBO_INFO("retry find slot in Bucket " << res.target_slot.bucket <<
+                            ". Cell " << res.target_slot.cell <<
+                            ". Slot " << res.target_slot.slot <<
+                            ". Key: " << key );
+                goto after_rehash;
             }
-            else { // cannot find a valid slot for insertion, rehash current bucket then retry
+        }
+        else { // cannot find a valid slot for insertion, rehash current bucket then retry
 
-                // Obtain the Bucket lock, rehash if success. Otherwise, other thread is already rehashing. 
-                if (bucket_meta->TryLock()) {
-                    // PrintAlProbeLen();
-                    MinorRehash(res.target_slot.bucket);
-                    bucket_meta->Unlock();
-                    retry_find = true;
-                    continue;
-                }
+            // Obtain the Bucket rehash lock. Otherwise, other thread is already rehashing. 
+            if (bucket_meta->TryRehashLock()) {
+                // Obtain the bucket lock, so other thread will not insert during rehashing
+                BucketLockScope meta_lock(bucket_meta); 
 
+                // PrintAlProbeLen();
+                // minor rehash will change the address part of bucket_meta
+                MinorRehash(res.target_slot.bucket);
+                bucket_meta->RehashUnlock();                               
+            } else {
                 // While the other thread is rehashing, we can start from beginning
-                TURBO_INFO("Concurrent rehash happens.");                
-                goto after_rehash;            
-            }
-        } while (retry_find);
+                TURBO_INFO("Concurrent rehash happens."); 
+            }                           
+            goto after_rehash;            
+        }        
         
         return false;
     }
@@ -2226,6 +2309,7 @@ private:
 
     struct FindSlotForInsertResult {
         SlotInfo target_slot;
+        char*    search_bucket_addr;
         bool     find;
     };
 
@@ -2240,13 +2324,14 @@ private:
         int64_t  cell_to_insert = -1;
         uint8_t  slot_to_insert = 0;
         BucketMeta* bucket_meta = locateBucket(bucket_i);
+        char* search_bucket_addr = bucket_meta->Address();
         ProbeWithinBucket probe(H1ToHash(partial_hash.H1_), bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeWithinBucket::MAX_PROBE_LEN)) {
             // Go to target cell
             auto offset = probe.offset();
-            char* cell_addr = locateCell(offset);
+            char* cell_addr = locateCell(search_bucket_addr, offset);
             CellMeta256V2 meta(cell_addr);
 
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // if there is any H2 match in this cell (SIMD)
@@ -2270,7 +2355,8 @@ private:
                                     partial_hash.H2_,       /* H2 */
                                     true,                   /* equal_key */
                                     i                       /* old slot */
-                                    },                  
+                                    },
+                                search_bucket_addr,
                                 true};
                     }
                 }
@@ -2292,7 +2378,8 @@ private:
                             partial_hash.H1_,       /* H1 */
                             partial_hash.H2_,       /* H2 */
                             false                   /* equal_key */
-                            }, 
+                            },
+                        search_bucket_addr,
                         true};    
             }
             
@@ -2308,12 +2395,13 @@ private:
         // We can insert to deleted slot
         if (cell_to_insert != -1) {
             return {{   bucket_i,
-                        cell_to_insert,
+                        (uint32_t)cell_to_insert,
                         slot_to_insert,
                         partial_hash.H1_,
                         partial_hash.H2_,
                         false
                     },
+                    search_bucket_addr,
                     true};
         }
         
@@ -2327,6 +2415,7 @@ private:
                     partial_hash.H2_, 
                     false
                     },
+                search_bucket_addr,
                 false};
     }
     
@@ -2339,12 +2428,13 @@ private:
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         BucketMeta* bucket_meta = locateBucket(bucket_i);
+        char* search_bucket_addr    = bucket_meta->Address();
         ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeWithinBucket::MAX_PROBE_LEN)) {
             auto offset = probe.offset();
-            char* cell_addr = locateCell(offset);
+            char* cell_addr = locateCell(search_bucket_addr, offset);
             CellMeta256V2 meta(cell_addr);
             
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell                                                                
@@ -2381,12 +2471,14 @@ private:
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         BucketMeta* bucket_meta = locateBucket(bucket_i);
+        char* search_bucket_addr    = bucket_meta->Address();
+        BucketLockScope meta_lock(bucket_meta);
         ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeWithinBucket::MAX_PROBE_LEN)) {
             auto offset = probe.offset();
-            char* cell_addr = locateCell(offset);
+            char* cell_addr = locateCell(search_bucket_addr, offset);
 
             CellMeta256V2 meta(cell_addr);
 
@@ -2423,12 +2515,13 @@ private:
         PartialHash partial_hash(key, hash_value);
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         BucketMeta* bucket_meta = locateBucket(bucket_i);
+        char* search_bucket_addr    = bucket_meta->Address();
         ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
         while (probe && (probe_count++ < ProbeWithinBucket::MAX_PROBE_LEN)) {
             auto offset = probe.offset();
-            char* cell_addr = locateCell(offset);
+            char* cell_addr = locateCell(search_bucket_addr, offset);
             CellMeta256V2 meta(cell_addr);
             
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell                                                                

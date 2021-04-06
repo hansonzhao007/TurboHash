@@ -603,6 +603,7 @@ public:
                 auto record_ptr = hashtable_->Find(key_iterator.Next());
                 if (unlikely(record_ptr == nullptr)) {
                     not_find++;
+                    INFO("Not find key: %lu\n", *key_iterator);
                 }
             }
             thread->stats.FinishedBatchOp(j);

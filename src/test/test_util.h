@@ -42,6 +42,10 @@ public:
             return (cur_index_ < end_index_);
         }
 
+        inline size_t operator*() {
+            return (*pkey_vec_)[cur_index_];
+        }
+
         inline size_t Next() {
             return (*pkey_vec_)[cur_index_++];
         }
@@ -77,6 +81,10 @@ public:
                 cur_index_ = 0;
             }
             return (*pkey_vec_)[index];
+        }
+
+        inline size_t operator*() {
+            return (*pkey_vec_)[cur_index_];
         }
 
         std::string Info() {
@@ -183,6 +191,10 @@ public:
             return (*pkey_vec_)[index];
         }
 
+        inline std::string& operator*() {
+            return (*pkey_vec_)[cur_index_];
+        }
+        
         std::string Info() {
             char buffer[128];
             sprintf(buffer, "valid: %s, cur i: %lu, end_i: %lu, range: %lu", Valid() ? "true" : "false", cur_index_, end_index_, range_);

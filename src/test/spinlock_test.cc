@@ -53,8 +53,14 @@ int main() {
     turbo::util::turbo_bit_spin_lock(lock_value, 0);
     printf("succ lock. lock value: %08x\n", *lock_value);
 
+    bool res = turbo::util::turbo_bit_spin_try_lock(lock_value, 0);
+    printf("should fail to try lock the same position. %s\n", res ? "succ" : "fail");
+    
     turbo::util::turbo_bit_spin_unlock(lock_value, 0);
     printf("succ unlock. lock value: %08x\n", *lock_value);
+
+    
+
 
     int kLoops = 100000;
 
