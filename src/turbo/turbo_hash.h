@@ -1678,7 +1678,8 @@ public:
                 cell_i_++;
                 if (cell_i_ == cell_count_) return;
                 char* cell_addr = bucket_addr_ + ( cell_i_ << CellMeta256V2::CellSizeLeftShift );
-                bitmap_ = util::BitSet(*(uint32_t*)(cell_addr) & CellMeta256V2::BitMapMask); 
+                CellMeta256V2 meta(cell_addr);
+                bitmap_ = meta.ValidBitSet();
             }
         }
 
@@ -2469,10 +2470,16 @@ private:
 
     inline bool deleteSlot(const Key& key, size_t hash_value) {
         PartialHash partial_hash(key, hash_value);
+
+after_rehash:
         uint32_t bucket_i = bucketIndex(partial_hash.bucket_hash_);
         BucketMeta* bucket_meta = locateBucket(bucket_i);
         char* search_bucket_addr    = bucket_meta->Address();
-        BucketLockScope meta_lock(bucket_meta);
+
+        while (bucket_meta->IsRehashLocked()) {
+            TURBO_CPU_RELAX();
+        }
+        
         ProbeWithinBucket probe(H1ToHash(partial_hash.H1_),  bucket_meta->CellCountMask(), bucket_i);
 
         int probe_count = 0; // limit probe times
@@ -2483,17 +2490,62 @@ private:
             CellMeta256V2 meta(cell_addr);
 
             for (int i : meta.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell
-
+                
                 HashSlot* slot = locateSlot(cell_addr, i); // locate the slot reference
 
                 if (TURBO_LIKELY(slot->H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
                 {
                     value_type* record = (value_type*)slot;
-
+                
                     if (SlotKeyEqual<Key, is_key_flat>{}(key, record)) {
                         // If this key exsit, set the deleted bitmap
+                        
+                        // Obtain the bucket lock
+                        BucketLockScope meta_lock(bucket_meta);
+
+                         // it is possible after obtain the bucket lock,
+                         // the bucket has already been rehashed. we need to compare the old address
+                        char* bucket_addr = bucket_meta->Address();
+                        if (bucket_addr != search_bucket_addr) {
+                            goto after_rehash;
+                        }
+
+                        int delete_pos = i;
+
+                        // Three cases before deletion.
+                        // Case 1: An new insert happens before the deletion. This does not change the position of the key we want to delete.                        
+                        // !Case 2: An update happens before the deletion, We need to delete the updated location. 
+                        // Case 3: Same deletion happens. It's ok to delete again.
+                        uint32_t valid_and_delete_after_lock = __atomic_load_n((uint32_t*)cell_addr, __ATOMIC_ACQUIRE);
+                        uint16_t valid_bitmap = valid_and_delete_after_lock & CellMeta256V2::BitMapMask;
+                        uint16_t delete_bitmap = valid_and_delete_after_lock >> 16;
+                        if (valid_bitmap != meta.bitmap_) {
+                            // The bitmap has been changed after lock
+
+                            bool is_delete_key_been_updated = (valid_bitmap & ( 1 << i)) == 0;
+
+                            if (is_delete_key_been_updated) {
+                                // case 2. find the new delete position
+                                CellMeta256V2 meta_after_lock(cell_addr);
+                                for (int j : meta_after_lock.MatchBitSet(partial_hash.H2_)) {  // Locate if there is any H2 match in this cell
+                
+                                    HashSlot* slot = locateSlot(cell_addr, j); // locate the slot reference
+
+                                    if (TURBO_LIKELY(slot->H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
+                                    {
+                                        value_type* record = (value_type*)slot;
+                                    
+                                        if (SlotKeyEqual<Key, is_key_flat>{}(key, record)) {
+                                            delete_pos = j;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }                            
+                        }
+
                         uint32_t* bitmap = (uint32_t*)cell_addr;
-                        util::AtomicBitOps::BitTestAndSet(bitmap, 16 + i);
+                        util::AtomicBitOps::BitTestAndSet(bitmap, 16 + delete_pos);
                         return true;
                     }                                        
                 }

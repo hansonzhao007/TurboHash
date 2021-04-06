@@ -440,6 +440,10 @@ public:
                 fresh_db = false;
                 key_trace_->Randomize();
                 method = &Benchmark::DoRead;                
+            } else if (name == "readall") {
+                fresh_db = false;
+                key_trace_->Randomize();
+                method = &Benchmark::DoReadAll;                
             } else if (name == "readnon") {
                 fresh_db = false;
                 method = &Benchmark::DoReadNon;                
@@ -567,7 +571,7 @@ public:
                 auto record_ptr = hashtable_->Find(key_iterator.Next());
                 if (unlikely(record_ptr == nullptr)) {
                     not_find++;
-                    INFO("Not find key: %s\n", (*key_iterator).c_str());
+                    // INFO("Not find key: %s\n", (*key_iterator).c_str());
                 }
             }
             thread->stats.FinishedBatchOp(j);
@@ -577,6 +581,38 @@ public:
         INFO("DoRead thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
         thread->stats.AddMessage(buf);
     }
+
+    void DoReadAll(ThreadState* thread) {
+        INFO("DoReadAll");
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            ERROR("DoReadAll lack key_trace_ initialization.");
+            return;
+        }
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between(start_offset, start_offset + interval);
+        printf("thread %2d, between %lu - %lu\n", thread->tid, start_offset, start_offset + interval);
+        size_t not_find = 0;
+        Duration duration(FLAGS_readtime, interval);
+        thread->stats.Start();        
+        while (!duration.Done(batch) && key_iterator.Valid()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid(); j++) {                         
+                auto record_ptr = hashtable_->Find(key_iterator.Next());
+                if (unlikely(record_ptr == nullptr)) {
+                    not_find++;                    
+                }
+            }
+            thread->stats.FinishedBatchOp(j);
+        }
+        char buf[100];
+        snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", interval, not_find);
+        INFO("DoReadAll thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, interval, not_find);
+        thread->stats.AddMessage(buf);
+    }
+
+    
 
     void DoReadNon(ThreadState* thread) {
         INFO("DoReadNon");
