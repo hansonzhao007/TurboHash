@@ -502,7 +502,7 @@ static inline bool turbo_bit_spin_try_lock(uint32_t *lock, int bit_pos) {
     return AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_PMEM_SPINLOCK_FREE;
 }
 
-static inline bool turbo_lockbusy(uint32_t *lock, int bit_pos) {
+static inline bool turbo_lockbusy(uint32_t *lock, int bit_pos) {    
     return (*lock) & (1 << bit_pos);
 }
 
@@ -513,13 +513,13 @@ static inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
         if (AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_PMEM_SPINLOCK_FREE) {
             return;
         }
-        while (turbo_lockbusy(lock, bit_pos)) __builtin_ia32_pause();
+        while (turbo_lockbusy(lock, bit_pos)) TURBO_PMEM_CPU_RELAX();
     }
 }
 
 static inline void turbo_bit_spin_unlock(uint32_t *lock, int bit_pos)
 {
-    TURBO_PMEM_BARRIER();
+    std::atomic_thread_fence(std::memory_order_release);
     *lock &= ~(1 << bit_pos);
 }
 
@@ -1534,7 +1534,25 @@ public:
         }
 
         inline bool IsLocked(void) {
+            std::atomic_thread_fence(std::memory_order_acquire);
             return util::turbo_lockbusy((uint32_t*)(&data_), 0);
+        }
+
+        inline bool TryRehashLock(void) {
+            return util::turbo_bit_spin_try_lock((uint32_t*)(&data_), 1);
+        }
+
+        inline void RehashLock(void) {
+            util::turbo_bit_spin_lock((uint32_t*)(&data_), 1);
+        }
+
+        inline void RehashUnlock(void) {
+            util::turbo_bit_spin_unlock((uint32_t*)(&data_), 1);
+        }
+
+        inline bool IsRehashLocked(void) {
+            std::atomic_thread_fence(std::memory_order_acquire);
+            return util::turbo_lockbusy((uint32_t*)(&data_), 1);
         }
 
         // LSB
@@ -2408,11 +2426,7 @@ private:
             new_bitmap &= ~( 1 << (16 + info.slot) ); // clean the delete_bitmap
         }
 
-        // add a fence here. 
-        // Make sure the bitmap is updated after H2
-        // https://www.modernescpp.com/index.php/fences-as-memory-barriers
-        // https://preshing.com/20130922/acquire-and-release-fences/
-        TURBO_PMEM_COMPILER_FENCE();
+        std::atomic_thread_fence(std::memory_order_release);
         *bitmap = new_bitmap;
         FLUSH(bitmap);
         FLUSHFENCE;
@@ -2421,12 +2435,13 @@ private:
     inline bool insertSlot(const Key& key, const T& value, size_t hash_value) {
         // Obtain the partial hash
         PartialHash partial_hash(key, hash_value);
-
+        
+after_rehash:
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
-        BucketMetaDram* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));
-
-        // Obtain the bucket lock
-        BucketLockScope meta_lock(bucket_meta);
+        BucketMetaDram* bucket_meta = locateBucket(bucketIndex(partial_hash.bucket_hash_));        
+        while (bucket_meta->IsRehashLocked()) {
+            TURBO_PMEM_CPU_RELAX();
+        }
 
         bool retry_find = false;
         do { // concurrent insertion may find same position for insertion, retry insertion if neccessary
@@ -2437,14 +2452,72 @@ private:
             if (res.find) { 
                 char* cell_addr = locateCell({res.target_slot.bucket, res.target_slot.cell});
 
-                insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot); // update slot content (including pointer and H1), H2 and bitmap
+                // Obtain the bucket lock
+                BucketLockScope meta_lock(bucket_meta);
 
-                return true;               
+                std::atomic_thread_fence(std::memory_order_acquire);
+
+                CellMeta256V2 meta(cell_addr);   // obtain the meta part
+
+                if (TURBO_PMEM_LIKELY( !meta.Occupy(res.target_slot.slot) )) { 
+                    // If the new slot from 'findSlotForInsert' is not occupied, insert directly
+
+                    insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot); // update slot content (including pointer and H1), H2 and bitmap
+
+                    // TODO: use thread_local variable to improve write performance
+                    // if (!res.target_slot.equal_key) {
+                    //     size_.fetch_add(1, std::memory_order_relaxed); // size + 1
+                    // }
+
+                    return true;
+                } else if (res.target_slot.equal_key) {
+                    // If this is an update request and the backup slot is occupied,
+                    // it means the backup slot has changed in current cell. So we 
+                    // update the slot location.
+                    util::BitSet empty_bitset = meta.EmptyBitSet(); 
+                    if (TURBO_PMEM_UNLIKELY(!empty_bitset)) {
+                        TURBO_PMEM_ERROR(" Cannot update.");
+                        printf("Cannot update.\n");
+                        exit(1);
+                    }
+
+                    res.target_slot.slot = *empty_bitset;
+                    insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot);
+                    return true;
+                } else { 
+                    // current new slot has been occupied by another concurrent thread.
+
+                    // Before retry 'findSlotForInsert', find if there is any empty slot for insertion
+                    util::BitSet empty_bitset = meta.EmptyBitSet();
+                    if (empty_bitset.validCount() > 1) {
+                        res.target_slot.slot = *empty_bitset;
+                        insertToSlotAndRecycle(hash_value, key, value, cell_addr, res.target_slot);
+                        return true;
+                    }
+
+                    // Current cell has no empty slot for insertion, we retry 'findSlotForInsert'
+                    // This unlikely happens with all previous effort.
+                    TURBO_PMEM_INFO("retry find slot in Bucket " << res.target_slot.bucket <<
+                               ". Cell " << res.target_slot.cell <<
+                               ". Slot " << res.target_slot.slot <<
+                               ". Key: " << key );
+                    retry_find = true;
+                }
             }
             else { // cannot find a valid slot for insertion, rehash current bucket then retry
-                MinorRehash(res.target_slot.bucket);
-                retry_find = true;
-                continue;
+
+                // Obtain the Bucket lock, rehash if success. Otherwise, other thread is already rehashing. 
+                if (bucket_meta->TryRehashLock()) {
+                    // PrintAlProbeLen();
+                    MinorRehash(res.target_slot.bucket);
+                    bucket_meta->RehashUnlock();
+                    retry_find = true;
+                    continue;
+                }
+
+                // While the other thread is rehashing, we can start from beginning
+                TURBO_PMEM_INFO("Concurrent rehash happens.");                
+                goto after_rehash;            
             }
         } while (retry_find);
         
