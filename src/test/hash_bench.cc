@@ -619,6 +619,7 @@ public:
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
+        printf("thread %2d num: %lu, not find: %lu\n",thread->tid, reads_, not_find);
         INFO("DoRead thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
         thread->stats.AddMessage(buf);
     }
@@ -649,6 +650,7 @@ public:
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", interval, not_find);
+        printf("thread %2d num: %lu, not find: %lu\n",thread->tid, interval, not_find);
         INFO("DoReadAll thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, interval, not_find);
         thread->stats.AddMessage(buf);
     }
@@ -678,6 +680,7 @@ public:
         }
         char buf[100];
         snprintf(buf, sizeof(buf), "(num: %lu, not find: %lu)", reads_, not_find);
+        printf("thread %2d num: %lu, not find: %lu\n",thread->tid, reads_, not_find);
         INFO("DoReadNon thread: %2d. Total read num: %lu, not find: %lu)", thread->tid, reads_, not_find);
         thread->stats.AddMessage(buf);
     }
