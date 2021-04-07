@@ -1652,7 +1652,7 @@ public:
                 cell_count_leftshit_1_ = __builtin_ctz(bucket_meta.CellCount());
             } else if (cur_ver_ == 1) {
             // if current version if on 1, commit to 2
-                bucket1_ptr_ = bucket_meta.Address();
+                bucket2_ptr_ = bucket_meta.Address();
                 cell_count_leftshit_2_ = __builtin_ctz(bucket_meta.CellCount());
             } else {
                 TURBO_PMEM_ERROR("The version is wrong. cur_ver: " << cur_ver_);

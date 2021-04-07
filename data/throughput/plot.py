@@ -105,7 +105,7 @@ def PlotNormal(df, ax, filename, rotation = 0, pick = 1, units="Mops/s", ytitle=
     ax.yaxis.grid(linewidth=0.5, dashes=[8,8], color='gray', alpha=0.5)
     ax.set_axisbelow(True)
     ax.set_ylabel(ytitle, fontsize=23)
-    ax.set_ylim([0.1, 11.9])
+    # ax.set_ylim([0.1, 11.9])
     plt.xticks(rotation=rotation)
     
 
