@@ -42,8 +42,8 @@ DEFINE_uint64(report_interval, 0, "Report interval in seconds");
 DEFINE_uint64(stats_interval, 10000000, "Report interval in ops");
 DEFINE_uint64(value_size, 8, "The value size");
 DEFINE_uint64(num, 100 * 1000000LU, "Number of total record");
-DEFINE_uint64(read,  100000000, "Number of read operations");
-DEFINE_uint64(write, 100000000, "Number of read operations");
+DEFINE_uint64(read,  0, "Number of read operations");
+DEFINE_uint64(write, 0, "Number of read operations");
 
 DEFINE_bool(hist, false, "");
 
@@ -512,8 +512,13 @@ public:
                 }
             } else {
                 if (hashtable_ == nullptr && FLAGS_use_existing_db) {
+                    auto time_start = NowMicros();
                     hashtable_ = new Hashtable();
-                    hashtable_->Recover();
+                    hashtable_->Recover();                    
+                    double recover_duration = NowMicros() - time_start;
+                    printf("Recover time: %f ms\n", recover_duration / 1000.0);
+                    INFO("Recover time: %f ms", recover_duration / 1000.0);
+                    fflush(nullptr);
                 }
             }
             #else

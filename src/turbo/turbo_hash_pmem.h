@@ -64,7 +64,6 @@
 // pmem library
 #include "ralloc.hpp"
 #include "pptr.hpp"
-#include "libpmem.h"
 
 #define TURBO_PMEM_LOG_SIZE ((96LU << 30))
 
@@ -91,6 +90,14 @@ inline void TURBO_PMEM_COMPILER_FENCE() {
     asm volatile("" : : : "memory"); /* Compiler fence. */
 }
 
+#define TURBO_PMEM_CACHE_LINE_SIZE ((64))
+inline void TURBO_PMEM_CLFLUSH(char *data, int len) {
+  volatile char *ptr = (char *)((unsigned long)data & ~(TURBO_PMEM_CACHE_LINE_SIZE - 1));
+  for (; ptr < data + len; ptr += TURBO_PMEM_CACHE_LINE_SIZE) {
+    FLUSH((void*)ptr);
+  }
+  FLUSHFENCE;
+}
 // turbo_hash logging
 namespace {
 
@@ -1865,8 +1872,9 @@ public:
             uint32_t rnd_cell_count = cell_count;
             char* addr = cell_allocator_.Allocate(rnd_cell_count);
 
-            // Reset the cell content to zero
-            pmem_memset_persist(addr, 0, rnd_cell_count * kCellSize);
+            // Reset the cell content to zero            
+            memset(addr, 0, rnd_cell_count * kCellSize);
+            TURBO_PMEM_CLFLUSH(addr, rnd_cell_count * kCellSize);
 
             // Initialize the dram bucket meta
             buckets_[i].Reset(addr, rnd_cell_count);
@@ -1908,13 +1916,15 @@ public:
         bucket_mask_  = bucket_count_ - 1;
         buckets_pmem_ = turbo_root->buckets_pmem_;
         buckets_      = (BucketMetaDram*)malloc(bucket_count_ * sizeof(BucketMetaDram));
-        TURBO_PMEM_INFO("Turbo Root bucket count: " << bucket_count_);
+        TURBO_PMEM_INFO("Turbo reboot bucket count: " << bucket_count_);
+        printf("Turbo reboot bucket count: %lu\n", bucket_count_);
 
         // Step3. Recover the BucketMetaDram
         for (size_t i = 0; i < bucket_count_; ++i) {
             buckets_[i] = buckets_pmem_[i].Extract();
             TURBO_PMEM_INFO("Recovered bucket cell count: " << buckets_[i].CellCount());
         }
+        printf("Finish recover\n");
     }
 
     double LoadFactor() {
@@ -2131,8 +2141,9 @@ public:
         }
 
         // Step 3. Copy content to pmem space
-        pmem_memmove_persist(new_bucket_addr_pmem, new_bucket_addr_dram, new_bucket_size);
-        
+        memcpy(new_bucket_addr_pmem, new_bucket_addr_dram, new_bucket_size);
+        TURBO_PMEM_CLFLUSH(new_bucket_addr_pmem, new_bucket_size);
+
         // Step 4. Reset bucket meta in buckets_
         bucket_meta->Reset(new_bucket_addr_pmem, new_cell_count);
         
