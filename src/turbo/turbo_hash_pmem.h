@@ -507,7 +507,6 @@ public:
 
 }; // end of class AtomicBitOps
 
-
 // #define CAS(_p, _u, _v)                                             \
 //   (__atomic_compare_exchange_n(_p, _u, _v, false, __ATOMIC_ACQUIRE, \
 //                                __ATOMIC_ACQUIRE))
@@ -557,11 +556,9 @@ public:
 static inline bool turbo_bit_spin_try_lock(uint32_t *lock, int bit_pos) {
     return AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_PMEM_SPINLOCK_FREE;
 }
-
 static inline bool turbo_lockbusy(uint32_t *lock, int bit_pos) {
     return (*lock) & (1 << bit_pos);
 }
-
 static inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
 {
     while(1) {
@@ -1935,7 +1932,7 @@ public:
     size_t Capacity() {
         size_t sum = 0;
         for (size_t b = 0; b < bucket_count_; ++b) {
-            sum += buckets_[b].CellCount() * (CellMeta::SlotCount() - 1);
+            sum += buckets_[b].CellCount() * (CellMeta256V2::SlotCount() - 1);
         }
         return sum;
     }
@@ -2309,7 +2306,6 @@ public:
         }
         return nullptr;
     }
-
 
     bool Delete(const Key& key) {
         // calculate hash value of the key

@@ -512,7 +512,6 @@ public:
 //   (__atomic_compare_exchange_n(_p, _u, _v, false, __ATOMIC_ACQUIRE, \
 //                                __ATOMIC_ACQUIRE))
 
-
 // static inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
 // {
 //     uint32_t old_value = 0;
@@ -555,8 +554,7 @@ public:
 // }
 
 
-static inline bool turbo_bit_spin_try_lock(uint32_t *lock, int bit_pos) 
-{
+static inline bool turbo_bit_spin_try_lock(uint32_t *lock, int bit_pos) {
     return AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_SPINLOCK_FREE;
 }
 static inline bool turbo_lockbusy(uint32_t *lock, int bit_pos) {
@@ -569,7 +567,7 @@ static inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
         if (AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_SPINLOCK_FREE) {
             return;
         }
-        while (turbo_lockbusy(lock, bit_pos)) __builtin_ia32_pause();
+        while (turbo_lockbusy(lock, bit_pos)) TURBO_CPU_RELAX();
     }
 }
 static inline void turbo_bit_spin_unlock(uint32_t *lock, int bit_pos)
@@ -1127,10 +1125,15 @@ public:
         static constexpr int SlotSizeLeftShift = 4;        
 
         explicit CellMeta256V2(char* rep) :             
-            meta_(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep))),
-            bitmap_( (*(uint32_t*)(rep)) & BitMapMask),         
-            bitmap_deleted_( ((*(uint32_t*)(rep)) >> 16) & BitMapMask ) {}
-        ~CellMeta256V2() { }
+            meta_( _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rep)) ) {
+            uint32_t tmp = __atomic_load_n((uint32_t*)rep, __ATOMIC_ACQUIRE);
+            bitmap_ = tmp & BitMapMask; 
+            bitmap_deleted_ = ( tmp >> 16 ) & BitMapMask;
+        }
+
+        ~CellMeta256V2() {
+            
+        }
 
         // return a bitset, the slot that matches the hash is set to 1
         inline util::BitSet MatchBitSet(uint16_t hash) {
@@ -2214,15 +2217,16 @@ private:
             // Obtain the bucket lock
             BucketLockScope meta_lock(bucket_meta);
 
-            // it is possible after obtain the bucket lock. the bucket already be rehashed. we need to compare the old address in res with current one
-            char* bucket_addr    = bucket_meta->Address();
+            // it is possible after obtain the bucket lock, 
+            // the bucket already be rehashed. we need to compare the old address in res with current one
+            char* bucket_addr = bucket_meta->Address();
             if (bucket_addr != res.search_bucket_addr) {
                 goto after_rehash;
             }
 
             char* cell_addr = locateCell(bucket_addr, {res.target_slot.bucket, res.target_slot.cell});            
             
-            CellMeta256V2 meta(cell_addr);   // obtain the meta part
+            CellMeta256V2 meta(cell_addr);   // obtain the meta part after lock
 
             if (TURBO_LIKELY( !meta.Occupy(res.target_slot.slot) )) { 
                 // If the new slot from 'findSlotForInsert' is not occupied, insert directly
