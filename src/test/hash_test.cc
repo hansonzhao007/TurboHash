@@ -1,5 +1,4 @@
-#include "turbo/turbo_hash_pmem.h"
-// #include "turbo/turbo_hash.h"
+#include "turbo/turbo_hash.h"
 #include "util/logger.h"
 
 #include "gflags/gflags.h"
@@ -16,9 +15,6 @@ using HashTable = turbo_pmem::unordered_map<std::string, std::string>;
 #endif
 
 int main() {
-    remove("/mnt/pmem/turbo_hash_pmem_basemd");
-    remove("/mnt/pmem/turbo_hash_pmem_desc");
-    remove("/mnt/pmem/turbo_hash_pmem_sb");
     const size_t COUNT = 100000;
 
     

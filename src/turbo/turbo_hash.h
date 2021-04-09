@@ -1742,7 +1742,7 @@ public:
     */
    size_t MinorReHashAll()  {
         // rehash for all the buckets
-        int rehash_thread = 8;
+        int rehash_thread = 4;
         printf("Rehash threads: %d\n", rehash_thread);
         std::vector<std::thread> workers(rehash_thread);
         std::vector<size_t> add_capacity(rehash_thread, 0);

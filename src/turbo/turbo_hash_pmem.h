@@ -1947,7 +1947,7 @@ public:
     */
    size_t MinorReHashAll()  {
         // rehash for all the buckets
-        int rehash_thread = 16;
+        int rehash_thread = 4;
         printf("Rehash threads: %d\n", rehash_thread);
         std::vector<std::thread> workers(rehash_thread);
         std::atomic<size_t> rehash_count(0);
@@ -1970,7 +1970,7 @@ public:
             t.join();
         });
         double rehash_duration = util::NowMicros() - rehash_start;
-        printf("Real rehash speed: %f Mops/s. entries: %lu, duration: %.2f s.\n", (double)rehash_count / rehash_duration, rehash_count.load(), rehash_duration/1000000.0);
+        printf("Real rehash speed: %f Mops/s. entries: %lu, duration: %.2f s.\n", (double)rehash_count.load() / rehash_duration, rehash_count.load(), rehash_duration/1000000.0);
         return rehash_count.load();
     }
 

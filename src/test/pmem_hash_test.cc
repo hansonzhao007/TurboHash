@@ -8,6 +8,9 @@ using GFLAGS_NAMESPACE::SetUsageMessage;
 
 
 int main() {
+    remove("/mnt/pmem/turbo_hash_pmem_basemd");
+    remove("/mnt/pmem/turbo_hash_pmem_desc");
+    remove("/mnt/pmem/turbo_hash_pmem_sb");
     {  
         const size_t COUNT = 100000;
         auto* hashtable = new turbo_pmem::unordered_map<std::string, std::string>;
@@ -43,6 +46,14 @@ int main() {
             }
             printf("find %lu key\n", find);
         };
+        read_fun();
+
+
+        // printf("------- rehash all bucket and repeat search ------\n");
+        hashtable->MinorReHashAll();
+        read_fun();
+
+        hashtable->MinorReHashAll();
         read_fun();
     }
 
