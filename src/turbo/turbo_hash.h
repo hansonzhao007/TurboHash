@@ -558,7 +558,8 @@ static inline bool turbo_bit_spin_try_lock(uint32_t *lock, int bit_pos) {
     return AtomicBitOps::BitTestAndSet(lock, bit_pos) == TURBO_SPINLOCK_FREE;
 }
 static inline bool turbo_lockbusy(uint32_t *lock, int bit_pos) {
-    return (*lock) & (1 << bit_pos);
+    uint32_t lock_value = __atomic_load_n(lock, __ATOMIC_ACQUIRE);   
+    return lock_value & (1 << bit_pos);
 }
 static inline void turbo_bit_spin_lock(uint32_t *lock, int bit_pos)
 {
