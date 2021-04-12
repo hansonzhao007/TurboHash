@@ -741,9 +741,6 @@ public:
     using mapped_type = T;
     using size_type   = size_t;
     using hasher      = Hash;
-    using key_equal   = typename std::conditional<  std::is_same<Key, std::string>::value == false  /* is numeric */,
-                                                    KeyEqual, std::equal_to<util::Slice> >::type;
-    using Self        = TurboHashTable<key_type, mapped_type, hasher, key_equal, kCellCountLimit>;
 
 // private:
 
