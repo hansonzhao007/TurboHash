@@ -106,7 +106,7 @@ public:
         keys_.resize (count);
         for (size_t i = 0; i < count; i++) {
             char buf[128];
-            sprintf (buf, "%0.*lu", KEY_LEN, i);
+            sprintf (buf, "%.*lu", KEY_LEN, i);
             keys_[i] = std::string (buf, KEY_LEN);
         }
         Randomize ();

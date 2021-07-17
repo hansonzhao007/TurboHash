@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 
-#include "turbo/hash_function.h"
+#include "hash_function.h"
 #include "turbo/turbo_hash.h"
 #include "util/time.h"
 

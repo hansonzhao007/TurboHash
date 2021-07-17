@@ -65,9 +65,12 @@ if(COMPILER_SUPPORTS_MARCH_NATIVE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 endif()
 
+# tbb
+find_library(TbbLib tbb)
+
 # add pthread support
 find_package(Threads REQUIRED)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -Wno-unused-parameter")
 
 # add avx512 sse2 sse3 support
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -mavx -mavx512f -msse -msse2 -msse3")
@@ -104,7 +107,7 @@ function(db_test test_file)
   get_filename_component(test_target_name "${test_file}" NAME_WE)
   set (case_name test_${test_target_name})
   add_executable("${case_name}" "${test_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS})  # boost_thread boost_system
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} ${TbbLib})  # boost_thread boost_system
   target_sources("${case_name}"
       PRIVATE
       "${test_file}"
@@ -116,7 +119,7 @@ function(db_exe src_file)
   get_filename_component(target_name "${src_file}" NAME_WE)
   set (case_name ${target_name})
   add_executable("${case_name}" "${src_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS})
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} ${TbbLib})
   target_sources("${case_name}"
       PRIVATE
       "${src_file}"

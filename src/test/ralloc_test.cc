@@ -96,8 +96,8 @@ int main (int argc, char* argv[]) {
             FLUSH (node);
             FLUSHFENCE;
             cur->next = node;
-            printf ("Write node%d. Dram addr: 0x%lx. Pmem off: 0x%lx, key: %d, val: %d\n", i, node,
-                    cur->next.off, node->key, node->val);
+            printf ("Write node%d. Dram addr: 0x%lx. Pmem off: 0x%lx, key: %d, val: %d\n", i,
+                    (size_t)node, cur->next.off, node->key, node->val);
             cur = node;
             FLUSH (node);
             FLUSHFENCE;
@@ -111,7 +111,7 @@ int main (int argc, char* argv[]) {
             char* str = cur->str;
             auto res = ParseStr (str);
             printf ("Read %s. Dram addr: 0x%lx. Pmem off: 0x%lx, key: %d, val: %d.\n", res.c_str (),
-                    cur, prev->next.off, cur->key, cur->val);
+                    (size_t)cur, prev->next.off, cur->key, cur->val);
             prev = cur;
             cur = cur->next;
         }

@@ -104,7 +104,6 @@ public:
                 pmm_dimms_.push_back (DimmDataContainer ());
                 pmm_dimms_.back ().dimm_id_ = matched_data[1];
             } else {
-                uint64_t h64, l64;
                 std::string str128b = matched_data[1];
                 if (std::regex_search (str128b, matched_num, stat_bit_convert_reg)) {
                     pmm_dimms_.back ().stat_[index - 1].h_u64b =

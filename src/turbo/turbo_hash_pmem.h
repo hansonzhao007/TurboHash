@@ -1652,7 +1652,7 @@ public:
         bool res = RP_init ("turbo_hash_pmem", TURBO_PMEM_LOG_SIZE);
         if (res) {
             TURBO_PMEM_INFO ("Prepare to recover");
-            TurboRoot* turbo_root = RP_get_root<TurboRoot> (0);
+            RP_get_root<TurboRoot> (0);
             int recover_res = RP_recover ();
             if (recover_res == 1) {
                 TURBO_PMEM_INFO ("Dirty open, recover");

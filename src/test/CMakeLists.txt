@@ -1,7 +1,7 @@
 # ----- Dram hash test ----
 db_test(spinlock_test)
 db_test(hash_test)
-
+db_exe(example)
 
 db_exe(hash_bench)
 db_exe(hash_bench_30)
