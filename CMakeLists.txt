@@ -13,16 +13,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # default using release mode
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release) # RelWithDebInfo
+  set(CMAKE_BUILD_TYPE release) # RelWithDebInfo
+  message(STATUS "build type set to release")
 endif()
+string(TOLOWER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE)
+message(STATUS "build type: ${CMAKE_BUILD_TYPE}")
 
 # add Intel PCM library
-add_custom_command( OUTPUT libPCM.a
-                    COMMAND make lib
-                    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/pcm)
-add_custom_target(pcm DEPENDS libPCM.a)
+execute_process(  COMMAND make lib
+                  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/pcm)
 link_directories(${PROJECT_SOURCE_DIR}/lib/pcm)
 list(APPEND THIRDPARTY_LIBS PCM)
+include_directories(
+  "${PROJECT_SOURCE_DIR}/lib/pcm"
+)
 
 # add liballoc.a library: https://github.com/urcs-sync/ralloc
 execute_process(  COMMAND make libralloc.a -j8
@@ -40,13 +44,6 @@ add_subdirectory(lib/gflags)
 list(APPEND THIRDPARTY_LIBS gflags)
 include_directories(
     "${CMAKE_BINARY_DIR}/lib/gflags/include"
-)
-
-# Process Abseil's CMake build system
-add_subdirectory(lib/abseil-cpp)
-list(APPEND THIRDPARTY_LIBS absl::flat_hash_set)
-include_directories(
-    "${CMAKE_BINARY_DIR}/lib/abseil-cpp"
 )
 
 if(CMAKE_COMPILER_IS_GNUCXX)
@@ -75,13 +72,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 # add avx512 sse2 sse3 support
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -mavx -mavx512f -msse -msse2 -msse3")
 
-# check existence of libcuckoo/cuckoohash_map.hh
-include(CheckIncludeFile)
-check_include_file("libcuckoo/cuckoohash_map.hh" HAVE_CUCKOO)
-if(HAVE_CUCKOO)
-  add_definitions(-DCUCKOO)
-endif()
-
 # check existence of jemalloc
 include(CheckIncludeFile)
 check_include_file("jemalloc/jemalloc.h" HAVE_JEMALLOC)
@@ -94,8 +84,7 @@ endif()
 include_directories(
   "/usr/include"
   "/usr/local/include"
-  "${PROJECT_SOURCE_DIR}/src"
-  "${PROJECT_SOURCE_DIR}/lib/pcm"
+  "${PROJECT_SOURCE_DIR}/src"  
   "${PROJECT_SOURCE_DIR}/lib"
 )
 
@@ -115,7 +104,7 @@ function(db_test test_file)
   get_filename_component(test_target_name "${test_file}" NAME_WE)
   set (case_name test_${test_target_name})
   add_executable("${case_name}" "${test_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util)  # boost_thread boost_system
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS})  # boost_thread boost_system
   target_sources("${case_name}"
       PRIVATE
       "${test_file}"
@@ -127,7 +116,7 @@ function(db_exe src_file)
   get_filename_component(target_name "${src_file}" NAME_WE)
   set (case_name ${target_name})
   add_executable("${case_name}" "${src_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} util)
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS})
   target_sources("${case_name}"
       PRIVATE
       "${src_file}"

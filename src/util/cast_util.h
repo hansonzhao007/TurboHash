@@ -11,11 +11,11 @@ namespace util {
 // It is not recommanded to add new code to issue class casting. The preferred
 // solution is to implement the functionality without a need of casting.
 template <class DestClass, class SrcClass>
-inline DestClass* static_cast_with_check(SrcClass* x) {
-  DestClass* ret = static_cast<DestClass*>(x);
+inline DestClass* static_cast_with_check (SrcClass* x) {
+    DestClass* ret = static_cast<DestClass*> (x);
 #ifdef ROCKSDB_USE_RTTI
-  assert(ret == dynamic_cast<DestClass*>(x));
+    assert (ret == dynamic_cast<DestClass*> (x));
 #endif
-  return ret;
+    return ret;
 }
-}  // namespace rocksdb
+}  // namespace util
