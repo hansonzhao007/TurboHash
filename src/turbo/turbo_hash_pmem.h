@@ -975,17 +975,14 @@ public:
 
         static __m256i SetHashVec (uint16_t hash) { return _mm256_set1_epi16 (hash); }
 
-        // // return a bitset, the slot that matches the hash is set to 1
-        // inline util::BitSet MatchBitSet (uint16_t hash) {
-        //     auto bitset = _mm256_set1_epi16 (hash);
-        //     uint16_t mask = _mm256_cmpeq_epi16_mask (bitset, meta_);
-        //     return util::BitSet (mask & bitmap_ &
-        //                          (~bitmap_deleted_));  // valid filter and
-        //                          detetion filter.
-        // }
-
         inline util::BitSet MatchBitSet (const __m256i& hash_vec) {
+#ifdef __AVX512__
             uint16_t mask = _mm256_cmpeq_epi16_mask (hash_vec, meta_);
+#else
+            auto compare_res = _mm256_cmpeq_epi16 (hash_vec, meta_);
+            uint32_t mask32 = _mm256_movemask_epi8 (compare_res);
+            uint16_t mask = _pext_u32 (mask32, 0xAAAAAAAA);  // extract odd bits
+#endif
             return util::BitSet (mask & bitmap_ & ~bitmap_deleted_ & BitMapMask);
         }
 
@@ -1487,9 +1484,7 @@ public:
             // printf("Initial Bucket iter at ai: %u, si: %u\n", cell_i_, *bitmap_);
         }
 
-        explicit operator bool () const {
-            return (cell_i_ < cell_count_) || (cell_count_ == (cell_count_ && bitmap_));
-        }
+        explicit operator bool () const { return (cell_i_ < cell_count_); }
 
         // ++iterator
         inline BucketIterator& operator++ () {
