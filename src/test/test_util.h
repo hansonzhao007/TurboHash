@@ -1,5 +1,8 @@
 #pragma once
 
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
+
 #include <algorithm>
 #include <fstream>
 #include <random>
@@ -9,25 +12,51 @@
 
 #define KEY_LEN ((15))
 
-auto rng = std::default_random_engine{};
+static constexpr uint64_t kRandNumMax = (1LU << 60);
+static constexpr uint64_t kRandNumMaxMask = kRandNumMax - 1;
+
+static uint64_t u64Rand (const uint64_t& min, const uint64_t& max) {
+    static thread_local std::mt19937 generator (std::random_device{}());
+    std::uniform_int_distribution<uint64_t> distribution (min, max);
+    return distribution (generator);
+}
 
 class RandomKeyTrace {
 public:
     RandomKeyTrace (size_t count) {
         count_ = count;
         keys_.resize (count);
-        for (size_t i = 0; i < count; i++) {
-            keys_[i] = i;
-        }
+
+        printf ("generate %lu keys\n", count);
+        auto starttime = std::chrono::system_clock::now ();
+        tbb::parallel_for (tbb::blocked_range<uint64_t> (0, count),
+                           [&] (const tbb::blocked_range<uint64_t>& range) {
+                               for (uint64_t i = range.begin (); i != range.end (); i++) {
+                                   //    uint64_t num = u64Rand (1LU, kRandNumMax);
+                                   keys_[i] = i;
+                               }
+                           });
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds> (
+            std::chrono::system_clock::now () - starttime);
+        printf ("generate duration %f s.\n", duration.count () / 1000000.0);
+
         Randomize ();
     }
 
     ~RandomKeyTrace () {}
 
     void Randomize (void) {
-        printf ("Randomize the trace...\r");
-        fflush (nullptr);
-        std::shuffle (std::begin (keys_), std::end (keys_), rng);
+        printf ("randomize %lu keys\n", keys_.size ());
+        auto starttime = std::chrono::system_clock::now ();
+        tbb::parallel_for (tbb::blocked_range<uint64_t> (0, keys_.size ()),
+                           [&] (const tbb::blocked_range<uint64_t>& range) {
+                               auto rng = std::default_random_engine{};
+                               std::shuffle (keys_.begin () + range.begin (),
+                                             keys_.begin () + range.end (), rng);
+                           });
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds> (
+            std::chrono::system_clock::now () - starttime);
+        printf ("randomize duration %f s.\n", duration.count () / 1000000.0);
     }
 
     class RangeIterator {
@@ -39,7 +68,7 @@ public:
 
         inline size_t operator* () { return (*pkey_vec_)[cur_index_]; }
 
-        inline size_t Next () { return (*pkey_vec_)[cur_index_++]; }
+        inline size_t& Next () { return (*pkey_vec_)[cur_index_++]; }
 
         std::vector<size_t>* pkey_vec_;
         size_t end_index_;
@@ -59,7 +88,7 @@ public:
 
         inline bool Valid () { return (begin_ || cur_index_ != end_index_); }
 
-        inline size_t Next () {
+        inline size_t& Next () {
             begin_ = false;
             size_t index = cur_index_;
             cur_index_++;
@@ -101,27 +130,52 @@ public:
 
 class RandomKeyTraceString {
 public:
-    RandomKeyTraceString (size_t count) {
-        count_ = count;
-        keys_.resize (count);
-        for (size_t i = 0; i < count; i++) {
-            char buf[128];
-            sprintf (buf, "%.*lu", KEY_LEN, i);
-            keys_[i] = std::string (buf, KEY_LEN);
-        }
-        Randomize ();
-        keys_non_ = keys_;
-        for (size_t i = 0; i < count; i++) {
-            keys_non_[i][0] = 'a';
+    RandomKeyTraceString (size_t count) : count_ (count) {
+        static const char alphabet[] =
+            "abcdefghijklmnopqrstuvwxyz"
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "0123456789";
+
+        const size_t N_STRS = count;
+        static const size_t S_LEN = KEY_LEN;
+
+        keys_.resize (N_STRS);
+
+        printf ("generate %lu keys\n", N_STRS);
+        auto starttime = std::chrono::system_clock::now ();
+        tbb::parallel_for (tbb::blocked_range<uint64_t> (0, N_STRS),
+                           [&] (const tbb::blocked_range<uint64_t>& range) {
+                               for (uint64_t i = range.begin (); i != range.end (); i++) {
+                                   keys_[i].reserve (S_LEN);
+                                   std::generate_n (std::back_inserter (keys_[i]), S_LEN,
+                                                    [&] () { return alphabet[u64Rand (0, 61)]; });
+                               }
+                           });
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds> (
+            std::chrono::system_clock::now () - starttime);
+        printf ("generate duration %f s.\n", duration.count () / 1000000.0);
+        keys_non_.resize (N_STRS);
+        for (size_t i = 0; i < N_STRS; i++) {
+            keys_non_[i] = keys_[i];
+            keys_non_[i][0] = '_';
+            keys_non_[i][KEY_LEN / 2] = '_';
         }
     }
 
     ~RandomKeyTraceString () {}
 
     void Randomize (void) {
-        printf ("Randomize the trace...\r");
-        fflush (nullptr);
-        std::shuffle (std::begin (keys_), std::end (keys_), rng);
+        printf ("randomize %lu keys\n", keys_.size ());
+        auto starttime = std::chrono::system_clock::now ();
+        tbb::parallel_for (tbb::blocked_range<uint64_t> (0, keys_.size ()),
+                           [&] (const tbb::blocked_range<uint64_t>& range) {
+                               auto rng = std::default_random_engine{};
+                               std::shuffle (keys_.begin () + range.begin (),
+                                             keys_.begin () + range.end (), rng);
+                           });
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds> (
+            std::chrono::system_clock::now () - starttime);
+        printf ("randomize duration %f s.\n", duration.count () / 1000000.0);
     }
 
     class RangeIterator {

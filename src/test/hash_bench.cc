@@ -429,7 +429,7 @@ public:
                 method = &Benchmark::DoReadAll;
             } else if (name == "readnon") {
                 fresh_db = false;
-                key_trace_->Randomize ();
+                // key_trace_->Randomize ();
                 method = &Benchmark::DoReadNon;
             } else if (name == "readlat") {
                 fresh_db = false;

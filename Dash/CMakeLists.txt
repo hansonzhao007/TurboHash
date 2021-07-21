@@ -23,6 +23,10 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "Release")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG -Ofast")
 endif ()
 
+
+# tbb
+find_library(TbbLib tbb)
+
 ##################### PMDK ####################
 set(PMDK_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/pmdk")
 ExternalProject_Add(PMDK
@@ -60,7 +64,7 @@ endif ()
 option(USE_PMEM "enable persistent memory support" ON)
 
 set(libs_to_link
-        pthread gflags)
+        pthread gflags  ${TbbLib})
 
 if (USE_PMEM MATCHES "ON")
   message(STATUS "persistent memory support enabled, going to build with PMDK")

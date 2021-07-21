@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.11)
 # THIS HAS TO COME BEFORE THE PROJECT LINE
 
 # set the project name
-project (pmem VERSION 0.0.1 LANGUAGES C CXX)
+project (turbohash VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -56,6 +56,7 @@ endif()
 
 # tbb
 find_library(TbbLib tbb)
+list(APPEND THIRDPARTY_LIBS  ${TbbLib})
 
 # add pthread support
 find_package(Threads REQUIRED)
@@ -97,7 +98,7 @@ function(db_test test_file)
   get_filename_component(test_target_name "${test_file}" NAME_WE)
   set (case_name test_${test_target_name})
   add_executable("${case_name}" "${test_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} ${TbbLib})  # boost_thread boost_system
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS})  # boost_thread boost_system
   target_sources("${case_name}"
       PRIVATE
       "${test_file}"
@@ -109,7 +110,7 @@ function(db_exe src_file)
   get_filename_component(target_name "${src_file}" NAME_WE)
   set (case_name ${target_name})
   add_executable("${case_name}" "${src_file}")
-  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS} ${TbbLib})
+  target_link_libraries("${case_name}" ${PROJECT_LINK_LIBS} ${THIRDPARTY_LIBS})
   target_sources("${case_name}"
       PRIVATE
       "${src_file}"
