@@ -893,10 +893,9 @@ public:
     /** CellMeta256V2
      *  @note: Hash cell whose size is 256 byte. There are 14 slots in the cell.
      *  @format:
-     *  | ----------------------- meta ------------------------| ----- slots -----
-     * | | 4 byte bitmap | 28 byte: two byte hash for each slot | 16 byte * 14
-     * slot | | Bitmap Zone   |    Tag Zone                          |    Slot
-     * Zone      |
+     *  | ----------------------- meta ------------------------| ----- slots ---
+     *  | 4 byte bitmap | 28 byte: two byte hash for each slot | 16 byte * 14slot
+     *  |  Bitmap Zone  |    Tag Zone                          | Slot Zone
      *
      *  |- Bitmap Zone:
      *            0 bit: used as a bitlock
@@ -929,6 +928,10 @@ public:
         ~CellMeta256V2 () {}
 
         static __m256i SetHashVec (uint16_t hash) { return _mm256_set1_epi16 (hash); }
+
+        static BitMapType LoadVersion (char* cell_addr) {
+            return __atomic_load_n ((uint32_t*)cell_addr, __ATOMIC_ACQUIRE);
+        }
 
         inline util::BitSet MatchBitSet (const __m256i& hash_vec) {
 #ifdef __AVX512__
@@ -1011,8 +1014,8 @@ public:
      *  @note: Hash cell whose size is 128 byte. There are 7 slots in the cell.
      *  @format:
      *  | ----------------------- meta ------------------------| ----- slots -----
-     * | | 2 byte bitmap | 14 byte: two byte hash for each slot | 16 byte * 7 slot
-     * | | Bitmap Zone   |    Tag Zone                          |    Slot Zone |
+     *  | 2 byte bitmap | 14 byte: two byte hash for each slot | 16 byte * 7 slot
+     *  | Bitmap Zone   |    Tag Zone                          |    Slot Zone
      *
      *  |- Bitmap Zone:
      *      0  -  7 bit: bitmap_, indicate which slot is empty, 0: empty or
@@ -1043,6 +1046,10 @@ public:
         ~CellMeta128 () {}
 
         static __m128i SetHashVec (uint16_t hash) { return _mm_set1_epi16 (hash); }
+
+        static BitMapType LoadVersion (char* cell_addr) {
+            return __atomic_load_n ((uint16_t*)cell_addr, __ATOMIC_ACQUIRE);
+        }
 
         inline util::BitSet MatchBitSet (const __m128i& hash_vec) {
 #ifdef __AVX512__
@@ -1996,14 +2003,15 @@ private:
 
         typename CellMeta::BitMapType new_bitmap = (*bitmap);
         if (true == info.equal_key) {
-            new_bitmap = (new_bitmap | (1 << info.slot)) ^
-                         (1 << info.old_slot);  // set the new slot, toggle the old slot (to 0)
-            new_bitmap &=
-                ~(1 << (CellMeta::kDeleteBitmapOffset + info.slot));  // clean the delete_bitmap,
+            // set the new slot, toggle the old slot (to 0)
+            new_bitmap = (new_bitmap | (1 << info.slot)) ^ (1 << info.old_slot);
+            // clean the delete_bitmap,
+            new_bitmap &= ~(1 << (CellMeta::kDeleteBitmapOffset + info.slot));
         } else {
-            new_bitmap |= (1 << info.slot);  // Insertion: set the new slot
-            new_bitmap &=
-                ~(1 << (CellMeta::kDeleteBitmapOffset + info.slot));  // clean the delete_bitmap
+            // Insertion: set the new slot
+            new_bitmap |= (1 << info.slot);
+            // clean the delete_bitmap
+            new_bitmap &= ~(1 << (CellMeta::kDeleteBitmapOffset + info.slot));
         }
 
         // add a fence here.
