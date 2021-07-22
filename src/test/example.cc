@@ -10,6 +10,8 @@
 
 using namespace turbo;
 
+using HashTable = turbo::unordered_map<size_t, size_t>;
+
 uint64_t u64Rand (const uint64_t& min, const uint64_t& max) {
     static thread_local std::mt19937 generator (std::random_device{}());
     std::uniform_int_distribution<uint64_t> distribution (min, max);
@@ -39,15 +41,17 @@ void multithreaded (char** argv) {
     }
 
     printf ("operation,n,ops/s\n");
-    turbo::unordered_map<size_t, size_t> tree;
+
+    HashTable tree;
 
     // Build tree
     {
         auto starttime = std::chrono::system_clock::now ();
         tbb::parallel_for (tbb::blocked_range<uint64_t> (0, n),
                            [&] (const tbb::blocked_range<uint64_t>& range) {
+                               auto tinfo = tree.getThreadInfo ();
                                for (uint64_t i = range.begin (); i != range.end (); i++) {
-                                   tree.Put (keys[i], keys[i]);
+                                   tree.Put (keys[i], keys[i], tinfo);
                                }
                            });
         auto duration = std::chrono::duration_cast<std::chrono::microseconds> (
@@ -58,17 +62,21 @@ void multithreaded (char** argv) {
     {
         // Lookup
         auto starttime = std::chrono::system_clock::now ();
-        tbb::parallel_for (tbb::blocked_range<uint64_t> (0, n),
-                           [&] (const tbb::blocked_range<uint64_t>& range) {
-                               for (uint64_t i = range.begin (); i != range.end (); i++) {
-                                   auto val = tree.Find (keys[i]);
-                                   if (val->second () != keys[i]) {
-                                       std::cout << "wrong key read: " << val
-                                                 << " expected:" << keys[i] << std::endl;
-                                       throw;
-                                   }
-                               }
-                           });
+        tbb::parallel_for (
+            tbb::blocked_range<uint64_t> (0, n), [&] (const tbb::blocked_range<uint64_t>& range) {
+                auto thread_info = tree.getThreadInfo ();
+                size_t vbuf;
+                auto callback = [&] (HashTable::RecordType record) { vbuf = record.value (); };
+                for (uint64_t i = range.begin (); i != range.end (); i++) {
+                    auto tinfo = tree.getThreadInfo ();
+                    bool res = tree.Find (keys[i], thread_info, callback);
+                    if (!res || vbuf != keys[i]) {
+                        std::cout << "wrong key read: " << vbuf << ", expected:" << keys[i]
+                                  << std::endl;
+                        throw;
+                    }
+                }
+            });
         auto duration = std::chrono::duration_cast<std::chrono::microseconds> (
             std::chrono::system_clock::now () - starttime);
         printf ("lookup,%ld,%f\n", n, (n * 1.0) / duration.count ());
@@ -79,8 +87,9 @@ void multithreaded (char** argv) {
 
         tbb::parallel_for (tbb::blocked_range<uint64_t> (0, n),
                            [&] (const tbb::blocked_range<uint64_t>& range) {
+                               auto tinfo = tree.getThreadInfo ();
                                for (uint64_t i = range.begin (); i != range.end (); i++) {
-                                   tree.Delete (keys[i]);
+                                   tree.Delete (keys[i], tinfo);
                                }
                            });
         auto duration = std::chrono::duration_cast<std::chrono::microseconds> (

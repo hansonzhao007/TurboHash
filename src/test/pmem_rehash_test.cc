@@ -24,8 +24,12 @@ int main () {
 
     bool succ = true;
     size_t find = 0;
+
+    auto thread_info = hashtable->getThreadInfo ();
+
     for (size_t i = 0; i < COUNT && succ; i++) {
-        succ = hashtable->Put ("key" + std::to_string (i), "value" + std::to_string (i));
+        succ =
+            hashtable->Put ("key" + std::to_string (i), "value" + std::to_string (i), thread_info);
         if ((succ)) find++;
     }
     printf ("inserted %lu kv, hashtable size: %lu, capacity: %lu, loadfactor: %f\n", find,
@@ -33,13 +37,16 @@ int main () {
 
     auto read_fun = [&hashtable] {
         size_t find = 0;
+        std::string value_buffer;
+        auto read_callback = [&] (HashTable::RecordType record) { value_buffer = record.value (); };
+        auto tinfo = hashtable->getThreadInfo ();
         for (size_t i = 0; i < COUNT; i++) {
             std::string key = "key" + std::to_string (i);
-            auto res = hashtable->Find (key);
+            auto res = hashtable->Find (key, tinfo, read_callback);
             if (i < 10 || (i & 0x7FF) == 0) {
-                INFO ("Get key: %s. value: %s\n", key.c_str (), res->second ().c_str ());
+                INFO ("Get key: %s. val: %s\n", key.c_str (), value_buffer.c_str ());
             }
-            if ((res != nullptr)) find++;
+            if (res) find++;
         }
         printf ("find %lu kv, hashtable size: %lu, capacity: %lu, loadfactor: %f\n", find,
                 hashtable->Size (), hashtable->Capacity (), hashtable->LoadFactor ());

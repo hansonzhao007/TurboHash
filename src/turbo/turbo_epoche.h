@@ -10,7 +10,7 @@
 #include "tbb/combinable.h"
 #include "tbb/enumerable_thread_specific.h"
 
-namespace turbo {
+namespace epoche {
 
 struct LabelDelete {
     std::array<std::function<void ()>, 32> nodes;
@@ -237,6 +237,6 @@ inline DeletionList& ThreadInfo::getDeletionList () const { return deletionList;
 
 inline Epoche& ThreadInfo::getEpoche () const { return epoche; }
 
-}  // namespace turbo
+}  // namespace epoche
 
 #endif

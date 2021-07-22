@@ -7,8 +7,8 @@
 #include <thread>
 #include <vector>
 
-#include "hash_function.h"
 #include "turbo/turbo_hash.h"
+#include "util/hash_function.h"
 #include "util/time.h"
 
 // static int kThreadIDs[16] = {0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23};

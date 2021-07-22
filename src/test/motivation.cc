@@ -3,10 +3,10 @@
 #include <cstdlib>
 
 #include "gflags/gflags.h"
-#include "hash_function.h"
 #include "libpmem.h"
 #include "pptr.hpp"
 #include "ralloc.hpp"
+#include "util/hash_function.h"
 #include "util/perf_util.h"
 #include "util/pmm_util.h"
 

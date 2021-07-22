@@ -5,17 +5,16 @@
 #include <mutex>   // std::mutex
 #include <thread>  // std::thread
 
-#include "typename.h"
-
 /* --------- Different HashTable --------*/
 #include "gflags/gflags.h"
-#include "test_util.h"
 #include "turbo/turbo_hash.h"
 #include "turbo/turbo_hash_pmem.h"
 #include "util/histogram.h"
 #include "util/logger.h"
 #include "util/pmm_util.h"
 #include "util/slice.h"
+#include "util/test_util.h"
+#include "util/typename.h"
 using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 using GFLAGS_NAMESPACE::RegisterFlagValidator;
 using GFLAGS_NAMESPACE::SetUsageMessage;
@@ -514,11 +513,12 @@ public:
     }
 
     void DoRehashLat (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoRehashLat. Thread %2d", thread->tid);
         thread->stats.Start ();
         auto time_start = util::NowMicros ();
         for (size_t b = 0; b < FLAGS_bucket_count; ++b) {
-            hashtable_->MinorRehash (b);
+            hashtable_->MinorRehash (b, tinfo);
         }
         auto duration = util::NowMicros () - time_start;
         printf ("MinorRehash avglat: %.4f us\n", (double)(duration) / FLAGS_bucket_count);
@@ -534,7 +534,10 @@ public:
         thread->stats.AddMessage (buf);
     }
 
+    static void NothingCallback (Hashtable::RecordType record) { return; }
+
     void DoRead (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoRead");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -549,8 +552,8 @@ public:
         while (!duration.Done (batch) && key_iterator.Valid ()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid (); j++) {
-                auto record_ptr = hashtable_->Find (key_iterator.Next ());
-                if (unlikely (record_ptr == nullptr)) {
+                auto res = hashtable_->Find (key_iterator.Next (), tinfo, NothingCallback);
+                if (!res) {
                     not_find++;
                     // INFO("Not find key: %s\n", (*key_iterator).c_str());
                 }
@@ -565,6 +568,7 @@ public:
     }
 
     void DoReadAll (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoReadAll");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -581,8 +585,8 @@ public:
         while (!duration.Done (batch) && key_iterator.Valid ()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid (); j++) {
-                auto record_ptr = hashtable_->Find (key_iterator.Next ());
-                if (unlikely (record_ptr == nullptr)) {
+                auto res = hashtable_->Find (key_iterator.Next (), tinfo, NothingCallback);
+                if (!res) {
                     not_find++;
                 }
             }
@@ -596,6 +600,7 @@ public:
     }
 
     void DoReadNon (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoReadNon");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -610,8 +615,8 @@ public:
         while (!duration.Done (batch) && key_iterator.Valid ()) {
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid (); j++) {
-                auto record_ptr = hashtable_->Find (key_iterator.Next ());
-                if (likely (record_ptr == nullptr)) {
+                auto res = hashtable_->Find (key_iterator.Next (), tinfo, NothingCallback);
+                if (!res) {
                     not_find++;
                 }
             }
@@ -625,6 +630,7 @@ public:
     }
 
     void DoReadLat (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoReadLat");
         if (key_trace_ == nullptr) {
             ERROR ("DoReadLat lack key_trace_ initialization.");
@@ -637,11 +643,11 @@ public:
         thread->stats.Start ();
         while (!duration.Done (1) && key_iterator.Valid ()) {
             auto time_start = util::NowNanos ();
-            auto record_ptr = hashtable_->Find (key_iterator.Next ());
+            auto res = hashtable_->Find (key_iterator.Next (), tinfo, NothingCallback);
             auto time_duration = util::NowNanos () - time_start;
             thread->stats.hist_.Add (time_duration);
 
-            if (unlikely (record_ptr == nullptr)) {
+            if (!res) {
                 not_find++;
             }
         }
@@ -653,6 +659,7 @@ public:
     }
 
     void DoReadNonLat (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoReadNonLat");
         if (key_trace_ == nullptr) {
             ERROR ("DoReadNonLat lack key_trace_ initialization.");
@@ -665,15 +672,11 @@ public:
         thread->stats.Start ();
         while (!duration.Done (1) && key_iterator.Valid ()) {
             auto time_start = util::NowNanos ();
-            auto record_ptr = hashtable_->Find (key_iterator.Next ());
+            auto res = hashtable_->Find (key_iterator.Next (), tinfo, NothingCallback);
             auto time_duration = util::NowNanos () - time_start;
             thread->stats.hist_.Add (time_duration);
-            if (likely (record_ptr == nullptr)) {
+            if (!res) {
                 not_find++;
-            } else {
-                printf ("find key: %s, val : %s", record_ptr->first ().c_str (),
-                        record_ptr->second ().c_str ());
-                exit (1);
             }
         }
         char buf[100];
@@ -684,6 +687,7 @@ public:
     }
 
     void DoWrite (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoWrite");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -699,7 +703,7 @@ public:
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid (); j++) {
                 std::string& key = key_iterator.Next ();
-                bool res = hashtable_->Put (key, key);
+                bool res = hashtable_->Put (key, key, tinfo);
                 if (!res) {
                     INFO ("Hash Table Full!!!\n");
                     printf ("Hash Table Full!!!\n");
@@ -713,6 +717,7 @@ public:
     }
 
     void DoWriteLat (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoWriteLat");
         if (key_trace_ == nullptr) {
             ERROR ("DoWriteLat lack key_trace_ initialization.");
@@ -726,7 +731,7 @@ public:
         while (key_iterator.Valid ()) {
             std::string& key = key_iterator.Next ();
             auto time_start = util::NowNanos ();
-            bool res = hashtable_->Put (key, key);
+            bool res = hashtable_->Put (key, key, tinfo);
             auto time_duration = util::NowNanos () - time_start;
             thread->stats.hist_.Add (time_duration);
 
@@ -742,6 +747,7 @@ public:
 
     // Print out load factor every 1 million insertion
     void DoLoadFactor (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoLoadFactor");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -758,7 +764,7 @@ public:
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid (); j++) {
                 std::string& key = key_iterator.Next ();
-                bool res = hashtable_->Put (key, key);
+                bool res = hashtable_->Put (key, key, tinfo);
                 if (!res) {
                     INFO ("Hash Table Full!!!\n");
                     printf ("Hash Table Full!!!\n");
@@ -774,6 +780,7 @@ public:
     }
 
     void DoOverWrite (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoOverWrite");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -789,7 +796,7 @@ public:
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid (); j++) {
                 std::string& key = key_iterator.Next ();
-                bool res = hashtable_->Put (key, key);
+                bool res = hashtable_->Put (key, key, tinfo);
                 if (!res) {
                     INFO ("Hash Table Full!!!\n");
                     printf ("Hash Table Full!!!\n");
@@ -803,6 +810,7 @@ public:
     }
 
     void DoDelete (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoDelete");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -819,7 +827,7 @@ public:
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid (); j++) {
                 auto& key = key_iterator.Next ();
-                auto res = hashtable_->Delete (key);
+                auto res = hashtable_->Delete (key, tinfo);
                 if (res) {
                     deleted++;
                 }
@@ -834,6 +842,7 @@ public:
     }
 
     void YCSBA (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("YCSBA");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -853,10 +862,10 @@ public:
             for (; j < batch && key_iterator.Valid (); j++) {
                 auto& key = key_iterator.Next ();
                 if (thread->ycsb_gen.NextA () == kYCSB_Write) {
-                    hashtable_->Put (key, key);
+                    hashtable_->Put (key, key, tinfo);
                     insert++;
                 } else {
-                    hashtable_->Find (key);
+                    hashtable_->Find (key, tinfo, NothingCallback);
                     find++;
                 }
             }
@@ -870,6 +879,7 @@ public:
     }
 
     void YCSBB (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("YCSBB");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -889,10 +899,10 @@ public:
             for (; j < batch && key_iterator.Valid (); j++) {
                 auto& key = key_iterator.Next ();
                 if (thread->ycsb_gen.NextB () == kYCSB_Write) {
-                    hashtable_->Put (key, key);
+                    hashtable_->Put (key, key, tinfo);
                     insert++;
                 } else {
-                    hashtable_->Find (key);
+                    hashtable_->Find (key, tinfo, NothingCallback);
                     find++;
                 }
             }
@@ -906,6 +916,7 @@ public:
     }
 
     void YCSBC (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("YCSBC");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -924,8 +935,8 @@ public:
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid (); j++) {
                 auto& key = key_iterator.Next ();
-                auto res = hashtable_->Find (key);
-                if (res != nullptr) {
+                auto res = hashtable_->Find (key, tinfo, NothingCallback);
+                if (res) {
                     find++;
                 }
             }
@@ -939,6 +950,7 @@ public:
     }
 
     void YCSBD (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("YCSBD");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -960,8 +972,8 @@ public:
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid (); j++) {
                 auto& key = key_iterator.Next ();
-                auto res = hashtable_->Find (key);
-                if (res != nullptr) {
+                auto res = hashtable_->Find (key, tinfo, NothingCallback);
+                if (res) {
                     find++;
                 }
             }
@@ -975,6 +987,7 @@ public:
     }
 
     void YCSBF (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
         INFO ("YCSBF");
         uint64_t batch = FLAGS_batch;
         if (key_trace_ == nullptr) {
@@ -994,13 +1007,13 @@ public:
             for (; j < batch && key_iterator.Valid (); j++) {
                 auto& key = key_iterator.Next ();
                 if (thread->ycsb_gen.NextF () == kYCSB_Read) {
-                    auto res = hashtable_->Find (key);
-                    if (res != nullptr) {
+                    auto res = hashtable_->Find (key, tinfo, NothingCallback);
+                    if (res) {
                         find++;
                     }
                 } else {
-                    hashtable_->Find (key);
-                    hashtable_->Put (key, key);
+                    hashtable_->Find (key, tinfo, NothingCallback);
+                    hashtable_->Put (key, key, tinfo);
                     insert++;
                 }
             }
