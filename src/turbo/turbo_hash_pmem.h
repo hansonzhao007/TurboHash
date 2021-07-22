@@ -65,8 +65,6 @@
 
 #define TURBO_PMEM_LOG_SIZE ((96LU << 30))
 
-#define OPTIMISTIC_LOCK
-
 // Linear probing setting
 static const int kTurboPmemMaxProbeLen = 16;
 static const int kTurboPmemProbeStep = 1;
@@ -1222,7 +1220,7 @@ public:
 
     private:
         Key key_;
-        Entry ptr_;
+        char* ptr_;
     };
 
     /**
@@ -1270,7 +1268,7 @@ public:
 
     private:
         H1Tag h1_;
-        Entry ptr_;
+        char* ptr_;
     };
     /**
      * @brief key is std::string, value is numeric
@@ -1321,7 +1319,7 @@ public:
 
     private:
         H1Tag h1_;
-        Entry ptr_;
+        char* ptr_;
     };
     /**
      * @brief key and value both are std::string
@@ -2175,7 +2173,6 @@ private:
         // Obtain the partial hash
         PartialHash partial_hash (key, hash_value);
 
-#ifdef OPTIMISTIC_LOCK
     after_rehash:
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
         BucketMetaDram* bucket_meta = locateBucket (bucketIndex (partial_hash.bucket_hash_));
@@ -2267,39 +2264,6 @@ private:
         }
 
         return false;
-#else
-        // Check if the bucket is locked for rehashing. Wait entil is unlocked.
-        BucketMetaDram* bucket_meta = locateBucket (bucketIndex (partial_hash.bucket_hash_));
-
-        // Obtain the bucket lock
-        BucketLockScope meta_lock (bucket_meta);
-
-        bool retry_find = false;
-        do {  // concurrent insertion may find same position for insertion, retry
-              // insertion if neccessary
-
-            FindSlotForInsertResult res = findSlotForInsert (key, partial_hash);
-
-            // find a valid slot in target cell
-            if (res.find) {
-                char* cell_addr = locateCell (res.search_bucket_addr,
-                                              {res.target_slot.bucket, res.target_slot.cell});
-
-                insertToSlotAndRecycle (hash_value, key, value, cell_addr,
-                                        res.target_slot);  // update slot content (including pointer
-                                                           // and H1), H2 and bitmap
-
-                return true;
-            } else {  // cannot find a valid slot for insertion, rehash current bucket
-                      // then retry
-                MinorRehash (res.target_slot.bucket);
-                retry_find = true;
-                continue;
-            }
-        } while (retry_find);
-
-        return false;
-#endif
     }
 
     template <typename T1, bool key_flat>
@@ -2464,7 +2428,7 @@ private:
         PartialHash partial_hash (key, hash_value);
         uint32_t bucket_i = bucketIndex (partial_hash.bucket_hash_);
         auto h2_hash_vec = CellMeta::SetHashVec (partial_hash.H2_);
-#ifdef OPTIMISTIC_LOCK
+
     after_rehash:
 
         BucketMetaDram* bucket_meta = locateBucket (bucket_i);
@@ -2525,55 +2489,6 @@ private:
         }
 
         return false;
-#else
-        uint32_t bucket_i = bucketIndex (partial_hash.bucket_hash_);
-        BucketMetaDram* bucket_meta = locateBucket (bucket_i);
-        char* search_bucket_addr = bucket_meta->Address ();
-        // Obtain the bucket lock
-        BucketLockScope meta_lock (bucket_meta);
-
-        ProbeWithinBucket probe (H1ToHash (partial_hash.H1_), bucket_meta->CellCountMask (),
-                                 bucket_i);
-
-        int probe_count = 0;  // limit probe times
-        while (probe && (probe_count++ < ProbeWithinBucket::MAX_PROBE_LEN)) {
-            auto offset = probe.offset ();
-            char* cell_addr = locateCell (search_bucket_addr, offset);
-
-            CellMeta256V2 meta (cell_addr);
-
-            for (int i : meta.MatchBitSet (
-                     partial_hash.H2_)) {  // Locate if there is any H2 match in this cell
-
-                HashSlot* slot = locateSlot (cell_addr, i);  // locate the slot reference
-
-                if (TURBO_PMEM_LIKELY (
-                        slot->H1 == partial_hash.H1_))  // Compare if the H1 partial hash is equal.
-                {
-                    SlotType* record = (SlotType*)slot;
-
-                    if (SlotKeyEqual<Key, is_key_flat>{}(key, record)) {
-                        // If this key exsit, set the deleted bitmap
-                        uint32_t* bitmap = (uint32_t*)cell_addr;
-                        util::AtomicBitOps::BitTestAndSet (bitmap, 16 + i);
-                        FLUSH (cell_addr);
-                        FLUSHFENCE;
-                        return true;
-                    }
-                }
-            }
-
-            // If this cell still has more than one empty slot, then it means the key
-            // does't exist.
-            if (!meta.Full ()) {
-                return false;
-            }
-
-            probe.next ();
-        }
-
-        return false;
-#endif
     }
 
     inline FindSlotResult probeFirstSlot (const Key& key, size_t hash_value) {
