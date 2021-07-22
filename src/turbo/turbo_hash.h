@@ -558,6 +558,9 @@ public:
     static constexpr bool is_key_flat = std::is_same<Key, std::string>::value == false;
     static constexpr bool is_value_flat = std::is_same<T, std::string>::value == false;
 
+    using key_type = Key;
+    using mapped_type = T;
+    using size_type = size_t;
     using hasher = Hash;
 
     // private:
@@ -884,10 +887,13 @@ public:
      *  @node:
      */
     struct HashSlot {
-        Entry entry;
-        char _[8 - sizeof (Entry)];
-        H1Tag H1;
-        char __[8 - sizeof (H1Tag)];
+        union {
+            struct {
+                H1Tag H1;
+                Entry entry;
+            };
+            uint64_t _[2];
+        };
     };
 
     /** CellMeta256V2
@@ -900,8 +906,8 @@ public:
      *  |- Bitmap Zone:
      *            0 bit: used as a bitlock
      *            1 bit: not in use
-     *      2  - 15 bit: indicate which slot is empty, 0: empty or deleted, 1:
-     * occupied 16 - 31 bit: delete_bitmap. 1: deleted
+     *      2  - 15 bit: indicate which slot is valid or not
+     *      16 - 31 bit: delete_bitmap. 1: deleted
      *
      *  |- two byte hash:
      *      16 bit tag (H2) for the slot
@@ -1006,7 +1012,7 @@ public:
         }
 
         __m256i meta_;             // 32 byte integer vector
-        uint16_t bitmap_;          // 1: occupied, 0: empty or deleted
+        uint16_t bitmap_;          // 1: occupied, 0: empty
         uint16_t bitmap_deleted_;  // 1: deleted
     };                             // end of class CellMeta256V2
 
@@ -1018,8 +1024,9 @@ public:
      *  | Bitmap Zone   |    Tag Zone                          |    Slot Zone
      *
      *  |- Bitmap Zone:
-     *      0  -  7 bit: bitmap_, indicate which slot is empty, 0: empty or
-     * deleted, 1: occupied 8  - 15 bit: bitmap_deleted_, 1: deleted
+     *            0 bit: spinlock
+     *      1  -  7 bit: bitmap_, indicate which slot is valid or not
+     *      9  - 15 bit: bitmap_deleted_, 1: deleted
      *
      *  |- two byte hash:
      *      16 bit tag (H2) for the slot
@@ -1124,7 +1131,7 @@ public:
         }
 
         __m128i meta_;            // 16 byte integer vector
-        uint8_t bitmap_;          // 1: occupied, 0: empty or deleted
+        uint8_t bitmap_;          // 1: occupied
         uint8_t bitmap_deleted_;  // 1: deleted
     };                            // end of class CellMeta128
 

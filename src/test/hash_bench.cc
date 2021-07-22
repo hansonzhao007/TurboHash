@@ -37,7 +37,7 @@ DEFINE_uint32 (batch, 1000000, "report batch");
 DEFINE_uint32 (readtime, 0, "if 0, then we read all keys");
 DEFINE_uint32 (thread, 1, "");
 DEFINE_uint64 (report_interval, 0, "Report interval in seconds");
-DEFINE_uint64 (stats_interval, 10000000, "Report interval in ops");
+DEFINE_uint64 (stats_interval, 200000000, "Report interval in ops");
 DEFINE_uint64 (value_size, 8, "The value size");
 DEFINE_uint64 (num, 100 * 1000000LU, "Number of total record");
 DEFINE_uint64 (read, 0, "Number of read operations");
@@ -45,7 +45,7 @@ DEFINE_uint64 (write, 0, "Number of read operations");
 
 DEFINE_bool (hist, false, "");
 
-DEFINE_string (benchmarks, "load,overwrite,readrandom", "");
+DEFINE_string (benchmarks, "loadverify,readall,readnon,deleteverify,readall,overwrite,readall", "");
 
 #ifdef IS_PMEM
 typedef turbo_pmem::unordered_map<size_t, size_t> Hashtable;
@@ -379,8 +379,8 @@ public:
         printf ("key trace size: %lu\n", trace_size_);
         key_trace_ = new RandomKeyTrace (trace_size_);
         if (reads_ == 0) {
-            reads_ = key_trace_->count_;
-            FLAGS_read = key_trace_->count_;
+            reads_ = key_trace_->count_ / FLAGS_thread;
+            FLAGS_read = key_trace_->count_ / FLAGS_thread;
         }
         PrintHeader ();
         bool fresh_db = true;
@@ -725,7 +725,7 @@ public:
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid (); j++) {
                 size_t key = key_iterator.Next ();
-                bool res = hashtable_->Put (key, key, tinfo);
+                bool res = hashtable_->Put (key, 1, tinfo);
                 if (!res) {
                     INFO ("Hash Table Full!!!\n");
                     printf ("Hash Table Full!!!\n");
@@ -860,7 +860,7 @@ public:
             uint64_t j = 0;
             for (; j < batch && key_iterator.Valid (); j++) {
                 size_t key = key_iterator.Next ();
-                bool res = hashtable_->Put (key, key, tinfo);
+                bool res = hashtable_->Put (key, 2, tinfo);
                 if (!res) {
                     INFO ("Hash Table Full!!!\n");
                     printf ("Hash Table Full!!!\n");

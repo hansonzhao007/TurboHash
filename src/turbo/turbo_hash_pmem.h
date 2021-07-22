@@ -934,10 +934,13 @@ public:
      *  @node:
      */
     struct HashSlot {
-        Entry entry;
-        char _[8 - sizeof (Entry)];
-        H1Tag H1;
-        char __[8 - sizeof (H1Tag)];
+        union {
+            struct {
+                H1Tag H1;
+                Entry entry;
+            };
+            uint64_t _[2];
+        };
     };
 
     /** CellMeta256V2
@@ -950,8 +953,8 @@ public:
      *  |- Bitmap Zone:
      *            0 bit: used as a bitlock
      *            1 bit: not in use
-     *      2  - 15 bit: indicate which slot is empty, 0: empty or deleted, 1:
-     * occupied 16 - 31 bit: delete_bitmap. 1: deleted
+     *      2  - 15 bit: indicate which slot is valid or not
+     *      16 - 31 bit: delete_bitmap. 1: deleted
      *
      *  |- two byte hash:
      *      16 bit tag (H2) for the slot
@@ -1809,7 +1812,7 @@ public:
     struct PptrToDramPptr<E, false> {
         static inline void Convert (E& des_entry_dram, E& des_entry_pmem, HashSlot* old_slot_dram,
                                     HashSlot* old_slot_pmem) {
-            E* old_slot_entry_addr = (E*)old_slot_pmem;
+            E* old_slot_entry_addr = (E*)&old_slot_pmem->entry;
             char* old_entry_addr = from_pptr_off (old_slot_dram->entry.off, old_slot_entry_addr);
             uint64_t off = to_pptr_off (old_entry_addr, &des_entry_pmem);
             des_entry_dram.off = off;
@@ -1894,7 +1897,6 @@ public:
                 exit (1);
             }
             //      c) move the old slot to new slot
-
             const SlotInfo& old_info = res.slot_info;
             HashSlot* old_slot_dram = res.hash_slot;
             char* old_cell_addr_pmem = old_bucket_addr_pmem + (old_info.cell << kCellSizeLeftShift);
