@@ -37,13 +37,16 @@ DEFINE_uint32 (readtime, 0, "if 0, then we read all keys");
 DEFINE_uint32 (thread, 1, "");
 DEFINE_uint64 (report_interval, 0, "Report interval in seconds");
 DEFINE_uint64 (stats_interval, 200000000, "Report interval in ops");
-DEFINE_uint64 (num, 80 * 1000000LU, "Number of total record");
+DEFINE_uint64 (num, 120 * 1000000LU, "Number of total record");
 DEFINE_uint64 (read, 0, "Number of read operations");
 DEFINE_uint64 (write, 0, "Number of read operations");
 
 DEFINE_bool (hist, false, "");
 
-DEFINE_string (benchmarks, "loadverify,readall,readnon,deleteverify,readall,overwrite,readall", "");
+DEFINE_string (benchmarks,
+               "loadverify,readall,readnon,overwrite,readall,readnon,deleteverify,readall,"
+               "overwrite,readall,readnon,delete,readall",
+               "");
 
 #ifdef IS_PMEM
 typedef turbo_pmem::unordered_map<std::string, std::string> Hashtable;

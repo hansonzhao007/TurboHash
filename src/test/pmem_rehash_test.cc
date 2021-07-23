@@ -18,9 +18,9 @@ int main () {
     remove ("/mnt/pmem/turbo_hash_pmem_basemd");
     remove ("/mnt/pmem/turbo_hash_pmem_desc");
     remove ("/mnt/pmem/turbo_hash_pmem_sb");
-    const size_t COUNT = 10000000;
+    const size_t COUNT = 1000000;
 
-    auto* hashtable = new HashTable (65536, 16);
+    auto* hashtable = new HashTable (4096, 16);
 
     bool succ = true;
     size_t find = 0;
@@ -43,7 +43,7 @@ int main () {
         for (size_t i = 0; i < COUNT; i++) {
             std::string key = "key" + std::to_string (i);
             auto res = hashtable->Find (key, tinfo, read_callback);
-            if (i < 10 || (i & 0x7FF) == 0) {
+            if (i < 10 || (i & 0x7FFF) == 0) {
                 INFO ("Get key: %s. val: %s\n", key.c_str (), value_buffer.c_str ());
             }
             if (res) find++;
