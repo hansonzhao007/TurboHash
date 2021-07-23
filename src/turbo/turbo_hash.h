@@ -63,7 +63,7 @@
 
 // Linear probing setting
 static constexpr int kTurboCellCountLimit = 32768;
-static constexpr int kTurboMaxProbeLen = 16;
+static constexpr int kTurboMaxProbeLen = 15;
 static constexpr int kTurboProbeStep = 1;
 
 #define TURBO_LIKELY(x) (__builtin_expect (!!(x), 1))

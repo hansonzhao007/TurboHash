@@ -66,7 +66,7 @@
 #define TURBO_PMEM_LOG_SIZE ((96LU << 30))
 
 // Linear probing setting
-static const int kTurboPmemMaxProbeLen = 16;
+static const int kTurboPmemMaxProbeLen = 15;
 static const int kTurboPmemProbeStep = 1;
 
 #define TURBO_PMEM_LIKELY(x) (__builtin_expect (!!(x), 1))
