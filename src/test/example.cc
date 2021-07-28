@@ -108,6 +108,5 @@ int main (int argc, char** argv) {
     }
 
     multithreaded (argv);
-
     return 0;
 }

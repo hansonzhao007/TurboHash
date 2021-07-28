@@ -942,6 +942,8 @@ public:
                 uint64_t data_;
             };
 
+            inline bool IsPosValid (int i) { return (bitmap_ & ~bitmap_deleted_ & (1 << i)) != 0; }
+
             bool operator== (const Version& v1) { return data_ == v1.data_; }
             bool operator!= (const Version& v1) { return data_ != v1.data_; }
         };
@@ -965,7 +967,7 @@ public:
         }
 
         static inline void StoreVersion (char* cell_addr, const Version& v) {
-            *reinterpret_cast<uint64_t*> (cell_addr) = v.data_;
+            __atomic_store_n (reinterpret_cast<uint64_t*> (cell_addr), v.data_, __ATOMIC_RELEASE);
         }
 
         static inline SlotType* LocateSlot (char* cell_addr, int slot_i) {
@@ -1106,6 +1108,8 @@ public:
                 uint64_t data_;
             };
 
+            inline bool IsPosValid (int i) { return (bitmap_ & ~bitmap_deleted_ & (1 << i)) != 0; }
+
             bool operator== (const Version& v1) { return data_ == v1.data_; }
             bool operator!= (const Version& v1) { return data_ != v1.data_; }
         };
@@ -1129,7 +1133,7 @@ public:
         }
 
         static inline void StoreVersion (char* cell_addr, const Version& v) {
-            *reinterpret_cast<uint64_t*> (cell_addr) = v.data_;
+            __atomic_store_n (reinterpret_cast<uint64_t*> (cell_addr), v.data_, __ATOMIC_RELEASE);
         }
 
         static inline SlotType* LocateSlot (char* cell_addr, int slot_i) {
@@ -1552,8 +1556,7 @@ public:
         inline bool IsRehashLocked (void) { return util::turbo_lockbusy ((uint32_t*)(&data_), 1); }
 
         // LSB
-        // | 1 bit bucket lock | 1 bit rehash lock | 6 bit reserved | 8 bit cell
-        // mask | 48 bit address |
+        // | 1 b bucket lock | 1 b rehash lock | 6 b reserved | 8 b cell mask | 48 b address |
         uint64_t data_;
     };
 
@@ -1576,7 +1579,7 @@ public:
     public:
         struct InfoPair {
             SlotInfo slot_info;
-            HashSlot hash_slot;
+            SlotType hash_slot;
         };
 
         BucketIterator (uint32_t bi, char* bucket_addr, size_t cell_count, size_t cell_i = 0)
@@ -1680,7 +1683,25 @@ public:
         }
     }
 
-    ~TurboHashTable () {}
+    template <bool should_free>
+    typename std::enable_if<should_free == true>::type releaseAllRecords () {
+        IterateAllCallback ([] (char* addr) { free (addr); });
+    }
+
+    template <bool should_free>
+    typename std::enable_if<should_free == false>::type releaseAllRecords () {}
+
+    void ReleaseRecords () { releaseAllRecords<!is_key_flat || !is_value_flat> (); }
+
+    ~TurboHashTable () {
+        ReleaseRecords ();
+        for (size_t b = 0; b < bucket_count_; b++) {
+            BucketMeta* bucket_meta = locateBucket (b);
+            char* addr = bucket_meta->Address ();
+            free (addr);
+        }
+        free (buckets_);
+    }
 
     /** MinorReHashAll
      *  @note: not thread safe. This global rehashing will double the hash table
@@ -1939,6 +1960,23 @@ public:
                 std::cout << info.ToString () << ", addr: " << slot.entry
                           << ". key: " << record->first () << ", value: " << record->second ()
                           << std::endl;
+                ++iter;
+                count++;
+            }
+        }
+        printf ("iterato %lu entries. total size: %lu\n", count, Size ());
+    }
+
+    template <typename Fn>
+    void IterateAllCallback (Fn&& callback) {
+        size_t count = 0;
+        for (size_t i = 0; i < bucket_count_; ++i) {
+            BucketMeta* bucket_meta = locateBucket (i);
+            BucketIterator iter (i, bucket_meta->Address (), bucket_meta->CellCount ());
+            while (iter.valid ()) {
+                auto res = (*iter);
+                auto& slot = res.hash_slot;
+                callback (slot.entry);
                 ++iter;
                 count++;
             }
@@ -2247,11 +2285,9 @@ private:
             CellMeta meta (cell_addr);
             for (int i : meta.MatchBitSet (h2_hash_vec)) {
                 // locate the slot reference
-                HashSlot* slot = CellMeta::LocateSlot (cell_addr, i);
+                SlotType* slot = CellMeta::LocateSlot (cell_addr, i);
                 if TURBO_LIKELY (slot->H1 == partial_hash.H1_) {
-                    // Obtain record pointer
-                    SlotType* record = (SlotType*)(slot);
-                    if (SlotKeyEqual<Key, is_key_flat>{}(key, record)) {
+                    if (SlotKeyEqual<Key, is_key_flat>{}(key, slot)) {
                         // This is an update request
                         util::BitSet backup_bitset = meta.BackupBitSet ();
                         return {{
@@ -2384,14 +2420,22 @@ private:
         while (probe && (probe_count++ < ProbeWithinBucket::MAX_PROBE_LEN)) {
             auto offset = probe.offset ();
             char* cell_addr = locateCell (search_bucket_addr, offset);
+
+        delete_retry:
             CellMeta meta (cell_addr);
             for (int i : meta.MatchBitSet (h2_hash_vec)) {
-                HashSlot* slot = CellMeta::LocateSlot (cell_addr, i);  // locate the slot reference
+                SlotType* slot = CellMeta::LocateSlot (cell_addr, i);  // locate the slot reference
                 if TURBO_LIKELY (slot->H1 == partial_hash.H1_) {
-                    SlotType* record = (SlotType*)slot;
                     // Obtain the bucket lock
                     BucketLockScope meta_lock (bucket_meta);
-                    if (SlotKeyEqual<Key, is_key_flat>{}(key, record)) {
+
+                    auto version = CellMeta::LoadVersion (cell_addr);
+
+                    if (!version.IsPosValid (i)) {
+                        goto delete_retry;
+                    }
+
+                    if (SlotKeyEqual<Key, is_key_flat>{}(key, slot)) {
                         // If this key exsit, set the deleted bitmap
 
                         // it is possible after obtain the bucket lock,
@@ -2403,14 +2447,14 @@ private:
                         }
 
                         // Garbage collection for deleted record
-                        char* old_addr = record->ReleaseAddress ();
+                        char* old_addr = slot->ReleaseAddress ();
                         if (old_addr != nullptr) {
                             epoche_.markNodeForDeletion ([=] () { free (old_addr); }, thread_info);
                         }
 
-                        uint32_t* bitmap = (uint32_t*)cell_addr;
-                        util::AtomicBitOps::BitTestAndSet (bitmap,
-                                                           CellMeta::kDeleteBitmapOffset + i);
+                        version.bitmap_deleted_ |= (1 << i);
+                        version.seq_no_++;
+                        CellMeta::StoreVersion (cell_addr, version);
                         return true;
                     }
                 }

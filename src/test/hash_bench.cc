@@ -365,6 +365,9 @@ public:
         if (hashtable_ != nullptr) {
             delete hashtable_;
         }
+        if (key_trace_ != nullptr) {
+            delete key_trace_;
+        }
     }
     void Run () {
         initial_capacity_ =
@@ -1198,6 +1201,11 @@ private:
         arg[0].thread->stats.Report (name, print_hist);
 
         for (auto& th : server_threads) th.join ();
+
+        for (int i = 0; i < thread_num; i++) {
+            delete arg[i].thread;
+        }
+        delete[] arg;
     }
 
     void PrintEnvironment () {

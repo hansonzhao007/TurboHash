@@ -46,7 +46,7 @@ public:
     ~RandomKeyTrace () {}
 
     void Randomize (void) {
-        printf ("randomize %lu keys\n", keys_.size ());
+        // printf ("randomize %lu keys\n", keys_.size ());
         auto starttime = std::chrono::system_clock::now ();
         tbb::parallel_for (tbb::blocked_range<uint64_t> (0, keys_.size ()),
                            [&] (const tbb::blocked_range<uint64_t>& range) {
@@ -56,7 +56,7 @@ public:
                            });
         auto duration = std::chrono::duration_cast<std::chrono::microseconds> (
             std::chrono::system_clock::now () - starttime);
-        printf ("randomize duration %f s.\n", duration.count () / 1000000.0);
+        // printf ("randomize duration %f s.\n", duration.count () / 1000000.0);
     }
 
     class RangeIterator {
@@ -165,7 +165,7 @@ public:
     ~RandomKeyTraceString () {}
 
     void Randomize (void) {
-        printf ("randomize %lu keys\n", keys_.size ());
+        // printf ("randomize %lu keys\n", keys_.size ());
         auto starttime = std::chrono::system_clock::now ();
         tbb::parallel_for (tbb::blocked_range<uint64_t> (0, keys_.size ()),
                            [&] (const tbb::blocked_range<uint64_t>& range) {
@@ -175,7 +175,7 @@ public:
                            });
         auto duration = std::chrono::duration_cast<std::chrono::microseconds> (
             std::chrono::system_clock::now () - starttime);
-        printf ("randomize duration %f s.\n", duration.count () / 1000000.0);
+        // printf ("randomize duration %f s.\n", duration.count () / 1000000.0);
     }
 
     class RangeIterator {
