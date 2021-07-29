@@ -1969,19 +1969,29 @@ public:
 
     template <typename Fn>
     void IterateAllCallback (Fn&& callback) {
-        size_t count = 0;
-        for (size_t i = 0; i < bucket_count_; ++i) {
-            BucketMeta* bucket_meta = locateBucket (i);
-            BucketIterator iter (i, bucket_meta->Address (), bucket_meta->CellCount ());
-            while (iter.valid ()) {
-                auto res = (*iter);
-                auto& slot = res.hash_slot;
-                callback (slot.entry);
-                ++iter;
-                count++;
-            }
+        size_t threads = std::min (8LU, bucket_count_);
+        std::vector<std::thread> workers (threads);
+        for (size_t t = 0; t < threads; t++) {
+            workers[t] = std::thread ([&, t] {
+                size_t start_b = bucket_count_ / threads * t;
+                size_t end_b = start_b + bucket_count_ / threads;
+                size_t count = 0;
+                for (size_t i = start_b; i < end_b; ++i) {
+                    BucketMeta* bucket_meta = locateBucket (i);
+                    BucketIterator iter (i, bucket_meta->Address (), bucket_meta->CellCount ());
+                    while (iter.valid ()) {
+                        auto res = (*iter);
+                        auto& slot = res.hash_slot;
+                        callback (slot.entry);
+                        ++iter;
+                        count++;
+                    }
+                }
+            });
         }
-        printf ("iterato %lu entries. total size: %lu\n", count, Size ());
+        std::for_each (workers.begin (), workers.end (), [] (std::thread& t) { t.join (); });
+
+        // printf ("iterato %lu entries. total size: %lu\n", count, Size ());
     }
 
     std::string ProbeStrategyName () { return ProbeWithinBucket::name (); }
@@ -2379,8 +2389,8 @@ private:
                         auto version = CellMeta::LoadVersion (cell_addr);
                         auto old_version = meta.GetVersion ();
                         if (old_version.seq_no_ + 1 < version.seq_no_) {
-                            // if version changed since last read, and the seq_no advances more than
-                            // 1 (which means >= 2 writes), we retry.
+                            // if version changed since last read, and the seq_no advances more
+                            // than 1 (which means >= 2 writes), we retry.
                             goto find_retry;
                         }
                         return {record, true};
@@ -2497,6 +2507,6 @@ using unordered_map = detail::TurboHashTable<
     typename std::conditional<std::is_same<Key, std::string>::value == false /* is numeric */,
                               KeyEqual, std::equal_to<util::Slice>>::type,
     kTurboCellCountLimit>;
-};  // end of namespace turbo
+};  // namespace turbo
 
 #endif
