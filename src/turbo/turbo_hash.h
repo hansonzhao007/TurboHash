@@ -802,30 +802,30 @@ public:
     /** Case 4: T1 is std::string, T2 is std::string
      *  * record memory layout:
      *         |  len1  |  len2  | buffer1 | bufer2 |
-     *         | size_t | size_t |         |
+     *         |   u32  |  u32   |         |
      *         |                 |
      *     addr start here     offset
      */
     template <typename T1, typename T2>
     struct Record2Size<false, false, T1, T2> {
         static inline size_t Size (char* addr) {
-            size_t len1 = *reinterpret_cast<size_t*> (addr);
-            size_t len2 = *reinterpret_cast<size_t*> (addr + sizeof (size_t));
-            return sizeof (size_t) + sizeof (size_t) + len1 + len2;
+            uint32_t len1 = *reinterpret_cast<uint32_t*> (addr);
+            uint32_t len2 = *reinterpret_cast<uint32_t*> (addr + sizeof (uint32_t));
+            return sizeof (uint32_t) + sizeof (uint32_t) + len1 + len2;
         }
     };
     template <typename T1, typename T2>
     struct Record2Format<false, false, T1, T2> {
         static inline size_t Length (const T1& t1, const T2& t2) {
-            return sizeof (size_t) + sizeof (size_t) + t1.size () + t2.size ();
+            return sizeof (uint32_t) + sizeof (uint32_t) + t1.size () + t2.size ();
         }
     };
     template <typename T1, typename T2>
     struct EncodeToRecord2<false, false, T1, T2> {
         static inline void Encode (const T1& t1, const T2& t2, char* addr) {
-            static constexpr size_t offset = sizeof (size_t) + sizeof (size_t);
-            *reinterpret_cast<size_t*> (addr) = t1.size ();
-            *reinterpret_cast<size_t*> (addr + sizeof (size_t)) = t2.size ();
+            static constexpr uint32_t offset = sizeof (uint32_t) + sizeof (uint32_t);
+            *reinterpret_cast<uint32_t*> (addr) = t1.size ();
+            *reinterpret_cast<uint32_t*> (addr + sizeof (uint32_t)) = t2.size ();
             memcpy (addr + offset, t1.data (), t1.size ());
             if (t2.size () != 0) memcpy (addr + offset + t1.size (), t2.data (), t2.size ());
         }
@@ -833,16 +833,16 @@ public:
     template <typename T1, typename T2>
     struct DecodeInRecord2<false, false, true /* IsFirst*/, T1, T2> {
         static inline util::Slice Decode (char* addr) {
-            size_t len1 = *reinterpret_cast<size_t*> (addr);
-            return util::Slice (addr + sizeof (size_t) + sizeof (size_t), len1);
+            uint32_t len1 = *reinterpret_cast<uint32_t*> (addr);
+            return util::Slice (addr + sizeof (uint32_t) + sizeof (uint32_t), len1);
         }
     };
     template <typename T1, typename T2>
     struct DecodeInRecord2<false, false, false /* IsFirst*/, T1, T2> {
         static inline util::Slice Decode (char* addr) {
-            size_t len1 = *reinterpret_cast<size_t*> (addr);
-            size_t len2 = *reinterpret_cast<size_t*> (addr + sizeof (size_t));
-            return util::Slice (addr + sizeof (size_t) + sizeof (size_t) + len1, len2);
+            uint32_t len1 = *reinterpret_cast<uint32_t*> (addr);
+            uint32_t len2 = *reinterpret_cast<uint32_t*> (addr + sizeof (uint32_t));
+            return util::Slice (addr + sizeof (uint32_t) + sizeof (uint32_t) + len1, len2);
         }
     };
 
@@ -1273,7 +1273,7 @@ public:
     static_assert (kCellCountLimit <= kTurboCellCountLimit,
                    "kCellCountLimit needs to be <= kTurboCellCountLimit");
 
-    using CellMeta = CellMeta256V2;
+    using CellMeta = CellMeta128;
     using WHash = WrapHash<Hash>;
     using WKeyEqual = WrapKeyEqual<KeyEqual>;
 
