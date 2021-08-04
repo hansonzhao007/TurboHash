@@ -25,7 +25,7 @@ using namespace util;
 #define likely(x) (__builtin_expect (false || (x), true))
 #define unlikely(x) (__builtin_expect (x, 0))
 
-// #define IS_PMEM 1
+#define IS_PMEM 1
 
 // For hash table
 DEFINE_bool (use_existing_db, false, "");

@@ -410,46 +410,92 @@ public:
 
 };  // end fo class Hasher
 
-#define CAS(_p, _u, _v) \
-    (__atomic_compare_exchange_n (_p, _u, _v, false, __ATOMIC_ACQUIRE, __ATOMIC_ACQUIRE))
-
-static inline void turbo_bit_spin_lock (uint32_t* lock, int bit_pos) {
-    uint32_t old_value = 0;
-    uint32_t new_value = 0;
-    do {
-        while (true) {
-            old_value = __atomic_load_n (lock, __ATOMIC_ACQUIRE);
-            if (!(old_value & (1 << bit_pos))) {
-                // not lock yet
-                break;
-            }
-            TURBO_PMEM_CPU_RELAX ();
-        }
-        new_value = old_value | (1 << bit_pos);
-    } while (!CAS (lock, &old_value, new_value));
-}
-
-// return true if try lock succ
-static inline bool turbo_bit_spin_try_lock (uint32_t* lock, int bit_pos) {
-    uint32_t v = __atomic_load_n (lock, __ATOMIC_ACQUIRE);
-    if (v & (1 << bit_pos)) {
-        return false;
+/** AtomicBitOps
+ *  @note: provide atomic bit test-and-set, test-and-reset
+ */
+class AtomicBitOps {
+public:
+    /** https://stackoverflow.com/questions/30467638/cheapest-least-intrusive-way-to-atomically-update-a-bit
+     * \brief Atomically tests and sets a bit (INTEL only)
+     * \details Sets bit \p bit of *\p ptr and returns its previous value.
+     * The function is atomic and acts as a read-write memory barrier.
+     * \param[in] ptr a pointer to an unsigned integer
+     * \param[in] bit index of the bit to set in *\p ptr
+     * \return the previous value of bit \p bit
+     */
+    static inline char BitTestAndSet (volatile unsigned int* ptr, unsigned int bit) {
+        char out;
+#if defined(__x86_64)
+        __asm__ __volatile__(
+            "lock; bts %2,%1\n"  // set carry flag if bit %2 (bit) of %1 (ptr) is set
+                                 //   then set bit %2 of %1
+            "sbb %0,%0\n"        // set %0 (out) if carry flag is set
+            : "=r"(out), "=m"(*ptr)
+            : "Ir"(bit)
+            : "memory");
+#else
+        __asm__ __volatile__(
+            "lock; bts %2,%1\n"  // set carry flag if bit %2 (bit) of %1 (ptr) is set
+                                 //   then set bit %2 of %1
+            "sbb %0,%0\n"        // set %0 (out) if carry flag is set
+            : "=q"(out), "=m"(*ptr)
+            : "Ir"(bit)
+            : "memory");
+#endif
+        return out;
     }
-    auto old_value = v;
-    auto new_value = v | (1 << bit_pos);
-    return CAS (lock, &old_value, new_value);
-}
 
-static inline void turbo_bit_spin_unlock (uint32_t* lock, int bit_pos) {
-    uint32_t v = *lock;
-    v &= ~(1 << bit_pos);
-    __atomic_store_n (lock, v, __ATOMIC_RELEASE);
-}
+    /**
+     * \brief Atomically tests and resets a bit (INTEL only)
+     * \details Resets bit \p bit of *\p ptr and returns its previous value.
+     * The function is atomic and acts as a read-write memory barrier
+     * \param[in] ptr a pointer to an unsigned integer
+     * \param[in] bit index of the bit to reset in \p ptr
+     * \return the previous value of bit \p bit
+     */
+    static inline char BitTestAndReset (volatile unsigned int* ptr, unsigned int bit) {
+        char out;
+#if defined(__x86_64)
+        __asm__ __volatile__(
+            "lock; btr %2,%1\n"  // set carry flag if bit %2 (bit) of %1 (ptr) is set
+                                 //   then reset bit %2 of %1
+            "sbb %0,%0\n"        // set %0 (out) if carry flag is set
+            : "=r"(out), "=m"(*ptr)
+            : "Ir"(bit)
+            : "memory");
+#else
+        __asm__ __volatile__(
+            "lock; btr %2,%1\n"  // set carry flag if bit %2 (bit) of %1 (ptr) is set
+                                 //   then reset bit %2 of %1
+            "sbb %0,%0\n"        // set %0 (out) if carry flag is set
+            : "=q"(out), "=m"(*ptr)
+            : "Ir"(bit)
+            : "memory");
+#endif
+        return out;
+    }
 
-// If locked, return true
+};  // end of class AtomicBitOps
+
+static inline bool turbo_bit_spin_try_lock (uint32_t* lock, int bit_pos) {
+    return AtomicBitOps::BitTestAndSet (lock, bit_pos) == TURBO_PMEM_SPINLOCK_FREE;
+}
 static inline bool turbo_lockbusy (uint32_t* lock, int bit_pos) {
     uint32_t lock_value = __atomic_load_n (lock, __ATOMIC_ACQUIRE);
     return lock_value & (1 << bit_pos);
+}
+static inline void turbo_bit_spin_lock (uint32_t* lock, int bit_pos) {
+    while (1) {
+        // test & set return 0 if success
+        if (AtomicBitOps::BitTestAndSet (lock, bit_pos) == TURBO_PMEM_SPINLOCK_FREE) {
+            return;
+        }
+        while (turbo_lockbusy (lock, bit_pos)) TURBO_PMEM_CPU_RELAX ();
+    }
+}
+static inline void turbo_bit_spin_unlock (uint32_t* lock, int bit_pos) {
+    TURBO_PMEM_BARRIER ();
+    *lock &= ~(1 << bit_pos);
 }
 
 /** SpinLockScope
