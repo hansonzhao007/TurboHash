@@ -10,8 +10,8 @@ from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
 plt.rcParams['axes.linewidth'] = 2
 
 # read data
-hashtables = ('turbo', 'cceh', 'turbo30', 'cceh30', 'clevel30', 'clht30')
-legend_name = ('TURBO16', 'CCEH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
+hashtables = ('turbo', 'cceh', 'dash', 'turbo30', 'cceh30', 'clevel30', 'clht30')
+legend_name = ('TURBO16', 'CCEH16', 'DASH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
 
 markers= {
     'turbo'   : 'o',     
