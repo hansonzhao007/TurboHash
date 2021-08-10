@@ -9,7 +9,7 @@ for t in 40
 do
     numactl -N $SOCKET_NO sudo ../release/hash_bench  --thread=$t --benchmarks=load,readrandom,readnon --stats_interval=200000000 --read=10000000 --num=${NUM} --bucket_count=65536 --cell_count=16 --no_rehash=false | tee thread.turbo_$t
 
-    # numactl -N $SOCKET_NO sudo ../release/hash_bench_30  --thread=$t --benchmarks=load,readrandom,readnon --stats_interval=200000000 --read=10000000 --num=${NUM} --bucket_count=65536 --cell_count=16 --no_rehash=false | tee thread.turbo30_$t
+    numactl -N $SOCKET_NO sudo ../release/hash_bench_30  --thread=$t --benchmarks=load,readrandom,readnon --stats_interval=200000000 --read=10000000 --num=${NUM} --bucket_count=65536 --cell_count=16 --no_rehash=false | tee thread.turbo30_$t
 
     # numactl -N $SOCKET_NO sudo ../CCEH-PMDK/ycsb_bench --thread=$t --benchmarks=load,readrandom,readnon --stats_interval=200000000 --read=10000000 --num=${NUM} | tee thread.cceh_$t
 
