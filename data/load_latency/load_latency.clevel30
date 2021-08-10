@@ -18,24 +18,24 @@ Stats interval:        10000000 records
 benchmarks:            loadlat
 ------------------------------------------------
 [32mStart IPMWatcher for loadlat
-[0mthread  2, between 12500000 - 18750000
-thread  6, between 37500000 - 43750000
-thread  8, between 50000000 - 56250000
+[0mthread  0, between 0 - 6250000
 thread 10, between 62500000 - 68750000
-thread 14, between 87500000 - 93750000
-thread  0, between 0 - 6250000
-thread  1, between 6250000 - 12500000
+thread  5, between 31250000 - 37500000
 thread 15, between 93750000 - 100000000
 thread  9, between 56250000 - 62500000
-thread  3, between 18750000 - 25000000
+thread  1, between 6250000 - 12500000
+thread 13, between 81250000 - 87500000
+thread  6, between 37500000 - 43750000
 thread 11, between 68750000 - 75000000
 thread  4, between 25000000 - 31250000
-thread 12, between 75000000 - 81250000
-thread 13, between 81250000 - 87500000
-thread  5, between 31250000 - 37500000
+thread 14, between 87500000 - 93750000
+thread  2, between 12500000 - 18750000
 thread  7, between 43750000 - 50000000
-Thread-16 starts expanding for 2097152 buckets
-Thread-16 finishes expanding, capacity: 29360128
+thread  8, between 50000000 - 56250000
+thread 12, between 75000000 - 81250000
+thread  3, between 18750000 - 25000000
+Thread-6 starts expanding for 2097152 buckets
+Thread-6 finishes expanding, capacity: 29360128
 Expand thread updates metadata, is_resizing: 0 levels_left: 2
 Thread-12 starts expanding for 4194304 buckets
 Thread-12 finishes expanding, capacity: 58720256
@@ -44,44 +44,49 @@ Thread-0 starts expanding for 8388608 buckets
 Thread-0 finishes expanding, capacity: 125829120
 Expand thread updates metadata, is_resizing: 1 levels_left: 3
 Expand thread updates metadata, is_resizing: 0 levels_left: 2
-Thread-10 starts expanding for 16777216 buckets
-Thread-10 finishes expanding, capacity: 234881024
-loadlat      : 72001969.000 micros/op 0.000000 Mops/s;
+Thread-2 starts expanding for 16777216 buckets
+Thread-2 finishes expanding, capacity: 234881024
+loadlat      : 69185572.000 micros/op 0.000000 Mops/s;
 Nanoseconds per op:
-Count: 100000000 Average: 11058.9545  StdDev: 11.92
-Min: 4192  Median: 10220.4189  Max: 1463384192
-Percentiles: P50: 10220.42 P75: 12581.77 P99: 21415.78 P99.9: 36117.13 P99.99: 107900.27
+Count: 100000000 Average: 10645.4434  StdDev: 29.76
+Min: 4217  Median: 9845.6019  Max: 1264043089
+Percentiles: P50: 9845.60 P75: 12235.28 P99: 21021.60 P99.9: 32171.58 P99.99: 107178.13
 ------------------------------------------------------
-(    2900,    4400 ]        6   0.000%   0.000% 
-(    4400,    6600 ]  1785511   1.786%   1.786% 
-(    6600,    9900 ] 44822161  44.822%  46.608% #########
-(    9900,   14000 ] 43407297  43.407%  90.015% #########
-(   14000,   22000 ]  9692867   9.693%  99.708% ##
-(   22000,   33000 ]   190126   0.190%  99.898% 
-(   33000,   50000 ]    11082   0.011%  99.909% 
-(   50000,   75000 ]    63636   0.064%  99.973% 
-(   75000,  110000 ]    18419   0.018%  99.991% 
-(  110000,  170000 ]      565   0.001%  99.992% 
+(    2900,    4400 ]        3   0.000%   0.000% 
+(    4400,    6600 ]  2447969   2.448%   2.448% 
+(    6600,    9900 ] 48349026  48.349%  50.797% ##########
+(    9900,   14000 ] 42492601  42.493%  93.290% ########
+(   14000,   22000 ]  6506097   6.506%  99.796% #
+(   22000,   33000 ]   112799   0.113%  99.908% 
+(   33000,   50000 ]     3705   0.004%  99.912% 
+(   50000,   75000 ]    58791   0.059%  99.971% 
+(   75000,  110000 ]    20676   0.021%  99.992% 
+(  110000,  170000 ]      455   0.000%  99.992% 
 (  170000,  250000 ]      294   0.000%  99.992% 
-(  250000,  380000 ]      576   0.001%  99.993% 
-(  380000,  570000 ]      778   0.001%  99.993% 
-(  570000,  860000 ]     6561   0.007% 100.000% 
-(  860000, 1200000 ]       49   0.000% 100.000% 
-( 1200000, 1900000 ]        8   0.000% 100.000% 
-( 110000000, 160000000 ]        4   0.000% 100.000% 
-( 160000000, 250000000 ]       12   0.000% 100.000% 
+(  250000,  380000 ]      535   0.001%  99.993% 
+(  380000,  570000 ]     1450   0.001%  99.994% 
+(  570000,  860000 ]     5516   0.006% 100.000% 
+(  860000, 1200000 ]        8   0.000% 100.000% 
+( 1200000, 1900000 ]        2   0.000% 100.000% 
+( 1900000, 2900000 ]        6   0.000% 100.000% 
+( 2900000, 4300000 ]        3   0.000% 100.000% 
+( 110000000, 160000000 ]       16   0.000% 100.000% 
 ( 250000000, 370000000 ]       16   0.000% 100.000% 
 ( 560000000, 850000000 ]       16   0.000% 100.000% 
 ( 1200000000, 1900000000 ]       16   0.000% 100.000% 
 
 [34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |      49224.22 |       29925.00 |    75562.61 |     34087.22 |   1.54 |   1.14 |[0m
+  MB  |      26956.03 |       15244.26 |    41279.87 |     16938.95 |   1.53 |   1.11 |[0m
 [34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |      54425.68 |       41372.15 |    83487.82 |     58493.17 |   1.53 |   1.41 |[0m
+  MB  |      49466.28 |       46179.54 |    69900.44 |     62679.54 |   1.41 |   1.36 |[0m
 [34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |      27916.79 |       11285.87 |    56970.93 |     19654.82 |   2.04 |   1.74 |[0m
+  MB  |      27966.08 |        9865.98 |    48626.27 |     13938.90 |   1.74 |   1.41 |[0m
 [34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
-  MB  |      27881.35 |       11287.65 |    56856.82 |     19604.47 |   2.04 |   1.74 |[0m
-[34m*SUM* | DIMM-R:  3789.8 MB/s. User-R:  2214.5 MB/s   | DIMM-W:  1831.0 MB/s, User-W:  1303.7 MB/s. Time:  72.00s.[0m
+  MB  |      18796.60 |        7498.60 |    38145.71 |     12866.81 |   2.03 |   1.72 |[0m
+[34mDIMM4 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      18789.34 |        7498.75 |    38110.22 |     12863.02 |   2.03 |   1.72 |[0m
+[34mDIMM5 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      18799.16 |        7499.77 |    38096.66 |     12832.63 |   2.03 |   1.71 |[0m
+[34m*SUM* | DIMM-R:  3962.6 MB/s. User-R:  2323.8 MB/s   | DIMM-W:  1909.6 MB/s, User-W:  1355.6 MB/s. Time:  69.19s.[0m
 [32mDestroy IPMWatcher.
 [0m

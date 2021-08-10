@@ -1,9 +1,16 @@
-if (POLICY CMP0048)
-  cmake_policy(SET CMP0048 NEW)
-endif ()
+# if (POLICY CMP0048)
+#   cmake_policy(SET CMP0048 NEW)
+# endif ()
 
-project(dash)
 cmake_minimum_required(VERSION 3.11)
+
+# THIS HAS TO COME BEFORE THE PROJECT LINE
+# set(CMAKE_C_COMPILER "clang")
+# set(CMAKE_CXX_COMPILER "clang++")
+# THIS HAS TO COME BEFORE THE PROJECT LINE
+
+project(dash VERSION 0.0.1 LANGUAGES C CXX)
+
 include(FetchContent)
 include(ExternalProject)
 
@@ -15,6 +22,10 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "Release")
   message("-- Release mode, all optimizations enabled")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG -Ofast")
 endif ()
+
+
+# tbb
+find_library(TbbLib tbb)
 
 ##################### PMDK ####################
 set(PMDK_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/pmdk")
@@ -53,7 +64,7 @@ endif ()
 option(USE_PMEM "enable persistent memory support" ON)
 
 set(libs_to_link
-        pthread gflags)
+        pthread gflags  ${TbbLib})
 
 if (USE_PMEM MATCHES "ON")
   message(STATUS "persistent memory support enabled, going to build with PMDK")

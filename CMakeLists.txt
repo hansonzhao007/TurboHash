@@ -6,23 +6,29 @@ cmake_minimum_required(VERSION 3.11)
 # THIS HAS TO COME BEFORE THE PROJECT LINE
 
 # set the project name
-project (pmem VERSION 0.0.1 LANGUAGES C CXX)
+project (turbohash VERSION 1.0.0 LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # default using release mode
 if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release) # RelWithDebInfo
+  set(CMAKE_BUILD_TYPE release) # RelWithDebInfo
+  message(STATUS "build type set to release")
 endif()
+string(TOLOWER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE)
+message(STATUS "build type: ${CMAKE_BUILD_TYPE}")
+
+option(AVX512 "Enable use of the Advanced Vector Extensions 512 (AVX512) instruction set" ON)
 
 # add Intel PCM library
-add_custom_command( OUTPUT libPCM.a
-                    COMMAND make lib
-                    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/pcm)
-add_custom_target(pcm DEPENDS libPCM.a)
+execute_process(  COMMAND make lib
+                  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/lib/pcm)
 link_directories(${PROJECT_SOURCE_DIR}/lib/pcm)
 list(APPEND THIRDPARTY_LIBS PCM)
+include_directories(
+  "${PROJECT_SOURCE_DIR}/lib/pcm"
+)
 
 # add liballoc.a library: https://github.com/urcs-sync/ralloc
 execute_process(  COMMAND make libralloc.a -j8
@@ -42,45 +48,23 @@ include_directories(
     "${CMAKE_BINARY_DIR}/lib/gflags/include"
 )
 
-# Process Abseil's CMake build system
-add_subdirectory(lib/abseil-cpp)
-list(APPEND THIRDPARTY_LIBS absl::flat_hash_set)
-include_directories(
-    "${CMAKE_BINARY_DIR}/lib/abseil-cpp"
-)
-
-if(CMAKE_COMPILER_IS_GNUCXX)
-    execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion
-                    OUTPUT_VARIABLE GCC_VERSION)
-    if(GCC_VERSION VERSION_GREATER 7.5 OR GCC_VERSION VERSION_EQUAL 7.5)
-        set(CMAKE_CXX_FLAGS "-Wall -Wextra ") #-Wpedantic")
-    else(GCC_VERSION VERSION_GREATER 7.5 OR GCC_VERSION VERSION_EQUAL 7.5)
-        set(CMAKE_CXX_FLAGS "-Wall -Wextra ") # -pedantic")
-    endif(GCC_VERSION VERSION_GREATER 7.5 OR GCC_VERSION VERSION_EQUAL 7.5)
-endif(CMAKE_COMPILER_IS_GNUCXX)
-if(CMAKE_CXX_COMPILER MATCHES "clang")
-    set(CMAKE_CXX_FLAGS "-Wall -Wextra")
-endif(CMAKE_CXX_COMPILER MATCHES "clang")
-
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
 if(COMPILER_SUPPORTS_MARCH_NATIVE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -Wall -Wextra")
 endif()
+
+# tbb
+find_library(TbbLib tbb)
+list(APPEND THIRDPARTY_LIBS  ${TbbLib})
 
 # add pthread support
 find_package(Threads REQUIRED)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -Wno-unused-parameter -Wno-ignored-qualifiers -msse -msse2")
 
-# add avx512 sse2 sse3 support
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -mavx -mavx512f -msse -msse2 -msse3")
-
-# check existence of libcuckoo/cuckoohash_map.hh
-include(CheckIncludeFile)
-check_include_file("libcuckoo/cuckoohash_map.hh" HAVE_CUCKOO)
-if(HAVE_CUCKOO)
-  add_definitions(-DCUCKOO)
-endif()
+if(AVX512)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__AVX512__ -mavx -mavx512f")
+endif(AVX512)
 
 # check existence of jemalloc
 include(CheckIncludeFile)
@@ -94,8 +78,7 @@ endif()
 include_directories(
   "/usr/include"
   "/usr/local/include"
-  "${PROJECT_SOURCE_DIR}/src"
-  "${PROJECT_SOURCE_DIR}/lib/pcm"
+  "${PROJECT_SOURCE_DIR}/src"  
   "${PROJECT_SOURCE_DIR}/lib"
 )
 

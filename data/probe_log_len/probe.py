@@ -46,4 +46,4 @@ def Plot(c_name, ylable, is_legend):
     plt.savefig(c_name+".pdf", bbox_inches='tight', pad_inches=0.05)
 
 Plot("probe_loadfactor", "Load Factor", False)
-Plot("probe_log_dis", "Average Log Length", True)
+Plot("probe_log_dis", "Average Probe Distance", True)

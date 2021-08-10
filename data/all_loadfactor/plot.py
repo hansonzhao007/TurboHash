@@ -7,31 +7,42 @@ from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
 
-plt.rcParams["font.family"] = "serif"
-plt.rcParams['axes.linewidth'] = 1.2
+plt.rcParams['axes.linewidth'] = 2
 
 # read data
-hashtables = ('turbo', 'turbo30', 'cceh', 'cceh30', 'clevel30', 'clht30')
-legend_name = ('TURBO16', 'TURBO30', 'CCEH16', 'CCEH30', 'CLEVEL30', 'CLHT30')
+hashtables = ('turbo', 'cceh', 'dash', 'turbo30', 'cceh30', 'clevel30', 'clht30')
+legend_name = ('TURBO16', 'CCEH16', 'DASH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
 
 markers= {
-    'turbo'   : 'o',
-    'turbo30' : '.', 
-    'cceh'    : '|', 
+    'turbo'   : 'o',     
+    'cceh'    : '|',
+    'dash'    : '^',
+    'turbo30' : '.',
     'cceh30'  : 'x', 
     'clevel30': 'd', 
     'clht30'  : ''}
+
+dashes= {
+    'turbo'   : [2, 0],
+    'cceh'    : [2, 0],
+    'dash'    : [2, 0],
+    'turbo30' : [3, 2],
+    'cceh30'  : [3, 2],
+    'clevel30': [3, 2],
+    'clht30'  : [3, 2]}
+
 colors= {
-    'turbo'   : '#9B0522',
-    'turbo30' : '#F37F82', 
-    'cceh'    : '#83C047', 
-    'cceh30'  : '#0E5932', 
+    'turbo'   : '#9B0522',     
+    'cceh'    : '#83C047',
+    'dash'    : '#f7cd6b',
+    'turbo30' : '#F37F82',
+    'cceh30'  : '#7e72b5', 
     'clevel30': '#3182BD', 
-    'clht30'  : '#BDBDBD'}
+    'clht30'  : '#808084'}
 
 def Plot(ylable, is_legend):
     # Plot Average Log Distance
-    fig, ax = plt.subplots(figsize=(6, 3.6))
+    fig, ax = plt.subplots(figsize=(6, 2.2))
     for i in hashtables:
         filename = "all_loadfactor." + str(i) + ".parse"
         df = pd.read_csv(filename ,header=None)
@@ -40,29 +51,23 @@ def Plot(ylable, is_legend):
         
         df.plot(
             ax=ax, 
-            linewidth=2,
-            fontsize=12,
+            linewidth=1.8,
+            fontsize=16,
             marker=markers[i],
+            dashes=dashes[i],
+            color=colors[i],
             markevery=4,
-            markersize=8,
-            fillstyle='none',
-            color=colors[i])
+            markersize=7
+            # fillstyle='none'
+            )
 
     if (is_legend):
-        ax.legend(
-        legend_name,
-        loc="upper right", 
-        fontsize=12, 
-        edgecolor='k',
-        facecolor='white', 
-        mode="expand", 
-        ncol=3,
-        bbox_to_anchor=(0.10, .15, 0.90, .102)
+        ax.legend(legend_name, fontsize=13, loc='upper left', edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=1, bbox_to_anchor=(1, 1.05, 0.4, 0)
     )
 
     ax.set_ylabel(ylable, fontsize=16, color='k')
-    ax.set_xlabel("Insertion (million)", fontsize=16)
-    ax.yaxis.grid(linewidth=1, linestyle='--')
+    ax.set_xlabel("Number of records (million)", fontsize=16)
+    ax.yaxis.grid(linewidth=0.5, dashes=[8,8], color='gray', alpha=0.5)
     plt.savefig("all_loadfactor.pdf", bbox_inches='tight', pad_inches=0.05)
 
 Plot("Load Factor", True)

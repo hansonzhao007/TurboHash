@@ -3,7 +3,7 @@
 rm *.parse
 
 # Parse the io
-for i in cceh cceh30 clevel30 clht30 turbo turbo30
+for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
 do
     datafile="thread.${i}_16"
     outfile="io_${i}.parse"    
@@ -34,7 +34,7 @@ done
 
 
 # Parse the throughput
-for i in cceh cceh30 clevel30 clht30 turbo turbo30
+for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
 do
     datafile="thread.${i}_16"
     outfile="throughput_${i}.parse"    

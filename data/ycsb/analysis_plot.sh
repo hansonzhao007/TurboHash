@@ -3,13 +3,13 @@
 rm *.parse
 
 # Parse the throughput
-for i in cceh cceh30 clevel30 clht30 turbo turbo30
+for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
 do
     datafile="ycsb.${i}"
     outfile="ycsb_${i}.parse"
     oneline=""
     index=0
-    echo "load,ycsba,ycsbb,ycsbc,ycsbd,ycsbf" >> $outfile
+    echo "load,ycsbd,ycsba,ycsbb,ycsbc,ycsbf" >> $outfile
     while read line; do
         if [ -n "$(echo $line | grep "load ")" ]; then  
             iops=`echo $line |  awk '{print $5}'`

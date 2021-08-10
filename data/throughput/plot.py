@@ -7,11 +7,19 @@ import numpy as np
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter,
                                AutoMinorLocator)
 # import matplotlib as mpl
-plt.rcParams["font.family"] = "serif"
-plt.rcParams['axes.linewidth'] = 1.8
+plt.rcParams['axes.linewidth'] = 2
 
-hashtables = ['turbo', 'cceh', 'turbo30', 'cceh30', 'clevel30', 'clht30']
-legend_name = ('TURBO16', 'CCEH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
+hashtables = ('turbo', 'cceh', 'dash', 'turbo30', 'cceh30', 'clevel30', 'clht30')
+legend_name = ('TURBO16', 'CCEH16', 'DASH16', 'TURBO30', 'CCEH30', 'CLEVEL30', 'CLHT30')
+
+colors= {
+    'turbo'   : '#9B0522',     
+    'cceh'    : '#83C047',
+    'dash'    : '#f7cd6b',
+    'turbo30' : '#F37F82',
+    'cceh30'  : '#7e72b5', 
+    'clevel30': '#3182BD', 
+    'clht30'  : '#808084'}
 
 # plot value on top of standard bar
 def add_value_labels(ax, spacing, labels, pick_standard, units="Mops/s"):
@@ -69,31 +77,40 @@ def PlotNormal(df, ax, filename, rotation = 0, pick = 1, units="Mops/s", ytitle=
         normalized.loc[kv] = normalized.loc[kv] / df.iloc[pick_standard]
     normalized = normalized.T
 
-    normalized.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
+    normalized.plot(ax=ax, kind="bar", rot=0, color='White', width=0.85, edgecolor='k', linewidth=2, fontsize=23, alpha=1)
     # plot marker in bar
     bars = ax.patches
-    patterns =('///', ' ', '///', ' ', '..', 'xx')
+    patterns =('//', ' ', '\\\\', '//', '..', 'xx', ' ')
+    patterns_color = list(colors.values())
+    hatches_color = [p for p in patterns_color for i in range(len(normalized))]
     hatches = [p for p in patterns for i in range(len(normalized))]
-    for bar, hatch in zip(bars, hatches):
+    i=0
+    for bar, hatch, color in zip(bars, hatches, hatches_color):
+        # bar.set_alpha(0.1)
+        if (i < 9):
+            bar.set_alpha(0.8)
+            bar.set_color(color)
+            bar.set_edgecolor('k')
+        else:
+            bar.set_edgecolor(color)
         bar.set_hatch(hatch)
+        i=i+1
     
     labels = (df).values.tolist()[pick_standard] 
     # print(labels)
     add_value_labels(ax, 7, labels, pick_standard, units)
     # draw legend
     ax.get_legend().remove()
-    ax.legend(legend_name, fontsize=22) #, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(0, 1.22, 1, 0))
-    ax.yaxis.grid(linewidth=1, linestyle='--')
+    # ax.legend(legend_name, fontsize=22) #, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=3, bbox_to_anchor=(0, 1.22, 1, 0))
+    ax.yaxis.grid(linewidth=0.5, dashes=[8,8], color='gray', alpha=0.5)
     ax.set_axisbelow(True)
-    ax.set_ylabel(ytitle, fontsize=26)
+    ax.set_ylabel(ytitle, fontsize=23)
     # ax.set_ylim([0.1, 11.9])
     plt.xticks(rotation=rotation)
-    plt.savefig(filename, bbox_inches='tight', pad_inches=0.05)
+    
 
 
-def PlotIO():
-    fig, ax = plt.subplots(figsize=(7, 7))
-
+def PlotIO(ax):
     data = pd.DataFrame()
 
     for i in hashtables:
@@ -102,36 +119,13 @@ def PlotIO():
         data = data.append(df.iloc[0])
     data.index=legend_name
     data = data / 1024.0
-    # print(data)
 
-    # Plot bw
-    data[['read_r', 'read_w']].plot.bar(ax=ax, color=("#5E88C2", "red"), edgecolor='k',  stacked=True, width=0.25, position=1, fontsize=16, alpha=0.6)
-    data[['readnon_r', 'readnon_w']].plot.bar(ax=ax, color=("white", "grey"), edgecolor='k',  stacked=True, width=0.25, position=0, fontsize=16, alpha=0.6)
-    data[['load_r', 'load_w']].plot.bar(ax=ax, color=("white", "#F2AA3F"), edgecolor='k',  stacked=True, width=0.25, position=-1, fontsize=16, alpha=0.6)
-    bars = ax.patches
-    patterns =(' ', ' ', ' ',' ', 'xxx', '...')
-    hatches = [p for p in patterns for i in range(6)]
-    for bar, hatch in zip(bars, hatches):
-        bar.set_hatch(hatch)
-
-    ax.set_axisbelow(True)
-    ax.grid(axis='y', linestyle='-.', linewidth=0.5)    
-    ax.set_ylabel("Total IO (GB)", fontsize=22)
-    ax.legend(["Positive Read - R", "Positive Read - W", "Negative Read - R", "Negative Read - W", "Load - R", "Load - W"], loc="upper left", fontsize=16, framealpha=1)
-    ax.tick_params(axis='y', labelsize=18)
-    ax.tick_params(axis='x', labelsize=20, rotation=30)
-    ax.set_xlim([-0.5, 5.75])
-    fig.savefig('io.pdf', bbox_inches='tight', pad_inches=0.05) 
-    data.index = hashtables
-    
     # Plot io normalized
     data['Write'] = data['load_r'] + data['load_w']
     data['Positive'] = data['read_r'] + data['read_w']
     data['Negative'] = data['readnon_r'] + data['readnon_w']
     print(data)
 
-    
-    ax = plt.figure(figsize=(7, 9)).add_subplot(111)
     df = data
     # df = data
     pick_standard = 1
@@ -142,29 +136,58 @@ def PlotIO():
     df_less = df[['Write', 'Positive', 'Negative']]
     normalized = df_normalized[['Write', 'Positive', 'Negative']]
     normalizedT = normalized.T
-    normalizedT.plot(ax=ax, kind="bar", rot=0, colormap='Spectral', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=0.8)
+    normalizedT.plot(ax=ax, kind="bar", rot=0, color='White', width=0.85, edgecolor='k', linewidth=2, fontsize=23)
     # plot marker in bar
     bars = ax.patches
-    patterns =('///', ' ', '///', ' ', '..', 'xx')
-    hatches = [p for p in patterns for i in range(len(normalized))]
-    for bar, hatch in zip(bars, hatches):
+    patterns =('//', ' ', '\\\\', '//', '..', 'xx', ' ')
+    patterns_color = list(colors.values())
+    hatches_color = [p for p in patterns_color for i in range(len(normalizedT))]
+    hatches = [p for p in patterns for i in range(len(normalizedT))]
+    i=0
+    for bar, hatch, color in zip(bars, hatches, hatches_color):
+        # bar.set_alpha(0.1)
+        if (i < 9):
+            bar.set_alpha(0.8)
+            bar.set_color(color)
+            bar.set_edgecolor('k')
+        else:
+            bar.set_edgecolor(color)
         bar.set_hatch(hatch)
+        i=i+1
     
-
+    ax2=ax.twinx()
     df_less = df[['load_w', 'read_w', 'readnon_w']]
     normalized = df_normalized[['load_w', 'read_w', 'readnon_w']]
     normalizedT = normalized.T
-    normalizedT.plot(ax=ax, kind="bar", rot=0, color='#D9DADC', width=0.75, edgecolor='k', linewidth=1.7, fontsize=26, alpha=1)
+    normalizedT.plot(ax=ax2, kind="bar", rot=0, color='#D9DADC', width=0.85, edgecolor='k', linewidth=2, fontsize=23, alpha=1)
+    # plot marker in bar
+    bars = ax2.patches
+    patterns =('//', ' ', '\\\\', '//', '..', 'xx', ' ')
+    patterns_color = list(colors.values())
+    hatches_color = [p for p in patterns_color for i in range(len(normalizedT))]
+    hatches = [p for p in patterns for i in range(len(normalizedT))]
+    for bar, hatch, color in zip(bars, hatches, hatches_color):  
+        bar.set_alpha(1)
+        bar.set_hatch('-|-|')      
+        bar.set_color('#FFFFFF')
+        bar.set_edgecolor('k')
+        
+    ymin,ymax = ax.get_ylim()
+    ax2.set_ylim([ymin, ymax])
+    ax2.set_yticklabels([])
+    ax2.get_legend().remove()
+    ax2.legend(['Write I/O'], fontsize=20, loc='upper center')
 
     ax.get_legend().remove()
-    ax.legend(legend_name, fontsize=22)
-    ax.yaxis.grid(linewidth=1, linestyle='--')
-    ax.set_axisbelow(True)
-    ax.set_ylabel('Pmem I/O (GB)', fontsize=26)
-    ax.set_xticklabels(['Write', 'Positive\nRead', 'Negative\nRead'])
-    plt.xticks(rotation=0)
-    plt.savefig('io_normalized.pdf', bbox_inches='tight', pad_inches=0.05)
+    ax.legend(legend_name, fontsize=22, edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=4, bbox_to_anchor=(-1.2, 0.98, 2.2, 0))
 
+    ax.yaxis.grid(linewidth=0.5, dashes=[8,8], color='gray', alpha=0.5)
+    ax.set_axisbelow(True)
+    ax.set_ylabel('Pmem I/O (GB)', fontsize=23)
+    ax.set_xticklabels(['Insert', 'Positive\nSearch', 'Negative\nSearch'])
+    ax.tick_params(axis='y', labelsize=19)
+    plt.xticks(rotation=0)
+    
     return data
 
 def PlotNormalThroughput():
@@ -176,13 +199,14 @@ def PlotNormalThroughput():
         data = data.append(df.iloc[0])
     
     data.index = hashtables
-    data.columns = ['Write', 'Positive\nRead', 'Negative\nRead']
+    data.columns = ['Insert', 'Positive\nSearch', 'Negative\nSearch']
     # Plot 
-    ax = plt.figure(figsize=(7, 9)).add_subplot(111)
+    fig, (ax1, ax2) = plt.subplots(1,2,figsize=(15,6))
     df = data
-    PlotNormal(df, ax, 'throughput_normalized.pdf')
+    PlotNormal(df, ax1, 'throughput_normalized.pdf')
+    PlotIO(ax2)
+    fig.savefig("throughput_normalized.pdf", bbox_inches='tight', pad_inches=0.05, dpi=600)
 
-PlotIO()
 
 PlotNormalThroughput()
 

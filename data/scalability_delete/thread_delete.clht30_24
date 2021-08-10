@@ -1,0 +1,100 @@
+CLHT n_buckets = 4194304
+Initialization done.
+Initial capacity 12582912
+key trace size: 120000000
+Randomize the trace...------------------------------------------------
+HashType:              CLHT
+Init Capacity:         12582912
+Key Size:              15
+Val Size:              15
+Entries:               120000000
+Trace size:            120000000
+Read:                  10000000 
+Write:                 1000000 
+Thread:                24 
+Report interval:       0 s
+Stats interval:        10000000 records
+benchmarks:            load,delete
+------------------------------------------------
+[32mStart IPMWatcher for load
+[0mthread 23, between 115000000 - 120000000
+thread  1, between 5000000 - 10000000
+thread 21, between 105000000 - 110000000
+thread 13, between 65000000 - 70000000
+thread 15, between 75000000 - 80000000
+thread 17, between 85000000 - 90000000
+thread  2, between 10000000 - 15000000
+thread  3, between 15000000 - 20000000
+thread 22, between 110000000 - 115000000
+thread 19, between 95000000 - 100000000
+thread  4, between 20000000 - 25000000
+thread 10, between 50000000 - 55000000
+thread  0, between 0 - 5000000
+thread  7, between 35000000 - 40000000
+thread 11, between 55000000 - 60000000
+thread  8, between 40000000 - 45000000
+thread 14, between 70000000 - 75000000
+thread 18, between 90000000 - 95000000
+thread 20, between 100000000 - 105000000
+thread 16, between 80000000 - 85000000
+thread  9, between 45000000 - 50000000
+thread 12, between 60000000 - 65000000
+thread  6, between 30000000 - 35000000
+thread  5, between 25000000 - 30000000
+load         :       0.720 micros/op 1.325367 Mops/s;
+[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      28013.39 |       16091.54 |    48368.60 |     25598.57 |   1.73 |   1.59 |[0m
+[34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      28022.48 |       16122.83 |    49955.26 |     27169.99 |   1.78 |   1.69 |[0m
+[34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      28020.04 |       16105.03 |    49357.05 |     26669.77 |   1.76 |   1.66 |[0m
+[34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      24952.93 |       13059.81 |    47396.60 |     23959.85 |   1.90 |   1.83 |[0m
+[34mDIMM4 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      24955.38 |       13061.62 |    47376.43 |     23965.33 |   1.90 |   1.83 |[0m
+[34mDIMM5 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      24957.80 |       13061.02 |    47317.27 |     23918.68 |   1.90 |   1.83 |[0m
+[34m*SUM* | DIMM-R:  3355.9 MB/s. User-R:  1840.5 MB/s   | DIMM-W:  1752.0 MB/s, User-W:  1013.4 MB/s. Time:  86.35s.[0m
+[32mDestroy IPMWatcher.
+[0m
+Randomize the trace...[32mStart IPMWatcher for delete
+[0mThread 11: num: 5000000, deleted: 4852270
+Thread 14: num: 5000000, deleted: 4852843
+Thread  5: num: 5000000, deleted: 4852484
+Thread 15: num: 5000000, deleted: 4852840
+Thread  4: num: 5000000, deleted: 4852155
+Thread  9: num: 5000000, deleted: 4853057
+Thread 10: num: 5000000, deleted: 4852040
+Thread 23: num: 5000000, deleted: 4851733
+Thread  3: num: 5000000, deleted: 4852675
+Thread 17: num: 5000000, deleted: 4853237
+Thread  7: num: 5000000, deleted: 4852817
+Thread 16: num: 5000000, deleted: 4852772
+Thread  6: num: 5000000, deleted: 4852068
+Thread  2: num: 5000000, deleted: 4852205
+Thread 19: num: 5000000, deleted: 4853238
+Thread 21: num: 5000000, deleted: 4852779
+Thread  0: num: 5000000, deleted: 4853727
+Thread 20: num: 5000000, deleted: 4853041
+Thread  1: num: 5000000, deleted: 4852469
+Thread 18: num: 5000000, deleted: 4852216
+Thread 22: num: 5000000, deleted: 4853581
+Thread 12: num: 5000000, deleted: 4852868
+Thread  8: num: 5000000, deleted: 4852577
+Thread 13: num: 5000000, deleted: 4852290
+delete       :       0.289 micros/op 3.298239 Mops/s;
+[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      11791.02 |        4738.15 |    27265.10 |     19241.83 |   2.31 |   4.06 |[0m
+[34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      11782.09 |        4736.69 |    26721.57 |     19283.67 |   2.27 |   4.07 |[0m
+[34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |      11783.71 |        4736.86 |    26754.19 |     19133.66 |   2.27 |   4.04 |[0m
+[34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       6812.39 |        2367.50 |    16263.49 |      9524.58 |   2.39 |   4.02 |[0m
+[34mDIMM4 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       6813.04 |        2368.50 |    16256.35 |      9524.73 |   2.39 |   4.02 |[0m
+[34mDIMM5 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       6813.31 |        2368.26 |    16226.20 |      9505.35 |   2.38 |   4.01 |[0m
+[34m*SUM* | DIMM-R:  3731.8 MB/s. User-R:  1608.0 MB/s   | DIMM-W:  2484.7 MB/s, User-W:   614.3 MB/s. Time:  34.70s.[0m
+[32mDestroy IPMWatcher.
+[0m

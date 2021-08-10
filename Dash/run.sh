@@ -32,10 +32,10 @@ do
 				numaarg="--cpunodebind=0,1 --membind=0"
 			fi
 			echo $numaarg
-			rm -f /mnt/pmem0/pmem_ex.data
-			rm -f /mnt/pmem0/pmem_lh.data
-			rm -f /mnt/pmem0/pmem_cceh.data
-			rm -f /mnt/pmem0/pmem_level.data
+			rm -f /mnt/pmem/pmem_ex.data
+			rm -f /mnt/pmem/pmem_lh.data
+			rm -f /mnt/pmem/pmem_cceh.data
+			rm -f /mnt/pmem/pmem_level.data
       LD_PRELOAD="./build/pmdk/src/PMDK/src/nondebug/libpmemobj.so.1 \
       ./build/pmdk/src/PMDK/src/nondebug/libpmem.so.1" \
       numactl $numaarg ./build/test_pmem \

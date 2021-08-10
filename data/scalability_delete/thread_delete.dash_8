@@ -1,0 +1,86 @@
+creating a new pool
+pool opened at: 0x5f0000000000
+key trace size: 120000000
+Randomize the trace...------------------------------------------------
+HashType:              DASH
+Init Segment:          8192
+Entries:               120000000
+Trace size:            120000000
+Read:                  10000000 
+Write:                 1000000 
+Thread:                8 
+Report interval:       0 s
+Stats interval:        10000000 records
+benchmarks:            load,delete
+------------------------------------------------
+[32mStart IPMWatcher for load
+[0mthread  5, between 75000000 - 90000000
+thread  2, between 30000000 - 45000000
+thread  0, between 0 - 15000000
+thread  3, between 45000000 - 60000000
+thread  1, between 15000000 - 30000000
+thread  6, between 90000000 - 105000000
+thread  4, between 60000000 - 75000000
+thread  7, between 105000000 - 120000000
+Directory_Doubling towards 14
+Directory_Doubling towards 15
+Directory_Doubling towards 16
+Directory_Doubling towards 17
+2021/04/05-17:35:02  ... thread 6: (10000000,10000000) ops and ( 847772.2,847772.2 ) ops/second in (11.7956,11.7956) seconds
+2021/04/05-17:35:02  ... thread 0: (10000000,10000000) ops and ( 847434.0,847434.0 ) ops/second in (11.8003,11.8003) seconds
+2021/04/05-17:35:02  ... thread 1: (10000000,10000000) ops and ( 847076.7,847076.7 ) ops/second in (11.8053,11.8053) seconds
+2021/04/05-17:35:02  ... thread 3: (10000000,10000000) ops and ( 846097.4,846097.4 ) ops/second in (11.8190,11.8190) seconds
+2021/04/05-17:35:02  ... thread 4: (10000000,10000000) ops and ( 846015.0,846015.0 ) ops/second in (11.8201,11.8201) seconds
+2021/04/05-17:35:02  ... thread 2: (10000000,10000000) ops and ( 845564.4,845564.4 ) ops/second in (11.8264,11.8264) seconds
+2021/04/05-17:35:02  ... thread 5: (10000000,10000000) ops and ( 845146.7,845146.7 ) ops/second in (11.8323,11.8323) seconds
+2021/04/05-17:35:02  ... thread 7: (10000000,10000000) ops and ( 844258.9,844258.9 ) ops/second in (11.8447,11.8447) seconds
+Directory_Doubling towards 18
+load         :       0.161 micros/op 5.927724 Mops/s;
+[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       8700.90 |        6070.99 |    18180.66 |     18477.88 |   2.09 |   3.04 |[0m
+[34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       8641.90 |        5954.75 |    18090.73 |     18299.22 |   2.09 |   3.07 |[0m
+[34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       8640.81 |        5954.80 |    17966.19 |     18247.06 |   2.08 |   3.06 |[0m
+[34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       8657.63 |        5965.13 |    18061.70 |     18319.71 |   2.09 |   3.07 |[0m
+[34mDIMM4 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       8656.49 |        5966.01 |    18035.07 |     18311.17 |   2.08 |   3.07 |[0m
+[34mDIMM5 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       8656.27 |        5964.95 |    17997.31 |     18280.13 |   2.08 |   3.06 |[0m
+[34m*SUM* | DIMM-R:  5611.2 MB/s. User-R:  2691.0 MB/s   | DIMM-W:  5694.2 MB/s, User-W:  1858.3 MB/s. Time:  19.31s.[0m
+[32mDestroy IPMWatcher.
+[0m
+Randomize the trace...[32mStart IPMWatcher for delete
+[0mthread  7, between 105000000 - 120000000
+thread  0, between 0 - 15000000
+thread  1, between 15000000 - 30000000
+thread  2, between 30000000 - 45000000
+thread  4, between 60000000 - 75000000
+thread  6, between 90000000 - 105000000
+thread  3, between 45000000 - 60000000
+thread  5, between 75000000 - 90000000
+2021/04/05-17:35:29  ... thread 2: (10000000,10000000) ops and ( 882294.9,882294.9 ) ops/second in (11.3341,11.3341) seconds
+2021/04/05-17:35:29  ... thread 3: (10000000,10000000) ops and ( 881004.2,881004.2 ) ops/second in (11.3507,11.3507) seconds
+2021/04/05-17:35:29  ... thread 6: (10000000,10000000) ops and ( 879392.1,879392.1 ) ops/second in (11.3715,11.3715) seconds
+2021/04/05-17:35:29  ... thread 1: (10000000,10000000) ops and ( 878381.2,878381.2 ) ops/second in (11.3846,11.3846) seconds
+2021/04/05-17:35:29  ... thread 7: (10000000,10000000) ops and ( 877744.0,877744.0 ) ops/second in (11.3928,11.3928) seconds
+2021/04/05-17:35:29  ... thread 0: (10000000,10000000) ops and ( 877384.9,877384.9 ) ops/second in (11.3975,11.3975) seconds
+2021/04/05-17:35:29  ... thread 5: (10000000,10000000) ops and ( 876770.1,876770.1 ) ops/second in (11.4055,11.4055) seconds
+2021/04/05-17:35:29  ... thread 4: (10000000,10000000) ops and ( 870667.0,870667.0 ) ops/second in (11.4854,11.4854) seconds
+delete       :       0.143 micros/op 6.664306 Mops/s; (num: 15000000, deleted: 14250000)
+[34mDIMM0 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       6669.42 |        3259.87 |    16061.94 |     13118.20 |   2.41 |   4.02 |[0m
+[34mDIMM1 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       6668.90 |        3259.78 |    16104.20 |     13132.05 |   2.41 |   4.03 |[0m
+[34mDIMM2 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       6667.14 |        3259.43 |    15993.23 |     13082.91 |   2.40 |   4.01 |[0m
+[34mDIMM3 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       6702.60 |        3291.30 |    16189.85 |     13250.77 |   2.42 |   4.03 |[0m
+[34mDIMM4 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       6703.43 |        3291.29 |    16175.35 |     13245.34 |   2.41 |   4.02 |[0m
+[34mDIMM5 | Read from IMC | Write from IMC |  Read DIMM  |  Write DIMM  |   RA   |   WA   |
+  MB  |       6699.80 |        3289.99 |    16106.89 |     13204.23 |   2.40 |   4.01 |[0m
+[34m*SUM* | DIMM-R:  5923.2 MB/s. User-R:  2458.7 MB/s   | DIMM-W:  4844.5 MB/s, User-W:  1204.6 MB/s. Time:  16.31s.[0m
+[32mDestroy IPMWatcher.
+[0m
