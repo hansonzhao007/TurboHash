@@ -5,6 +5,10 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include <array>
+#include <memory>
+#include <string>
+
 namespace util {
 
 // Returns the number of micro-seconds since some fixed point in time. Only

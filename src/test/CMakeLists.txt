@@ -8,6 +8,7 @@ db_exe(hash_bench)
 db_exe(hash_bench_30)
 db_exe(turbo_hash_test)
 db_exe(motivation)
+db_exe(mem_bench)
 
 # Pmem hash test
 db_test(ralloc_test)

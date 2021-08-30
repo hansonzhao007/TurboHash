@@ -4,11 +4,15 @@
 #include <tbb/parallel_for.h>
 
 #include <algorithm>
+#include <cassert>
 #include <fstream>
 #include <random>
 #include <string>
 #include <thread>
 #include <vector>
+
+#include "random.h"
+#include "slice.h"
 
 #define KEY_LEN ((15))
 
@@ -30,7 +34,7 @@ public:
         printf ("generate %lu keys\n", count);
         auto starttime = std::chrono::system_clock::now ();
         tbb::parallel_for (tbb::blocked_range<uint64_t> (0, count),
-                           [&] (const tbb::blocked_range<uint64_t>& range) {
+                           [&](const tbb::blocked_range<uint64_t>& range) {
                                for (uint64_t i = range.begin (); i != range.end (); i++) {
                                    //    uint64_t num = u64Rand (1LU, kRandNumMax);
                                    keys_[i] = i;
@@ -49,7 +53,7 @@ public:
         // printf ("randomize %lu keys\n", keys_.size ());
         auto starttime = std::chrono::system_clock::now ();
         tbb::parallel_for (tbb::blocked_range<uint64_t> (0, keys_.size ()),
-                           [&] (const tbb::blocked_range<uint64_t>& range) {
+                           [&](const tbb::blocked_range<uint64_t>& range) {
                                auto rng = std::default_random_engine{};
                                std::shuffle (keys_.begin () + range.begin (),
                                              keys_.begin () + range.end (), rng);
@@ -144,11 +148,11 @@ public:
         printf ("generate %lu keys\n", N_STRS);
         auto starttime = std::chrono::system_clock::now ();
         tbb::parallel_for (tbb::blocked_range<uint64_t> (0, N_STRS),
-                           [&] (const tbb::blocked_range<uint64_t>& range) {
+                           [&](const tbb::blocked_range<uint64_t>& range) {
                                for (uint64_t i = range.begin (); i != range.end (); i++) {
                                    keys_[i].reserve (S_LEN);
                                    std::generate_n (std::back_inserter (keys_[i]), S_LEN,
-                                                    [&] () { return alphabet[u64Rand (0, 61)]; });
+                                                    [&]() { return alphabet[u64Rand (0, 61)]; });
                                }
                            });
         auto duration = std::chrono::duration_cast<std::chrono::microseconds> (
@@ -168,7 +172,7 @@ public:
         // printf ("randomize %lu keys\n", keys_.size ());
         auto starttime = std::chrono::system_clock::now ();
         tbb::parallel_for (tbb::blocked_range<uint64_t> (0, keys_.size ()),
-                           [&] (const tbb::blocked_range<uint64_t>& range) {
+                           [&](const tbb::blocked_range<uint64_t>& range) {
                                auto rng = std::default_random_engine{};
                                std::shuffle (keys_.begin () + range.begin (),
                                              keys_.begin () + range.end (), rng);
@@ -307,5 +311,45 @@ public:
         } else {
             return kYCSB_ReadModifyWrite;
         }
+    }
+};
+
+// Helper for quickly generating random data.
+class RandomGenerator {
+private:
+    std::string data_;
+    int pos_;
+
+public:
+    RandomGenerator () : data_ (""), pos_ (0) {
+        // We use a limited amount of data over and over again and ensure
+        // that it is larger than the compression window (32KB), and also
+        // large enough to serve all typical value sizes we want to write.
+        util::Random rnd (301);
+        std::string piece;
+        while (data_.size () < 1048576) {
+            // Add a short fragment that is as compressible as specified
+            // by FLAGS_compression_ratio.
+            RandomString (&rnd, 100, &piece);
+            data_.append (piece);
+        }
+        pos_ = 0;
+    }
+
+    Slice RandomString (util::Random* rnd, int len, std::string* dst) {
+        dst->resize (len);
+        for (int i = 0; i < len; i++) {
+            (*dst)[i] = static_cast<char> (' ' + rnd->Uniform (95));  // ' ' .. '~'
+        }
+        return Slice (*dst);
+    }
+
+    Slice Generate (size_t len) {
+        if (pos_ + len > data_.size ()) {
+            pos_ = 0;
+            assert (len < data_.size ());
+        }
+        pos_ += len;
+        return Slice (data_.data () + pos_ - len, len);
     }
 };

@@ -121,7 +121,12 @@ public:
 
 class IPMWatcher {
 public:
+    bool reported = false;
     std::string file_name_;
+    double app_read_;
+    double app_write_;
+    double pmm_read_;
+    double pmm_write_;
 
     PMMData *start, *end;
     float *outer_imc_read_addr = nullptr, *outer_imc_write_addr = nullptr,
@@ -136,9 +141,12 @@ public:
         start->get_pmm_data ();
     }
 
-    ~IPMWatcher () { Report (); }
+    ~IPMWatcher () {
+        if (!reported) Report ();
+    }
 
     void Report () {
+        reported = true;
         end->get_pmm_data ();
         end_timer = std::chrono::system_clock::now ();
         int dimm_num = end->pmm_dimms_.size ();
@@ -202,6 +210,11 @@ public:
             media_read_size_MB / seconds, imc_read_size_MB / seconds, media_write_size_MB / seconds,
             imc_write_size_MB / seconds, seconds);
 
+        app_read_ = imc_read_size_MB / seconds;
+        app_write_ = imc_write_size_MB / seconds;
+        pmm_read_ = media_read_size_MB / seconds;
+        pmm_write_ = media_write_size_MB / seconds;
+
         delete start;
         delete end;
 
@@ -256,5 +269,299 @@ private:
     const std::string name_;
     uint64_t start_time_;
 };
+
+uint64_t PMMMask (size_t length) {
+    if (64 == length) {
+        return 0xFFFFFFFFFFFFFFC0;
+    } else if (128 == length) {
+        return 0xFFFFFFFFFFFFFF80;
+    } else if (256 == length) {
+        return 0xFFFFFFFFFFFFFF00;
+    } else if (512 == length) {
+        return 0xFFFFFFFFFFFFFE00;
+    } else if (length % 1024 == 0 && length > 0) {
+        double tmp = std::log2 (length / 1024);
+        int left_shift = tmp;
+        return (0xFFFFFFFFFFFFFC00 << left_shift);
+    } else
+        return 0xFFFFFFFFFFFFFFFF;
+}
+
+force_inline void MFence () { __asm__ __volatile__("mfence" ::: "memory"); }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+void __attribute__ ((optimize ("O0"))) ClearCache () {
+    static const int size = 20 * 1024 * 1024;  // Allocate 20M. Set much larger then L3
+    static char* c = (char*)malloc (size);
+    for (int i = 0; i < 1; i++) memset (c, 0, size);
+    _mm_mfence ();
+}
+
+inline void  // __attribute__((optimize("O0"),always_inline))
+Load64_NT (char* addr, int N = 0) {
+    volatile __m512i zmm0 = _mm512_stream_load_si512 ((__m512i*)addr + 0);
+    // __m512i zmm00 = _mm512_stream_load_si512((__m512i *)addr + 0); // 64
+    // _mm_lfence();
+}
+
+inline void  // __attribute__((optimize("O0"),always_inline))
+Load128_NT (char* addr, int N = 0) {
+    volatile __m512i zmm0 = _mm512_stream_load_si512 ((__m512i*)addr + 0);
+    volatile __m512i zmm1 = _mm512_stream_load_si512 ((__m512i*)addr + 1);
+
+    // __m512i zmm0 = _mm512_stream_load_si512((__m512i *)addr + 0);
+    // __m512i zmm1 = _mm512_stream_load_si512((__m512i *)addr + 1);
+    // _mm_lfence();
+}
+
+inline void  // __attribute__((optimize("O0"),always_inline))
+Load256_NT (char* addr, int N = 0) {
+    volatile __m512i zmm00 = _mm512_stream_load_si512 ((__m512i*)addr + 0);
+    volatile __m512i zmm01 = _mm512_stream_load_si512 ((__m512i*)addr + 1);
+    volatile __m512i zmm02 = _mm512_stream_load_si512 ((__m512i*)addr + 2);
+    volatile __m512i zmm03 = _mm512_stream_load_si512 ((__m512i*)addr + 3);
+
+    // __m512i zmm00 = _mm512_stream_load_si512((__m512i *)addr + 0); // 64
+    // __m512i zmm01 = _mm512_stream_load_si512((__m512i *)addr + 1); // 128
+    // __m512i zmm02 = _mm512_stream_load_si512((__m512i *)addr + 2); // 192
+    // __m512i zmm03 = _mm512_stream_load_si512((__m512i *)addr + 3); // 256
+    // _mm_lfence();
+}
+
+inline void  // __attribute__((optimize("O0"),always_inline))
+Load512_NT (char* addr, int N = 0) {
+    volatile __m512i zmm00 = _mm512_stream_load_si512 ((__m512i*)addr + 0);
+    volatile __m512i zmm01 = _mm512_stream_load_si512 ((__m512i*)addr + 1);
+    volatile __m512i zmm02 = _mm512_stream_load_si512 ((__m512i*)addr + 2);
+    volatile __m512i zmm03 = _mm512_stream_load_si512 ((__m512i*)addr + 3);
+    volatile __m512i zmm04 = _mm512_stream_load_si512 ((__m512i*)addr + 4);
+    volatile __m512i zmm05 = _mm512_stream_load_si512 ((__m512i*)addr + 5);
+    volatile __m512i zmm06 = _mm512_stream_load_si512 ((__m512i*)addr + 6);
+    volatile __m512i zmm07 = _mm512_stream_load_si512 ((__m512i*)addr + 7);
+    // __m512i zmm00 = _mm512_stream_load_si512((__m512i *)addr + 0); // 64
+    // __m512i zmm01 = _mm512_stream_load_si512((__m512i *)addr + 1); // 128
+    // __m512i zmm02 = _mm512_stream_load_si512((__m512i *)addr + 2); // 192
+    // __m512i zmm03 = _mm512_stream_load_si512((__m512i *)addr + 3); // 256
+    // __m512i zmm04 = _mm512_stream_load_si512((__m512i *)addr + 4); //
+    // __m512i zmm05 = _mm512_stream_load_si512((__m512i *)addr + 5); //
+    // __m512i zmm06 = _mm512_stream_load_si512((__m512i *)addr + 6); //
+    // __m512i zmm07 = _mm512_stream_load_si512((__m512i *)addr + 7); // 512
+    // _mm_lfence();
+}
+
+inline void  // __attribute__((optimize("O0"),always_inline))
+Load1024_NT (char* addr, int N = 0) {
+    volatile __m512i zmm00 = _mm512_stream_load_si512 ((__m512i*)addr + 0);
+    volatile __m512i zmm01 = _mm512_stream_load_si512 ((__m512i*)addr + 1);
+    volatile __m512i zmm02 = _mm512_stream_load_si512 ((__m512i*)addr + 2);
+    volatile __m512i zmm03 = _mm512_stream_load_si512 ((__m512i*)addr + 3);
+    volatile __m512i zmm04 = _mm512_stream_load_si512 ((__m512i*)addr + 4);
+    volatile __m512i zmm05 = _mm512_stream_load_si512 ((__m512i*)addr + 5);
+    volatile __m512i zmm06 = _mm512_stream_load_si512 ((__m512i*)addr + 6);
+    volatile __m512i zmm07 = _mm512_stream_load_si512 ((__m512i*)addr + 7);
+    volatile __m512i zmm08 = _mm512_stream_load_si512 ((__m512i*)addr + 8);
+    volatile __m512i zmm09 = _mm512_stream_load_si512 ((__m512i*)addr + 9);
+    volatile __m512i zmm10 = _mm512_stream_load_si512 ((__m512i*)addr + 10);
+    volatile __m512i zmm11 = _mm512_stream_load_si512 ((__m512i*)addr + 11);
+    volatile __m512i zmm12 = _mm512_stream_load_si512 ((__m512i*)addr + 12);
+    volatile __m512i zmm13 = _mm512_stream_load_si512 ((__m512i*)addr + 13);
+    volatile __m512i zmm14 = _mm512_stream_load_si512 ((__m512i*)addr + 14);
+    volatile __m512i zmm15 = _mm512_stream_load_si512 ((__m512i*)addr + 15);
+    // __m512i zmm00 = _mm512_stream_load_si512((__m512i *)addr + 0); // 64
+    // __m512i zmm01 = _mm512_stream_load_si512((__m512i *)addr + 1); // 128
+    // __m512i zmm02 = _mm512_stream_load_si512((__m512i *)addr + 2); // 192
+    // __m512i zmm03 = _mm512_stream_load_si512((__m512i *)addr + 3); // 256
+    // __m512i zmm04 = _mm512_stream_load_si512((__m512i *)addr + 4); //
+    // __m512i zmm05 = _mm512_stream_load_si512((__m512i *)addr + 5); //
+    // __m512i zmm06 = _mm512_stream_load_si512((__m512i *)addr + 6); //
+    // __m512i zmm07 = _mm512_stream_load_si512((__m512i *)addr + 7); // 512
+    // __m512i zmm08 = _mm512_stream_load_si512((__m512i *)addr + 8);
+    // __m512i zmm09 = _mm512_stream_load_si512((__m512i *)addr + 9);
+    // __m512i zmm10 = _mm512_stream_load_si512((__m512i *)addr + 10);
+    // __m512i zmm11 = _mm512_stream_load_si512((__m512i *)addr + 11);
+    // __m512i zmm12 = _mm512_stream_load_si512((__m512i *)addr + 12);
+    // __m512i zmm13 = _mm512_stream_load_si512((__m512i *)addr + 13);
+    // __m512i zmm14 = _mm512_stream_load_si512((__m512i *)addr + 14);
+    // __m512i zmm15 = _mm512_stream_load_si512((__m512i *)addr + 15); // 1024
+    // _mm_lfence();
+}
+
+inline void LoadNKB_NT (char* addr, int N) {
+    char* tmp = addr;
+    // Load N KB from
+    for (int i = 0; i < N; ++i) {
+        Load1024_NT (tmp);
+        tmp += 1024;
+    }
+}
+
+static __m512i zmm = _mm512_set1_epi8 ((char)(31));
+
+force_inline void Store64_NT (char* dest, int N = 0) {
+    _mm512_stream_si512 ((__m512i*)dest + 0, zmm);
+    _mm_sfence ();
+}
+
+force_inline void Store128_NT (char* dest, int N = 0) {
+    _mm512_stream_si512 ((__m512i*)dest + 0, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 1, zmm);
+    _mm_sfence ();
+}
+
+force_inline void Store256_NT (char* dest, int N = 0) {
+    _mm512_stream_si512 ((__m512i*)dest + 0, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 1, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 2, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 3, zmm);
+    _mm_sfence ();
+}
+
+force_inline void Store512_NT (char* dest, int N = 0) {
+    _mm512_stream_si512 ((__m512i*)dest + 0, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 1, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 2, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 3, zmm);
+#ifdef FENCE_ALL
+    _mm_sfence ();
+#endif
+    _mm512_stream_si512 ((__m512i*)dest + 4, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 5, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 6, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 7, zmm);
+    _mm_sfence ();
+}
+
+force_inline void Store1024_NT (char* dest, int N = 0) {
+    _mm512_stream_si512 ((__m512i*)dest + 0, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 1, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 2, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 3, zmm);
+#ifdef FENCE_ALL
+    _mm_sfence ();
+#endif
+    _mm512_stream_si512 ((__m512i*)dest + 4, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 5, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 6, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 7, zmm);
+#ifdef FENCE_ALL
+    _mm_sfence ();
+#endif
+    _mm512_stream_si512 ((__m512i*)dest + 8, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 9, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 10, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 11, zmm);
+#ifdef FENCE_ALL
+    _mm_sfence ();
+#endif
+    _mm512_stream_si512 ((__m512i*)dest + 12, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 13, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 14, zmm);
+    _mm512_stream_si512 ((__m512i*)dest + 15, zmm);
+    _mm_sfence ();
+}
+
+force_inline void StoreNKB_NT (char* dest, int N) {
+    // store N KB to dest
+    // char* old = dest;
+    for (int i = 0; i < N; ++i) {
+        Store1024_NT (dest);
+        dest += 1024;
+    }
+}
+
+force_inline void Store64_WB (char* dest, int N = 0) {
+    _mm512_store_epi64 ((__m512i*)dest + 0, zmm);
+    _mm_clwb ((__m512i*)dest + 0);
+    _mm_sfence ();
+}
+
+force_inline void Store128_WB (char* dest, int N = 0) {
+    _mm512_store_epi64 ((__m512i*)dest + 0, zmm);
+    _mm_clwb ((__m512i*)dest + 0);
+    _mm512_store_epi64 ((__m512i*)dest + 1, zmm);
+    _mm_clwb ((__m512i*)dest + 1);
+    _mm_sfence ();
+}
+
+force_inline void Store256_WB (char* dest, int N = 0) {
+    _mm512_store_epi64 ((__m512i*)dest + 0, zmm);
+    _mm_clwb ((__m512i*)dest + 0);
+    _mm512_store_epi64 ((__m512i*)dest + 1, zmm);
+    _mm_clwb ((__m512i*)dest + 1);
+    _mm512_store_epi64 ((__m512i*)dest + 2, zmm);
+    _mm_clwb ((__m512i*)dest + 2);
+    _mm512_store_epi64 ((__m512i*)dest + 3, zmm);
+    _mm_clwb ((__m512i*)dest + 3);
+    _mm_sfence ();
+}
+
+force_inline void Store512_WB (char* dest, int N = 0) {
+    _mm512_store_epi64 ((__m512i*)dest + 0, zmm);
+    _mm_clwb ((__m512i*)dest + 0);
+    _mm512_store_epi64 ((__m512i*)dest + 1, zmm);
+    _mm_clwb ((__m512i*)dest + 1);
+    _mm512_store_epi64 ((__m512i*)dest + 2, zmm);
+    _mm_clwb ((__m512i*)dest + 2);
+    _mm512_store_epi64 ((__m512i*)dest + 3, zmm);
+    _mm_clwb ((__m512i*)dest + 3);
+    _mm512_store_epi64 ((__m512i*)dest + 4, zmm);
+    _mm_clwb ((__m512i*)dest + 4);
+    _mm512_store_epi64 ((__m512i*)dest + 5, zmm);
+    _mm_clwb ((__m512i*)dest + 5);
+    _mm512_store_epi64 ((__m512i*)dest + 6, zmm);
+    _mm_clwb ((__m512i*)dest + 6);
+    _mm512_store_epi64 ((__m512i*)dest + 7, zmm);
+    _mm_clwb ((__m512i*)dest + 7);
+    _mm_sfence ();
+}
+
+force_inline void Store1024_WB (char* dest, int N = 0) {
+    _mm512_store_epi64 ((__m512i*)dest + 0, zmm);
+    _mm_clwb ((__m512i*)dest + 0);
+    _mm512_store_epi64 ((__m512i*)dest + 1, zmm);
+    _mm_clwb ((__m512i*)dest + 1);
+    _mm512_store_epi64 ((__m512i*)dest + 2, zmm);
+    _mm_clwb ((__m512i*)dest + 2);
+    _mm512_store_epi64 ((__m512i*)dest + 3, zmm);
+    _mm_clwb ((__m512i*)dest + 3);
+    _mm512_store_epi64 ((__m512i*)dest + 4, zmm);
+    _mm_clwb ((__m512i*)dest + 4);
+    _mm512_store_epi64 ((__m512i*)dest + 5, zmm);
+    _mm_clwb ((__m512i*)dest + 5);
+    _mm512_store_epi64 ((__m512i*)dest + 6, zmm);
+    _mm_clwb ((__m512i*)dest + 6);
+    _mm512_store_epi64 ((__m512i*)dest + 7, zmm);
+    _mm_clwb ((__m512i*)dest + 7);
+    _mm512_store_epi64 ((__m512i*)dest + 8, zmm);
+    _mm_clwb ((__m512i*)dest + 8);
+    _mm512_store_epi64 ((__m512i*)dest + 9, zmm);
+    _mm_clwb ((__m512i*)dest + 9);
+    _mm512_store_epi64 ((__m512i*)dest + 10, zmm);
+    _mm_clwb ((__m512i*)dest + 10);
+    _mm512_store_epi64 ((__m512i*)dest + 11, zmm);
+    _mm_clwb ((__m512i*)dest + 11);
+    _mm512_store_epi64 ((__m512i*)dest + 12, zmm);
+    _mm_clwb ((__m512i*)dest + 12);
+    _mm512_store_epi64 ((__m512i*)dest + 13, zmm);
+    _mm_clwb ((__m512i*)dest + 13);
+    _mm512_store_epi64 ((__m512i*)dest + 14, zmm);
+    _mm_clwb ((__m512i*)dest + 14);
+    _mm512_store_epi64 ((__m512i*)dest + 15, zmm);
+    _mm_clwb ((__m512i*)dest + 15);
+    _mm_sfence ();
+}
+
+#pragma GCC diagnostic pop
+
+force_inline void StoreNKB_WB (char* dest, int N) {
+    // store N KB to dest
+    // char* old = dest;
+    for (int i = 0; i < N; ++i) {
+        Store1024_WB (dest);
+        dest += 1024;
+    }
+}
 
 }  // namespace util

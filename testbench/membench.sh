@@ -1,0 +1,2 @@
+numactl -C 0-7,16-23   sudo ../release/mem_bench --thread=16 --block_size=256 --type=fillrandomNT --pmdk=true | tee local_pmdk.data
+numactl -C 8-15,24-31  sudo ../release/mem_bench --thread=16 --block_size=256 --type=fillrandomNT --pmdk=true | tee remote_pmdk.data
