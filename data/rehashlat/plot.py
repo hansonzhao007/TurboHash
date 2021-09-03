@@ -16,20 +16,21 @@ def PlotLat():
     print(df) 
    
     # Plot 
-    fig, ax = plt.subplots(figsize=(4, 3))
-    df.plot(ax=ax, x='bucket_count', style=['|--', 'o-', '-.'], alpha=0.8, colormap='Spectral', fontsize=12)
+    fig, ax = plt.subplots(figsize=(6, 2.5))
+    df.plot(ax=ax, x='bucket_count', style=['|--', 'o-', '-.'], alpha=0.8, colormap='Spectral', fontsize=12, linewidth=3)
 
     ax.legend(
         ['Rehash Small Key', 'Rehash Large Key'],
-        loc="lower right", 
+        loc="upper left", 
         fontsize=10, 
         edgecolor='k',
         facecolor='white',
         )
     ax.set_ylabel('Average Rehash Time (us)', fontsize=12, color='k')
     ax.set_xlabel("Number of Buckets", fontsize=16)
-    ax.yaxis.grid(linewidth=1, linestyle='--')
-    ax.xaxis.grid(linewidth=1, linestyle='--')
+    # ax.set_xscale('log')
+    # ax.yaxis.grid(linewidth=1, linestyle='--')
+    # ax.xaxis.grid(linewidth=1, linestyle='--')
     
     fig.savefig('rehash_lat_line.pdf', bbox_inches='tight', pad_inches=0.05)
 
