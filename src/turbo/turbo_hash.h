@@ -2401,12 +2401,14 @@ private:
             // If this cell still has more than one empty slot, then it means the key
             // does't exist.
             if (!meta.Full ()) {
+                // printf ("%d\n", probe_count);
                 return {{}, false};
             }
 
             probe.next ();
         }
 
+        // printf ("%d\n", probe_count);
         // after all the probe, no key exist
         return {{}, false};
     }

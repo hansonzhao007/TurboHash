@@ -25,7 +25,7 @@ using namespace util;
 #define likely(x) (__builtin_expect (false || (x), true))
 #define unlikely(x) (__builtin_expect (x, 0))
 
-#define IS_PMEM 1
+// #define IS_PMEM 1
 
 // For hash table
 DEFINE_bool (use_existing_db, false, "");
@@ -42,6 +42,7 @@ DEFINE_uint64 (value_size, 8, "The value size");
 DEFINE_uint64 (num, 120 * 1000000LU, "Number of total record");
 DEFINE_uint64 (read, 0, "Number of read operations");
 DEFINE_uint64 (write, 0, "Number of read operations");
+DEFINE_uint32 (repeat_delete, 0, "");
 
 DEFINE_bool (hist, false, "");
 
@@ -423,6 +424,10 @@ public:
                 fresh_db = false;
                 key_trace_->Randomize ();
                 method = &Benchmark::DoDelete;
+            } else if (name == "deleterepeat") {
+                fresh_db = false;
+                key_trace_->Randomize ();
+                method = &Benchmark::DoDeleteRepeat;
             } else if (name == "deleteverify") {
                 fresh_db = false;
                 method = &Benchmark::DoDeleteRead;
@@ -911,6 +916,69 @@ public:
         return;
     }
 
+    void DoDeleteRepeat (ThreadState* thread) {
+        auto tinfo = hashtable_->getThreadInfo ();
+        INFO ("DoDeleteRepeat");
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            ERROR ("DoDeleteRepeat lack key_trace_ initialization.");
+            return;
+        }
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+
+        size_t key_offset_size = 1000000000L;
+        size_t cur_key_offset = 0;
+        const int kRepeatNum = FLAGS_repeat_delete;
+        for (int repeat = 0; repeat < kRepeatNum; repeat++) {
+            thread->stats.Start ();
+            size_t deleted = 0;
+            auto key_iterator = key_trace_->iterate_between (start_offset, start_offset + interval);
+            // delete
+            while (key_iterator.Valid ()) {
+                uint64_t j = 0;
+                for (; j < batch && key_iterator.Valid (); j++) {
+                    size_t key = key_iterator.Next ();
+                    auto res = hashtable_->Delete (key + cur_key_offset, tinfo);
+                    if (res) {
+                        deleted++;
+                    }
+                }
+                thread->stats.FinishedBatchOp (j);
+            }
+            // insert
+            cur_key_offset += key_offset_size;
+            auto key_iterator2 =
+                key_trace_->iterate_between (start_offset, start_offset + interval);
+            while (key_iterator2.Valid ()) {
+                uint64_t j = 0;
+                for (; j < batch && key_iterator2.Valid (); j++) {
+                    size_t key = key_iterator2.Next ();
+                    bool res = hashtable_->Put (key + cur_key_offset, 1, tinfo);
+                    if (!res) {
+                        INFO ("Hash Table Full!!!\n");
+                        printf ("Hash Table Full!!!\n");
+                        exit (1);
+                    }
+                }
+                thread->stats.FinishedBatchOp (j);
+            }
+        }
+
+        Duration duration (FLAGS_readtime, reads_);
+        cur_key_offset += key_offset_size;
+        thread->stats.Start ();
+        auto key_iterator = key_trace_->iterate_between (start_offset, start_offset + interval);
+        while (!duration.Done (batch) && key_iterator.Valid ()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid (); j++) {
+                size_t key = key_iterator.Next () + cur_key_offset;
+                hashtable_->Find (key, tinfo, NothingCallback);
+            }
+            thread->stats.FinishedBatchOp (j);
+        }
+    }
+
     void DoDeleteRead (ThreadState* thread) {
         auto tinfo = hashtable_->getThreadInfo ();
         INFO ("DoDeleteRead");
@@ -1303,6 +1371,10 @@ private:
 };
 
 int main (int argc, char* argv[]) {
+    for (int i = 0; i < argc; i++) {
+        printf ("%s ", argv[i]);
+    }
+    printf ("\n");
     ParseCommandLineFlags (&argc, &argv, true);
     Benchmark benchmark;
     benchmark.Run ();
