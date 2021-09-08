@@ -12,7 +12,7 @@ plt.rcParams['axes.linewidth'] = 2
 
 
 # read data
-for d in range(0,4):
+for d in range(0,2):
     fig, axs= plt.subplots(2,4,figsize=(10,5), sharey=True, constrained_layout=True)
     for i in range(1, 9):
         filename = "delete_repeat_" + str(d) + "_" + str(i) + "0per.data.parse"
@@ -37,6 +37,7 @@ for d in range(0,4):
         print("row", c, "col", c)
         ax = axs[r, c]
         ax.set_xlim(-0.5, 15)
+        ax.set_ylim(10005, 99999999)
         df.plot(ax=ax, kind="bar", width=0.975, edgecolor='#F37F82', linewidth=1.7, color='#F37F82')
         ax.get_legend().remove()
         
@@ -57,8 +58,8 @@ for d in range(0,4):
         # loc = plticker.MultipleLocator(base=3.0) # this locator puts ticks at regular intervals
         # ax.xaxis.set_major_locator(loc)
 
-        if i == 1 or i == 5:
-            ax.set_ylabel('Frequency', fontsize=22, color='k')
+        # if i == 1 or i == 5:
+        #     ax.set_ylabel('Frequency', fontsize=22, color='k')
         ax.set_xlim(-0.5, 15.5)
 
         loc = plticker.MultipleLocator(base=5.0) # this locator puts ticks at regular intervals

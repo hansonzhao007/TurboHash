@@ -25,7 +25,7 @@ using namespace util;
 #define likely(x) (__builtin_expect (false || (x), true))
 #define unlikely(x) (__builtin_expect (x, 0))
 
-// #define IS_PMEM 1
+#define IS_PMEM 1
 
 // For hash table
 DEFINE_bool (use_existing_db, false, "");
@@ -392,10 +392,10 @@ public:
         PrintHeader ();
         bool fresh_db = true;
         // run benchmark
-        bool print_hist = false;
         const char* benchmarks = FLAGS_benchmarks.c_str ();
         while (benchmarks != nullptr) {
             int thread = FLAGS_thread;
+            bool print_hist = false;
             void (Benchmark::*method) (ThreadState*) = nullptr;
             const char* sep = strchr (benchmarks, ',');
             std::string name;
@@ -460,6 +460,10 @@ public:
                 fresh_db = false;
                 thread = 1;
                 method = &Benchmark::DoRehash;
+            } else if (name == "gc") {
+                fresh_db = false;
+                thread = 1;
+                method = &Benchmark::DoGC;
             } else if (name == "rehashlat") {
                 fresh_db = false;
                 thread = 1;
@@ -535,6 +539,13 @@ public:
         INFO ("DoRehash. Thread %2d", thread->tid);
         thread->stats.Start ();
         size_t rehash_count = hashtable_->MinorReHashAll ();
+        thread->stats.FinishedBatchOp (rehash_count);
+    }
+
+    void DoGC (ThreadState* thread) {
+        INFO ("DoGC. Thread %2d", thread->tid);
+        thread->stats.Start ();
+        size_t rehash_count = hashtable_->GCAll ();
         thread->stats.FinishedBatchOp (rehash_count);
     }
 

@@ -1840,6 +1840,33 @@ public:
         return rehash_count.load ();
     }
 
+    size_t GCAll () {
+        // rehash for all the buckets
+        int rehash_thread = 4;
+        printf ("Rehash threads: %d\n", rehash_thread);
+        std::vector<std::thread> workers (rehash_thread);
+        std::atomic<size_t> rehash_count (0);
+        auto rehash_start = util::NowMicros ();
+        for (int t = 0; t < rehash_thread; t++) {
+            workers[t] = std::thread ([&, t] {
+                auto thread_info = getThreadInfo ();
+                size_t start_b = bucket_count_ / rehash_thread * t;
+                size_t end_b = start_b + bucket_count_ / rehash_thread;
+                size_t counts = 0;
+                for (size_t i = start_b; i < end_b; ++i) {
+                    counts += GC (i, thread_info);
+                }
+                rehash_count.fetch_add (counts, std::memory_order_relaxed);
+            });
+        }
+        std::for_each (workers.begin (), workers.end (), [] (std::thread& t) { t.join (); });
+        double rehash_duration = util::NowMicros () - rehash_start;
+        printf ("Real rehash speed: %f Mops/s. entries: %lu, duration: %.2f s.\n",
+                (double)rehash_count.load () / rehash_duration, rehash_count.load (),
+                rehash_duration / 1000000.0);
+        return rehash_count.load ();
+    }
+
     struct FindNextSlotInRehashResult {
         uint32_t cell_index;
         uint8_t slot_index;
@@ -1924,6 +1951,142 @@ public:
         char* old_bucket_addr_dram = (char*)aligned_alloc (kCellSize, old_bucket_size);
         memmove (old_bucket_addr_dram, old_bucket_addr_pmem, old_bucket_size);
         uint32_t new_cell_count = old_cell_count << 1;
+        uint32_t new_cell_count_mask = new_cell_count - 1;
+        size_t new_bucket_size = new_cell_count * kCellSize;
+        char* new_bucket_addr_dram = (char*)aligned_alloc (kCellSize, new_bucket_size);
+        char* new_bucket_addr_pmem = cell_allocator_.Allocate (new_cell_count);
+
+        if (new_bucket_addr_dram == nullptr) {
+            perror ("rehash alloc dram fail\n");
+            exit (1);
+        }
+        if (new_bucket_addr_pmem == nullptr) {
+            perror ("rehash alloc pmem fail\n");
+            exit (1);
+        }
+        if (new_cell_count > kCellCountLimit) {
+            printf ("Cannot rehash.\n");
+            exit (1);
+        }
+
+        // Reset all cell's meta data
+        for (size_t i = 0; i < new_cell_count; ++i) {
+            char* des_cell_addr = new_bucket_addr_dram + (i << kCellSizeLeftShift);
+            memset (des_cell_addr, 0, CellMeta::size ());
+        }
+        // ----------------------------------------------------------------------------------
+        // iterator old bucket and insert slots info to new bucket
+        // old: |11111111|22222222|33333333|44444444|
+        //       ========>
+        // new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444
+        // |
+        // ----------------------------------------------------------------------------------
+
+        // Step 2. Move the meta in old bucket to new bucket
+        //      a) Record next avaliable slot position of each cell within new
+        //      bucket for rehash
+        uint8_t* slot_vec = (uint8_t*)malloc (new_cell_count);
+        memset (slot_vec, CellMeta::StartSlotPos (), new_cell_count);
+        BucketIterator iter (bi, old_bucket_addr_dram, old_cell_count);
+        //      b) Iterate every slot in this bucket
+        while (iter.valid ()) {
+            count++;
+            // Step 1. obtain old slot info and slot content
+            typename BucketIterator::InfoPair res = *iter;
+
+            // Step 2. update bitmap, H2, H1 and slot pointer in new bucket
+            //      a) find valid slot in new bucket
+            FindNextSlotInRehashResult des_slot_info =
+                findNextSlotInRehash (slot_vec, res.slot_info.H1, new_cell_count_mask);
+            //      b) obtain des cell addr
+            char* des_cell_addr_dram =
+                new_bucket_addr_dram + (des_slot_info.cell_index << kCellSizeLeftShift);
+            char* des_cell_addr_pmem =
+                new_bucket_addr_pmem + (des_slot_info.cell_index << kCellSizeLeftShift);
+            if (des_slot_info.slot_index >= CellMeta::SlotMaxRange ()) {
+                printf ("rehash fail: %s\n", res.slot_info.ToString ().c_str ());
+                TURBO_PMEM_ERROR ("Rehash fail: " << res.slot_info.ToString ());
+                printf ("%s\n", PrintBucketMeta (res.slot_info.bucket).c_str ());
+                exit (1);
+            }
+            //      c) move the old slot to new slot
+            const SlotInfo& old_info = res.slot_info;
+            HashSlot* old_slot_dram = res.hash_slot;
+            char* old_cell_addr_pmem = old_bucket_addr_pmem + (old_info.cell << kCellSizeLeftShift);
+            HashSlot* old_slot_pmem = CellMeta::LocateSlot (old_cell_addr_pmem, old_info.slot);
+
+            // move slot content, including H1 and pointer
+            HashSlot* des_slot_dram =
+                CellMeta::LocateSlot (des_cell_addr_dram, des_slot_info.slot_index);
+            HashSlot* des_slot_pmem =
+                CellMeta::LocateSlot (des_cell_addr_pmem, des_slot_info.slot_index);
+            PptrToDramPptr<Entry, is_key_flat && is_value_flat>::Convert (
+                des_slot_dram->entry, des_slot_pmem->entry, old_slot_dram, old_slot_pmem);
+            des_slot_dram->H1 = old_info.H1;
+
+            // locate H2 and set H2
+            H2Tag* h2_tag_ptr =
+                CellMeta::LocateH2Tag (des_cell_addr_dram, des_slot_info.slot_index);
+            *h2_tag_ptr = old_info.H2;
+
+            // obtain and set bitmap
+            decltype (CellMeta::bitmap_)* bitmap =
+                (decltype (CellMeta::bitmap_)*)des_cell_addr_dram;
+            *bitmap = (*bitmap) | (1 << des_slot_info.slot_index);
+
+            // Step 3. to next old slot
+            ++iter;
+        }
+        //      c) set remaining slots' slot pointer to 0 (including the backup
+        //      slot)
+        for (uint32_t ci = 0; ci < new_cell_count; ++ci) {
+            char* des_cell_addr = new_bucket_addr_dram + (ci << kCellSizeLeftShift);
+            for (uint8_t si = slot_vec[ci]; si <= CellMeta::SlotMaxRange (); si++) {
+                HashSlot* des_slot = CellMeta::LocateSlot (des_cell_addr, si);
+                des_slot->entry = 0;
+                des_slot->H1 = 0;
+            }
+        }
+
+        // Step 3. Copy content to pmem space
+        memmove (new_bucket_addr_pmem, new_bucket_addr_dram, new_bucket_size);
+        TURBO_PMEM_CLFLUSH (new_bucket_addr_pmem, new_bucket_size);
+
+        // Step 4. Reset bucket meta in buckets_
+        bucket_meta->Reset (new_bucket_addr_pmem, new_cell_count);
+
+        // Step 5. commit the changed bucket meta to pmem meta. As long as this is
+        // not finished, if crash happens, turbo hash will reboot from the last
+        // state
+        buckets_pmem_[bi].Store (*bucket_meta);
+
+        // Step 6. Garbage collection for old_bucket
+        epoche_.markNodeForDeletion ([=] () { cell_allocator_.Release (old_bucket_addr_pmem); },
+                                     thread_info);
+
+        // TURBO_PMEM_DEBUG("Rehash bucket: " << bi <<
+        //      ", old cell count: " << old_cell_count <<
+        //      ", loadfactor: " << (double)count / ( old_cell_count *
+        //      (CellMeta::SlotCount() - 1) ) <<
+        //      ", new cell count: " << new_cell_count);
+
+        free (slot_vec);
+        free (new_bucket_addr_dram);
+        free (old_bucket_addr_dram);
+        return count;
+    }
+
+    size_t GC (int bi, ThreadInfo& thread_info) {
+        size_t count = 0;
+        BucketMetaDram* bucket_meta = locateBucket (bi);
+
+        // Step 1. Create new bucket and initialize its meta
+        uint32_t old_cell_count = bucket_meta->CellCount ();
+        size_t old_bucket_size = old_cell_count * kCellSize;
+        char* old_bucket_addr_pmem = bucket_meta->Address ();
+        char* old_bucket_addr_dram = (char*)aligned_alloc (kCellSize, old_bucket_size);
+        memmove (old_bucket_addr_dram, old_bucket_addr_pmem, old_bucket_size);
+        uint32_t new_cell_count = old_cell_count;
         uint32_t new_cell_count_mask = new_cell_count - 1;
         size_t new_bucket_size = new_cell_count * kCellSize;
         char* new_bucket_addr_dram = (char*)aligned_alloc (kCellSize, new_bucket_size);

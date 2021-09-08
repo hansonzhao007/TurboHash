@@ -1736,6 +1736,34 @@ public:
         return rehash_count.load ();
     }
 
+    size_t GCAll () {
+        // gc for all the buckets
+        int rehash_thread = 4;
+        printf ("Rehash threads: %d\n", rehash_thread);
+        std::vector<std::thread> workers (rehash_thread);
+        std::vector<size_t> add_capacity (rehash_thread, 0);
+        std::atomic<size_t> rehash_count (0);
+        auto rehash_start = util::NowMicros ();
+        for (int t = 0; t < rehash_thread; t++) {
+            workers[t] = std::thread ([&, t] {
+                auto thread_info = getThreadInfo ();
+                size_t start_b = bucket_count_ / rehash_thread * t;
+                size_t end_b = start_b + bucket_count_ / rehash_thread;
+                size_t counts = 0;
+                for (size_t i = start_b; i < end_b; ++i) {
+                    counts += GC (i, thread_info);
+                }
+                rehash_count.fetch_add (counts, std::memory_order_relaxed);
+            });
+        }
+        std::for_each (workers.begin (), workers.end (), [] (std::thread& t) { t.join (); });
+        double rehash_duration = util::NowMicros () - rehash_start;
+        printf ("Real rehash speed: %f Mops/s. entries: %lu, duration: %.2f s.\n",
+                (double)rehash_count / rehash_duration, rehash_count.load (),
+                rehash_duration / 1000000.0);
+        return rehash_count.load ();
+    }
+
     struct FindNextSlotInRehashResult {
         uint32_t cell_index;
         uint8_t slot_index;
@@ -1804,6 +1832,86 @@ public:
         // new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444
         // |
         // ----------------------------------------------------------------------------------
+
+        // Step 2. Move the meta in old bucket to new bucket
+        //      a) Record next avaliable slot position of each cell within new
+        //      bucket for rehash
+        uint8_t* slot_vec = (uint8_t*)malloc (new_cell_count);
+        memset (slot_vec, CellMeta::StartSlotPos (), new_cell_count);
+        BucketIterator iter (bi, bucket_meta->Address (), bucket_meta->CellCount ());
+        //      b) Iterate every slot in this bucket
+        while (iter.valid ()) {
+            count++;
+            // Step 1. obtain old slot info and slot content
+            typename BucketIterator::InfoPair res = *iter;
+
+            // Step 2. update bitmap, H2, H1 and slot pointer in new bucket
+            //      a) find valid slot in new bucket
+            FindNextSlotInRehashResult valid_slot =
+                findNextSlotInRehash (slot_vec, res.slot_info.H1, new_cell_count_mask);
+            //      b) obtain des cell addr
+            char* des_cell_addr = new_bucket_addr + (valid_slot.cell_index << kCellSizeLeftShift);
+            if (valid_slot.slot_index >= CellMeta::SlotMaxRange ()) {
+                printf ("rehash fail: %s\n", res.slot_info.ToString ().c_str ());
+                printf ("%s\n", PrintBucketMeta (res.slot_info.bucket).c_str ());
+                exit (1);
+            }
+            //      c) move the slot meta to new bucket
+            moveSlot (des_cell_addr, valid_slot.slot_index /* des_slot_i */, res.slot_info,
+                      res.hash_slot);
+
+            // Step 3. to next old slot
+            ++iter;
+        }
+        //      c) set remaining slots' slot pointer to 0 (including the backup
+        //      slot)
+        for (uint32_t ci = 0; ci < new_cell_count; ++ci) {
+            char* des_cell_addr = new_bucket_addr + (ci << kCellSizeLeftShift);
+            for (uint8_t si = slot_vec[ci]; si <= CellMeta::SlotMaxRange (); si++) {
+                HashSlot* des_slot = CellMeta::LocateSlot (des_cell_addr, si);
+                des_slot->entry = 0;
+                des_slot->H1 = 0;
+            }
+        }
+
+        // Step 3. Reset bucket meta in buckets_
+        bucket_meta->Reset (new_bucket_addr, new_cell_count);
+
+        // Step 4. Garbage collection for old bucket.
+        epoche_.markNodeForDeletion ([=] () { free (old_bucket_addr); }, thread_info);
+
+        free (slot_vec);
+        return count;
+    }
+
+    size_t GC (int bi, ThreadInfo& thread_info) {
+        size_t count = 0;
+        BucketMeta* bucket_meta = locateBucket (bi);
+
+        // Step 1. Create new bucket and initialize its meta
+        uint32_t old_cell_count = bucket_meta->CellCount ();
+        uint32_t new_cell_count = old_cell_count;
+        uint32_t new_cell_count_mask = new_cell_count - 1;
+        char* old_bucket_addr = bucket_meta->Address ();
+        char* new_bucket_addr = cell_allocator_.Allocate (new_cell_count);
+
+        if (new_cell_count > kCellCountLimit) {
+            printf ("Cannot rehash\n");
+            exit (1);
+        }
+
+        capacity_.fetch_add (old_cell_count * (CellMeta::SlotCount () - 1));
+
+        if (new_bucket_addr == nullptr) {
+            perror ("rehash alloc memory fail\n");
+            exit (1);
+        }
+
+        // Reset all cell's meta data
+        for (size_t i = 0; i < new_cell_count; ++i) {
+            char* des_cell_addr = new_bucket_addr + (i << kCellSizeLeftShift);
+            memset (des_cell_addr, 0, CellMeta::size ());
+        }
 
         // Step 2. Move the meta in old bucket to new bucket
         //      a) Record next avaliable slot position of each cell within new

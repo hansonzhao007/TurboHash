@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-for i in {1..9}
+for i in {1..8}
 do
-    for d in 0 1 2 3
+    for d in 0 1
     do
         filename="delete_repeat_${d}_${i}0per.data"
         echo "------ $filename -------"
