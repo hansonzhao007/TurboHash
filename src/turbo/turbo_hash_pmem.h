@@ -1022,6 +1022,8 @@ public:
             explicit Version (uint64_t data) : data_ (data) {}
             explicit Version (uint16_t b, uint16_t bd, uint32_t seq)
                 : bitmap_ (b), bitmap_deleted_ (bd), seq_no_ (seq) {}
+
+            Version (const Version& v) { this->data_ = v.data_; }
             union {
                 struct {
                     uint16_t bitmap_;
@@ -1039,12 +1041,8 @@ public:
 
         explicit CellMeta256V2 (char* rep)
             // obtain the hash tags to meta_
-            : meta_ (_mm_loadu_si128 (reinterpret_cast<const __m128i*> (rep + 16))) {
-            uint64_t tmp = __atomic_load_n ((uint64_t*)rep, __ATOMIC_ACQUIRE);
-            bitmap_ = tmp & BitMapMask;
-            bitmap_deleted_ = (tmp >> 16) & BitMapMask;
-            seq_no_ = tmp >> 32;
-        }
+            : meta_ (_mm_loadu_si128 (reinterpret_cast<const __m128i*> (rep + 16))),
+              ver_ (LoadVersion (rep)) {}
 
         ~CellMeta256V2 () {}
 
@@ -1067,7 +1065,7 @@ public:
             return reinterpret_cast<H2Tag*> (cell_addr + 16) + slot_i;
         }
 
-        inline Version GetVersion () { return Version (data_); }
+        inline Version GetVersion () { return ver_; }
 
         inline util::BitSet MatchBitSet (const __m128i& hash_vec) {
 #ifdef __AVX512__
@@ -1076,24 +1074,26 @@ public:
             auto compare_res = _mm_cmpeq_epi8 (hash_vec, meta_);
             uint16_t mask = _mm_movemask_epi8 (compare_res);
 #endif
-            return util::BitSet (mask & bitmap_ & ~bitmap_deleted_ & BitMapMask);
+            return util::BitSet (mask & ver_.bitmap_ & ~ver_.bitmap_deleted_ & BitMapMask);
         }
 
-        inline util::BitSet EraseBitSet () { return util::BitSet (bitmap_deleted_ & BitMapMask); }
+        inline util::BitSet EraseBitSet () {
+            return util::BitSet (ver_.bitmap_deleted_ & BitMapMask);
+        }
 
-        inline util::BitSet BackupBitSet () { return util::BitSet (~bitmap_ & BitMapMask); }
+        inline util::BitSet BackupBitSet () { return util::BitSet (~ver_.bitmap_ & BitMapMask); }
 
         inline util::BitSet ValidBitSet () {
-            return util::BitSet (bitmap_ & ~bitmap_deleted_ & BitMapMask);
+            return util::BitSet (ver_.bitmap_ & ~ver_.bitmap_deleted_ & BitMapMask);
         }
 
-        inline bool IsDeleted (int i) { return (bitmap_deleted_ >> i) & 0x1; }
+        inline bool IsDeleted (int i) { return (ver_.bitmap_deleted_ >> i) & 0x1; }
 
-        inline bool Full () { return __builtin_popcount (bitmap_ & BitMapMask) == 13; }
+        inline bool Full () { return __builtin_popcount (ver_.bitmap_ & BitMapMask) == 13; }
 
-        inline bool Occupy (int slot_index) { return bitmap_ & (1 << slot_index); }
+        inline bool Occupy (int slot_index) { return ver_.bitmap_ & (1 << slot_index); }
 
-        inline int OccupyCount () { return __builtin_popcount (bitmap_); }
+        inline int OccupyCount () { return __builtin_popcount (ver_.bitmap_); }
 
         inline static constexpr uint8_t StartSlotPos () { return 2; }
 
@@ -1126,8 +1126,8 @@ public:
             uint64_t H2s[4];
             memcpy (H2s, &meta_, 32);
             sprintf (buffer, "bitmap: 0b%s, deleted: 0b%s - H2: 0x%016lx%016lx%016lx%016lx",
-                     print_binary (bitmap_).c_str (), print_binary (bitmap_deleted_).c_str (),
-                     H2s[3], H2s[2], H2s[1], H2s[0]);
+                     print_binary (ver_.bitmap_).c_str (),
+                     print_binary (ver_.bitmap_deleted_).c_str (), H2s[3], H2s[2], H2s[1], H2s[0]);
             return buffer;
         }
 
@@ -1145,14 +1145,7 @@ public:
         }
 
         __m128i meta_;  // 16 byte integer vector for hash tags
-        union {
-            struct {
-                uint16_t bitmap_;          // 1: occupied, 0: empty
-                uint16_t bitmap_deleted_;  // 1: deleted
-                uint32_t seq_no_;          // increase after each write
-            };
-            uint64_t data_;
-        };
+        Version ver_;
 
     };  // end of class CellMeta256V2
 
@@ -1854,7 +1847,7 @@ public:
                 size_t end_b = start_b + bucket_count_ / rehash_thread;
                 size_t counts = 0;
                 for (size_t i = start_b; i < end_b; ++i) {
-                    counts += GC (i, thread_info);
+                    counts += MinorRehash (i, thread_info, true);
                 }
                 rehash_count.fetch_add (counts, std::memory_order_relaxed);
             });
@@ -1940,7 +1933,7 @@ public:
      * @param bi
      * @return size_t: amount of the rehashed iterms.
      */
-    size_t MinorRehash (int bi, ThreadInfo& thread_info) {
+    size_t MinorRehash (int bi, ThreadInfo& thread_info, bool isgc = false) {
         size_t count = 0;
         BucketMetaDram* bucket_meta = locateBucket (bi);
 
@@ -1950,7 +1943,7 @@ public:
         char* old_bucket_addr_pmem = bucket_meta->Address ();
         char* old_bucket_addr_dram = (char*)aligned_alloc (kCellSize, old_bucket_size);
         memmove (old_bucket_addr_dram, old_bucket_addr_pmem, old_bucket_size);
-        uint32_t new_cell_count = old_cell_count << 1;
+        uint32_t new_cell_count = isgc ? old_cell_count : old_cell_count << 1;
         uint32_t new_cell_count_mask = new_cell_count - 1;
         size_t new_bucket_size = new_cell_count * kCellSize;
         char* new_bucket_addr_dram = (char*)aligned_alloc (kCellSize, new_bucket_size);
@@ -2030,144 +2023,8 @@ public:
             *h2_tag_ptr = old_info.H2;
 
             // obtain and set bitmap
-            decltype (CellMeta::bitmap_)* bitmap =
-                (decltype (CellMeta::bitmap_)*)des_cell_addr_dram;
-            *bitmap = (*bitmap) | (1 << des_slot_info.slot_index);
-
-            // Step 3. to next old slot
-            ++iter;
-        }
-        //      c) set remaining slots' slot pointer to 0 (including the backup
-        //      slot)
-        for (uint32_t ci = 0; ci < new_cell_count; ++ci) {
-            char* des_cell_addr = new_bucket_addr_dram + (ci << kCellSizeLeftShift);
-            for (uint8_t si = slot_vec[ci]; si <= CellMeta::SlotMaxRange (); si++) {
-                HashSlot* des_slot = CellMeta::LocateSlot (des_cell_addr, si);
-                des_slot->entry = 0;
-                des_slot->H1 = 0;
-            }
-        }
-
-        // Step 3. Copy content to pmem space
-        memmove (new_bucket_addr_pmem, new_bucket_addr_dram, new_bucket_size);
-        TURBO_PMEM_CLFLUSH (new_bucket_addr_pmem, new_bucket_size);
-
-        // Step 4. Reset bucket meta in buckets_
-        bucket_meta->Reset (new_bucket_addr_pmem, new_cell_count);
-
-        // Step 5. commit the changed bucket meta to pmem meta. As long as this is
-        // not finished, if crash happens, turbo hash will reboot from the last
-        // state
-        buckets_pmem_[bi].Store (*bucket_meta);
-
-        // Step 6. Garbage collection for old_bucket
-        epoche_.markNodeForDeletion ([=] () { cell_allocator_.Release (old_bucket_addr_pmem); },
-                                     thread_info);
-
-        // TURBO_PMEM_DEBUG("Rehash bucket: " << bi <<
-        //      ", old cell count: " << old_cell_count <<
-        //      ", loadfactor: " << (double)count / ( old_cell_count *
-        //      (CellMeta::SlotCount() - 1) ) <<
-        //      ", new cell count: " << new_cell_count);
-
-        free (slot_vec);
-        free (new_bucket_addr_dram);
-        free (old_bucket_addr_dram);
-        return count;
-    }
-
-    size_t GC (int bi, ThreadInfo& thread_info) {
-        size_t count = 0;
-        BucketMetaDram* bucket_meta = locateBucket (bi);
-
-        // Step 1. Create new bucket and initialize its meta
-        uint32_t old_cell_count = bucket_meta->CellCount ();
-        size_t old_bucket_size = old_cell_count * kCellSize;
-        char* old_bucket_addr_pmem = bucket_meta->Address ();
-        char* old_bucket_addr_dram = (char*)aligned_alloc (kCellSize, old_bucket_size);
-        memmove (old_bucket_addr_dram, old_bucket_addr_pmem, old_bucket_size);
-        uint32_t new_cell_count = old_cell_count;
-        uint32_t new_cell_count_mask = new_cell_count - 1;
-        size_t new_bucket_size = new_cell_count * kCellSize;
-        char* new_bucket_addr_dram = (char*)aligned_alloc (kCellSize, new_bucket_size);
-        char* new_bucket_addr_pmem = cell_allocator_.Allocate (new_cell_count);
-
-        if (new_bucket_addr_dram == nullptr) {
-            perror ("rehash alloc dram fail\n");
-            exit (1);
-        }
-        if (new_bucket_addr_pmem == nullptr) {
-            perror ("rehash alloc pmem fail\n");
-            exit (1);
-        }
-        if (new_cell_count > kCellCountLimit) {
-            printf ("Cannot rehash.\n");
-            exit (1);
-        }
-
-        // Reset all cell's meta data
-        for (size_t i = 0; i < new_cell_count; ++i) {
-            char* des_cell_addr = new_bucket_addr_dram + (i << kCellSizeLeftShift);
-            memset (des_cell_addr, 0, CellMeta::size ());
-        }
-        // ----------------------------------------------------------------------------------
-        // iterator old bucket and insert slots info to new bucket
-        // old: |11111111|22222222|33333333|44444444|
-        //       ========>
-        // new: |1111    |22222   |333     |4444    |1111    |222     |33333   |4444
-        // |
-        // ----------------------------------------------------------------------------------
-
-        // Step 2. Move the meta in old bucket to new bucket
-        //      a) Record next avaliable slot position of each cell within new
-        //      bucket for rehash
-        uint8_t* slot_vec = (uint8_t*)malloc (new_cell_count);
-        memset (slot_vec, CellMeta::StartSlotPos (), new_cell_count);
-        BucketIterator iter (bi, old_bucket_addr_dram, old_cell_count);
-        //      b) Iterate every slot in this bucket
-        while (iter.valid ()) {
-            count++;
-            // Step 1. obtain old slot info and slot content
-            typename BucketIterator::InfoPair res = *iter;
-
-            // Step 2. update bitmap, H2, H1 and slot pointer in new bucket
-            //      a) find valid slot in new bucket
-            FindNextSlotInRehashResult des_slot_info =
-                findNextSlotInRehash (slot_vec, res.slot_info.H1, new_cell_count_mask);
-            //      b) obtain des cell addr
-            char* des_cell_addr_dram =
-                new_bucket_addr_dram + (des_slot_info.cell_index << kCellSizeLeftShift);
-            char* des_cell_addr_pmem =
-                new_bucket_addr_pmem + (des_slot_info.cell_index << kCellSizeLeftShift);
-            if (des_slot_info.slot_index >= CellMeta::SlotMaxRange ()) {
-                printf ("rehash fail: %s\n", res.slot_info.ToString ().c_str ());
-                TURBO_PMEM_ERROR ("Rehash fail: " << res.slot_info.ToString ());
-                printf ("%s\n", PrintBucketMeta (res.slot_info.bucket).c_str ());
-                exit (1);
-            }
-            //      c) move the old slot to new slot
-            const SlotInfo& old_info = res.slot_info;
-            HashSlot* old_slot_dram = res.hash_slot;
-            char* old_cell_addr_pmem = old_bucket_addr_pmem + (old_info.cell << kCellSizeLeftShift);
-            HashSlot* old_slot_pmem = CellMeta::LocateSlot (old_cell_addr_pmem, old_info.slot);
-
-            // move slot content, including H1 and pointer
-            HashSlot* des_slot_dram =
-                CellMeta::LocateSlot (des_cell_addr_dram, des_slot_info.slot_index);
-            HashSlot* des_slot_pmem =
-                CellMeta::LocateSlot (des_cell_addr_pmem, des_slot_info.slot_index);
-            PptrToDramPptr<Entry, is_key_flat && is_value_flat>::Convert (
-                des_slot_dram->entry, des_slot_pmem->entry, old_slot_dram, old_slot_pmem);
-            des_slot_dram->H1 = old_info.H1;
-
-            // locate H2 and set H2
-            H2Tag* h2_tag_ptr =
-                CellMeta::LocateH2Tag (des_cell_addr_dram, des_slot_info.slot_index);
-            *h2_tag_ptr = old_info.H2;
-
-            // obtain and set bitmap
-            decltype (CellMeta::bitmap_)* bitmap =
-                (decltype (CellMeta::bitmap_)*)des_cell_addr_dram;
+            decltype (CellMeta::Version::bitmap_)* bitmap =
+                (decltype (CellMeta::Version::bitmap_)*)des_cell_addr_dram;
             *bitmap = (*bitmap) | (1 << des_slot_info.slot_index);
 
             // Step 3. to next old slot
@@ -2561,16 +2418,21 @@ private:
             // Go to target cell
             auto offset = probe.offset ();
             char* cell_addr = locateCell (search_bucket_addr, offset);
-            CellMeta meta (cell_addr);
 
+        find_for_insert_retry:
+            CellMeta meta (cell_addr);
             for (int i : meta.MatchBitSet (h2_hash_vec)) {
                 // locate the slot reference
                 SlotType* slot = CellMeta::LocateSlot (cell_addr, i);
                 if TURBO_PMEM_LIKELY (slot->H1 == partial_hash.H1_) {
-                    // Obtain record pointer
                     if (SlotKeyEqual<Key, is_key_flat>{}(key, slot)) {
                         // This is an update request
                         util::BitSet backup_bitset = meta.BackupBitSet ();
+                        auto version = CellMeta::LoadVersion (cell_addr);
+                        auto old_version = meta.GetVersion ();
+                        if (old_version.seq_no_ + 1 < version.seq_no_) {
+                            goto find_for_insert_retry;
+                        }
                         return {{
                                     offset.first,     /* bucket */
                                     offset.second,    /* cell */
@@ -2600,7 +2462,12 @@ private:
                     cell_to_insert = offset.second;
                     slot_to_insert = *backup_bitset;
                 }
-                // return an empty slot for new insertion
+                auto version = CellMeta::LoadVersion (cell_addr);
+                auto old_version = meta.GetVersion ();
+                if (old_version.seq_no_ + 1 < version.seq_no_) {
+                    goto find_for_insert_retry;
+                }
+                // return an empty slot or deleted slot for new insertion
                 return {{
                             bucket_i,                 /* bucket */
                             (uint32_t)cell_to_insert, /* cell */
@@ -2711,8 +2578,8 @@ private:
                     BucketLockScope meta_lock (bucket_meta);
 
                     auto version = CellMeta::LoadVersion (cell_addr);
-
-                    if (!version.IsPosValid (i)) {
+                    auto old_version = meta.GetVersion ();
+                    if (old_version.seq_no_ + 1 < version.seq_no_) {
                         goto delete_retry;
                     }
 

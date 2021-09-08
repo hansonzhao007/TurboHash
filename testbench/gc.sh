@@ -1,3 +1,1 @@
-numactl -N 0 sudo ../release/hash_bench  --thread=40 --benchmarks=load,readall,readnon,readlat,readnonlat,delete,overwrite,readall,readnon,readlat,readnonlat,gc,readall,readnon,readlat,readnonlat --stats_interval=200000000 --read=10000000 --num=100000000 --bucket_count=131072 --cell_count=64 | tee gc.data
-
-numactl -N 0 sudo ../release/hash_bench  --thread=40 --benchmarks=load,readall,readnon,readlat,readnonlat,delete,overwrite,readall,readnon,readlat,readnonlat,gc,readall,readnon,readlat,readnonlat --stats_interval=200000000 --read=10000000 --num=100000000 --bucket_count=131072 --cell_count=64 | tee gc.data
+numactl -N 0 sudo ../release/hash_bench  --thread=40 --benchmarks=load,readall,readnon,readlat,readnonlat,delete,overwrite,readall,readnon,readlat,readnonlat,gc,readall,readnon,readlat,readnonlat --stats_interval=200000000 --read=10000000 --num=92000000 --bucket_count=131072 --cell_count=64 | tee gc.data
