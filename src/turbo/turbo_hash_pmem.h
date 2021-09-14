@@ -65,7 +65,7 @@
 
 #define TURBO_PMEM_LOG_SIZE ((96LU << 30))
 
-#define PIN_KEY_TO_THREAD
+// #define PIN_KEY_TO_THREAD
 
 // Linear probing setting
 static const int kTurboPmemMaxProbeLen = 15;
