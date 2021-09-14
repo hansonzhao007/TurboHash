@@ -61,6 +61,7 @@
 #include <vector>
 
 #include "turbo_epoche.h"
+// #define PIN_KEY_TO_THREAD
 
 // Linear probing setting
 static constexpr int kTurboCellCountLimit = 32768;
@@ -2130,16 +2131,30 @@ private:
         PartialHash partial_hash (key, hash_value);
     after_rehash:
         BucketMeta* bucket_meta = locateBucket (bucketIndex (partial_hash.bucket_hash_));
+
+#ifndef PIN_KEY_TO_THREAD
+        // Obtain the bucket lock
+        BucketLockScope meta_lock (bucket_meta);
+#else
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
         while (bucket_meta->IsRehashLocked ()) {
             TURBO_CPU_RELAX ();
         }
-        // Obtain the bucket lock
-        BucketLockScope meta_lock (bucket_meta);
+#endif
 
         FindSlotForInsertResult res = findSlotForInsert (key, partial_hash);
+
         // find a valid slot in target cell
         if (res.find) {
+#ifndef PIN_KEY_TO_THREAD
+            char* bucket_addr = bucket_meta->Address ();
+            char* cell_addr =
+                locateCell (bucket_addr, {res.target_slot.bucket, res.target_slot.cell});
+            insertToSlotAndGC (hash_value, key, value, cell_addr, res.target_slot, thread_info);
+            return true;
+#else
+            // Obtain the bucket lock
+            BucketLockScope meta_lock (bucket_meta);
             // it is possible after obtain the bucket lock,
             // the bucket already be rehashed. we need to compare the old address in
             // res with current one
@@ -2191,20 +2206,25 @@ private:
 
                 goto after_rehash;
             }
+#endif
         } else {
             // cannot find a valid slot for insertion, rehash current bucket
             // then retry
-
+#ifndef PIN_KEY_TO_THREAD
+            MinorRehash (res.target_slot.bucket, thread_info);
+#else
             // Obtain the Bucket rehash lock. Otherwise, other thread is already
             // rehashing.
             if (bucket_meta->TryRehashLock ()) {
+                // Obtain the bucket lock, so other thread will not insert during
+                // rehashing
+                BucketLockScope meta_lock (bucket_meta);
+
                 // minor rehash will change the address part of bucket_meta
                 MinorRehash (res.target_slot.bucket, thread_info);
                 bucket_meta->RehashUnlock ();
-            } else {
-                // While the other thread is rehashing, we can start from beginning
-                // TURBO_INFO ("Concurrent rehash happens.");
             }
+#endif
             goto after_rehash;
         }
 
@@ -2395,10 +2415,13 @@ private:
 
     after_rehash:
         BucketMeta* bucket_meta = locateBucket (bucket_i);
-        char* search_bucket_addr = bucket_meta->Address ();
+
+#ifdef PIN_KEY_TO_THREAD
         while (bucket_meta->IsRehashLocked ()) {
             TURBO_CPU_RELAX ();
         }
+#endif
+        char* search_bucket_addr = bucket_meta->Address ();
 
         ProbeWithinBucket probe (H1ToHash (partial_hash.H1_), bucket_meta->CellCountMask (),
                                  bucket_i);
