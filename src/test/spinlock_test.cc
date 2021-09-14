@@ -30,21 +30,21 @@ std::string print_binary (uint32_t bitmap) {
 const int kThreadNum = 16;
 int main () {
     unsigned* lock_value = (unsigned*)malloc (4);
-    for (int i = 0; i < 32; ++i) {
-        printf ("test and set bit: %d\n", i);
-        printf ("\tlock_value before: %09x\n", *lock_value);
-        char test_set_res = turbo::util::AtomicBitOps::BitTestAndSet (lock_value, i);
-        printf ("\tlock_value  after: %09x. test&set result: %d\n", *lock_value, test_set_res);
-        test_set_res = turbo::util::AtomicBitOps::BitTestAndSet (lock_value, i);
-        printf ("\tlock_value  after: %09x. test&set result: %d (retry)\n", *lock_value,
-                test_set_res);
-        char test_reset_res = turbo::util::AtomicBitOps::BitTestAndReset (lock_value, i);
-        printf ("\tlock_value  after: %09x. test&reset result: %d (reset)\n", *lock_value,
-                test_reset_res);
-        test_reset_res = turbo::util::AtomicBitOps::BitTestAndReset (lock_value, i);
-        printf ("\tlock_value  after: %09x. test&reset result: %d (retry)\n", *lock_value,
-                test_reset_res);
-    }
+    // for (int i = 0; i < 32; ++i) {
+    //     printf ("test and set bit: %d\n", i);
+    //     printf ("\tlock_value before: %09x\n", *lock_value);
+    //     char test_set_res = turbo::util::AtomicBitOps::BitTestAndSet (lock_value, i);
+    //     printf ("\tlock_value  after: %09x. test&set result: %d\n", *lock_value, test_set_res);
+    //     test_set_res = turbo::util::AtomicBitOps::BitTestAndSet (lock_value, i);
+    //     printf ("\tlock_value  after: %09x. test&set result: %d (retry)\n", *lock_value,
+    //             test_set_res);
+    //     char test_reset_res = turbo::util::AtomicBitOps::BitTestAndReset (lock_value, i);
+    //     printf ("\tlock_value  after: %09x. test&reset result: %d (reset)\n", *lock_value,
+    //             test_reset_res);
+    //     test_reset_res = turbo::util::AtomicBitOps::BitTestAndReset (lock_value, i);
+    //     printf ("\tlock_value  after: %09x. test&reset result: %d (retry)\n", *lock_value,
+    //             test_reset_res);
+    // }
 
     *lock_value = 0xFCFCDAC8;
     turbo::util::turbo_bit_spin_lock (lock_value, 0);

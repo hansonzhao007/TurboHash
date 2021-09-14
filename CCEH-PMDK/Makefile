@@ -6,7 +6,7 @@ CFLAGS := -I./ -lrt
 all: ycsb
 
 ycsb: src/ycsb_bench.cpp CCEH
-	$(CXX) $(CFLAGS) -o ycsb_bench src/ycsb_bench.cpp src/CCEH.o -lpmemobj -lpmem -lpthread -lgflags -ltbb -DMULTITHREAD
+	$(CXX) $(CFLAGS) -o ycsb_bench src/ycsb_bench.cpp src/CCEH_CoW.o -lpmemobj -lpmem -lpthread -lgflags -ltbb -DMULTITHREAD
 
 CCEH: src/CCEH.h src/CCEH.cpp
 	$(CXX) $(CFLAGS) -c -o src/CCEH.o src/CCEH.cpp -DINPLACE -lpmemobj -lpmem

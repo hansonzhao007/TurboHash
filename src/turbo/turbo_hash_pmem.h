@@ -65,6 +65,8 @@
 
 #define TURBO_PMEM_LOG_SIZE ((96LU << 30))
 
+#define PIN_KEY_TO_THREAD
+
 // Linear probing setting
 static const int kTurboPmemMaxProbeLen = 15;
 static const int kTurboPmemProbeStep = 1;
@@ -2285,18 +2287,33 @@ private:
                             ThreadInfo& thread_info) {
         // Obtain the partial hash
         PartialHash partial_hash (key, hash_value);
+
     after_rehash:
         BucketMetaDram* bucket_meta = locateBucket (bucketIndex (partial_hash.bucket_hash_));
+
+#ifndef PIN_KEY_TO_THREAD
+        // Obtain the bucket lock
+        BucketLockScope meta_lock (bucket_meta);
+#else
         // Check if the bucket is locked for rehashing. Wait entil is unlocked.
         while (bucket_meta->IsRehashLocked ()) {
             TURBO_PMEM_CPU_RELAX ();
         }
+#endif
+
         FindSlotForInsertResult res = findSlotForInsert (key, partial_hash);
+
         // find a valid slot in target cell
         if (res.find) {
+#ifndef PIN_KEY_TO_THREAD
+            char* bucket_addr = bucket_meta->Address ();
+            char* cell_addr =
+                locateCell (bucket_addr, {res.target_slot.bucket, res.target_slot.cell});
+            insertToSlotAndGC (hash_value, key, value, cell_addr, res.target_slot, thread_info);
+            return true;
+#else
             // Obtain the bucket lock
             BucketLockScope meta_lock (bucket_meta);
-
             // it is possible after obtain the bucket lock,
             // the bucket already be rehashed. we need to compare the old address in
             // res with current one
@@ -2353,10 +2370,13 @@ private:
                                  << ". Slot " << res.target_slot.slot << ". Key: " << key);
                 goto after_rehash;
             }
+#endif
         } else {
             // cannot find a valid slot for insertion, rehash current bucket
             // then retry
-
+#ifndef PIN_KEY_TO_THREAD
+            MinorRehash (res.target_slot.bucket, thread_info);
+#else
             // Obtain the Bucket rehash lock. Otherwise, other thread is already
             // rehashing.
             if (bucket_meta->TryRehashLock ()) {
@@ -2368,6 +2388,7 @@ private:
                 MinorRehash (res.target_slot.bucket, thread_info);
                 bucket_meta->RehashUnlock ();
             }
+#endif
             goto after_rehash;
         }
 
@@ -2557,10 +2578,13 @@ private:
 
     after_rehash:
         BucketMetaDram* bucket_meta = locateBucket (bucket_i);
-        char* search_bucket_addr = bucket_meta->Address ();
+
+#ifdef PIN_KEY_TO_THREAD
         while (bucket_meta->IsRehashLocked ()) {
             TURBO_PMEM_CPU_RELAX ();
         }
+#endif
+        char* search_bucket_addr = bucket_meta->Address ();
 
         ProbeWithinBucket probe (H1ToHash (partial_hash.H1_), bucket_meta->CellCountMask (),
                                  bucket_i);
