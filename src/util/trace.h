@@ -13,17 +13,6 @@ const uint64_t kRAND64_MAX = ((((uint64_t)RAND_MAX) << 31) + ((uint64_t)RAND_MAX
 const double kRAND64_MAX_D = ((double)(kRAND64_MAX));
 const uint64_t kRANDOM_RANGE = UINT64_C (2000000000000);
 
-const uint64_t kYCSB_SEED = 1729;
-const uint64_t kYCSB_LATEST_SEED = 1089;
-
-enum YCSBLoadType { kYCSB_A, kYCSB_B, kYCSB_C, kYCSB_D, kYCSB_E, kYCSB_F };
-enum YCSBOpType { kYCSB_Write, kYCSB_Read, kYCSB_Query, kYCSB_ReadModifyWrite };
-
-struct YCSB_Op {
-    YCSBOpType type;
-    uint64_t key;
-};
-
 class Trace {
 public:
     Trace (int seed) : seed_ (seed), init_ (seed), gi_ (nullptr) {
@@ -177,6 +166,112 @@ public:
     }
 };
 
+class TraceZipfian : public Trace {
+public:
+    explicit TraceZipfian (int seed, uint64_t minimum = 0,
+                           uint64_t maximum = UINT64_C (0xc0000000000))
+        : Trace (seed), range_ (maximum) {
+        gi_ = new GenInfo ();
+        struct GenInfo_Zipfian* const gz = &(gi_->gen.zipfian);
+
+        const uint64_t items = maximum - minimum + 1;
+        gz->nr_items = items;
+        gz->base = minimum;
+        gz->zipfian_constant = ZIPFIAN_CONSTANT;
+        gz->theta = ZIPFIAN_CONSTANT;
+        gz->zeta2theta = Zeta (2, ZIPFIAN_CONSTANT);
+        gz->alpha = 1.0 / (1.0 - ZIPFIAN_CONSTANT);
+        double zetan = Zeta (items, ZIPFIAN_CONSTANT);
+        gz->zetan = zetan;
+        gz->eta = (1.0 - std::pow (2.0 / (double)items, 1.0 - ZIPFIAN_CONSTANT)) /
+                  (1.0 - (gz->zeta2theta / zetan));
+        gz->countforzeta = items;
+        gz->min = minimum;
+        gz->max = maximum;
+
+        gi_->type = GEN_ZIPFIAN;
+    }
+    ~TraceZipfian () {}
+    uint64_t Next () override {
+        // ScrambledZipfian. scatters the "popular" items across the itemspace.
+        const uint64_t z = NextRaw ();
+        const uint64_t xz = gi_->gen.zipfian.min + (FNVHash64 (z) % gi_->gen.zipfian.nr_items);
+        return xz;
+    }
+    uint64_t NextRaw () {
+        // simplified: no increamental update
+        const GenInfo_Zipfian* gz = &(gi_->gen.zipfian);
+        const double u = RandomDouble ();
+        const double uz = u * gz->zetan;
+        if (uz < 1.0) {
+            return gz->base + 0lu;
+        } else if (uz < (1.0 + pow (0.5, gz->theta))) {
+            return gz->base + 1lu;
+        }
+        const double x = ((double)gz->nr_items) * pow (gz->eta * (u - 1.0) + 1.0, gz->alpha);
+        const uint64_t ret = gz->base + (uint64_t)x;
+        return ret;
+    }
+    double Zeta (const uint64_t n, const double theta) {
+        // assert(theta == zetalist_theta);
+        const uint64_t zlid0 = n / zetalist_step;
+        const uint64_t zlid = (zlid0 > zetalist_count) ? zetalist_count : zlid0;
+        const double sum0 = zetalist_double[zlid];
+        const uint64_t start = zlid * zetalist_step;
+        const uint64_t count = n - start;
+        assert (n > start);
+        const double sum1 = ZetaRange (start, count, theta);
+        return sum0 + sum1;
+    }
+    double ZetaRange (const uint64_t start, const uint64_t count, const double theta) {
+        double sum = 0.0;
+        if (count > 0x10000000) {
+            fprintf (stderr, "zeta_range would take a long time... kill me or wait\n");
+        }
+        for (uint64_t i = 0; i < count; i++) {
+            sum += (1.0 / pow ((double)(start + i + 1), theta));
+        }
+        return sum;
+    }
+    uint64_t FNVHash64 (const uint64_t value) {
+        uint64_t hashval = FNV_OFFSET_BASIS_64;
+        uint64_t val = value;
+        for (int i = 0; i < 8; i++) {
+            const uint64_t octet = val & 0x00ff;
+            val = val >> 8;
+            // FNV-1a
+            hashval = (hashval ^ octet) * FNV_PRIME_64;
+        }
+        return hashval;
+    }
+
+private:
+    uint64_t zetalist_u64[17] = {
+        0,
+        UINT64_C (0x4040437dd948c1d9),
+        UINT64_C (0x4040b8f8009bce85),
+        UINT64_C (0x4040fe1121e564d6),
+        UINT64_C (0x40412f435698cdf5),
+        UINT64_C (0x404155852507a510),
+        UINT64_C (0x404174d7818477a7),
+        UINT64_C (0x40418f5e593bd5a9),
+        UINT64_C (0x4041a6614fb930fd),
+        UINT64_C (0x4041bab40ad5ec98),
+        UINT64_C (0x4041cce73d363e24),
+        UINT64_C (0x4041dd6239ebabc3),
+        UINT64_C (0x4041ec715f5c47be),
+        UINT64_C (0x4041fa4eba083897),
+        UINT64_C (0x4042072772fe12bd),
+        UINT64_C (0x4042131f5e380b72),
+        UINT64_C (0x40421e53630da013),
+    };
+
+    double* zetalist_double = (double*)zetalist_u64;
+    uint64_t zetalist_step = UINT64_C (0x10000000000);
+    uint64_t zetalist_count = 16;
+    // double zetalist_theta = 0.99;
+    uint64_t range_;
+};
 }  // namespace util
    // hopman_fast
 

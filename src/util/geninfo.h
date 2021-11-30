@@ -70,7 +70,7 @@ struct GenInfo_HotSet {
     double hot_op_fraction;
 };
 
-#define ZIPFIAN_CONSTANT ((0.99))
+#define ZIPFIAN_CONSTANT ((0.95))
 struct GenInfo_Zipfian {
     uint64_t nr_items;
     uint64_t base;
