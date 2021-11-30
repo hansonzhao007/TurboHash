@@ -85,9 +85,9 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
 
 def PlotScalability():
     # Plot throughput
-    Plot("scalability_load.parse", "scalability_load.pdf", -8, "Write Throughput", "IOPS (Mops/s)")
-    Plot("scalability_read.parse", "scalability_read.pdf", -10, "Positive Read Throughput", "IOPS (Mops/s)")
-    Plot("scalability_readnon.parse", "scalability_readnon.pdf", -10, "Negative Read Throughput", "IOPS (Mops/s)")
+    Plot("scalability_load.parse", "scalability_load.pdf", -8, "Write Throughput", "Throughput (Mops/s)")
+    Plot("scalability_read.parse", "scalability_read.pdf", -10, "Positive Read Throughput", "Throughput (Mops/s)")
+    Plot("scalability_readnon.parse", "scalability_readnon.pdf", -10, "Negative Read Throughput", "Throughput (Mops/s)")
     
     # Plot IO
     Plot("scalability_load_io.parse", "scalability_load_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)

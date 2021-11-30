@@ -120,6 +120,63 @@ public:
     }
 };
 
+class TraceExponential : public Trace {
+public:
+#define FNV_OFFSET_BASIS_64 ((UINT64_C (0xCBF29CE484222325)))
+#define FNV_PRIME_64 ((UINT64_C (1099511628211)))
+    explicit TraceExponential (int seed, const double percentile = 50, double range = kRANDOM_RANGE)
+        : Trace (seed), range_ (range) {
+        range = range * 0.15;
+        gi_ = new GenInfo ();
+        gi_->gen.exponential.gamma = -log (1.0 - (percentile / 100.0)) / range;
+
+        gi_->type = GEN_EXPONENTIAL;
+    }
+    ~TraceExponential () {}
+    uint64_t Next () override {
+        uint64_t d = (uint64_t) (-log (RandomDouble ()) / gi_->gen.exponential.gamma) % range_;
+        return d;
+    }
+
+private:
+    uint64_t range_;
+};
+
+class TraceNormal : public Trace {
+public:
+    explicit TraceNormal (int seed, uint64_t minimum = 0, uint64_t maximum = kRANDOM_RANGE)
+        : Trace (seed) {
+        gi_ = new GenInfo ();
+        gi_->gen.normal.min = minimum;
+        gi_->gen.normal.max = maximum;
+        gi_->gen.normal.mean = (maximum + minimum) / 2;
+        gi_->gen.normal.stddev = (maximum - minimum) / 4;
+        gi_->type = GEN_NORMAL;
+    }
+    ~TraceNormal () {}
+    uint64_t Next () override {
+        double p;
+        double val = 0;
+        double random = 0;
+        do {
+            p = RandomDouble ();
+            if (p < 0.8) {
+                // F^-1(p) = - G^-1(p)
+                double t = sqrt (-2.0 * log (p));
+                random = -(t - ((0.010328 * t + 0.802853) * t + 2.515517) /
+                                   (((0.001308 * t + 0.189269) * t + 1.432788) * t + 1.0));
+            } else {
+                double t = sqrt (-2.0 * log (1 - p));
+                random = t - ((0.010328 * t + 0.802853) * t + 2.515517) /
+                                 (((0.001308 * t + 0.189269) * t + 1.432788) * t + 1.0);
+            }
+            val = (random + 5) * (gi_->gen.normal.max - gi_->gen.normal.min) / 10;
+        } while (val < gi_->gen.normal.min || val > gi_->gen.normal.max);
+
+        return val;
+    }
+};
+
 }  // namespace util
    // hopman_fast
 

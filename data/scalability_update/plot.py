@@ -90,7 +90,7 @@ def Plot(filename, outfile, padding, title, ylabel, divide=1):
 
 def PlotScalability():
     # Plot throughput
-    Plot("scalability_update", "scalability_update.pdf", -10, "Update Throughput", "IOPS (Mops/s)")
+    Plot("scalability_update", "scalability_update.pdf", -10, "Update Throughput", "Throughput (Mops/s)")
     
     # Plot IO
     Plot("scalability_update_io", "scalability_update_io.pdf", -4, "", "Pmem I/O (GB)", 1024.0)

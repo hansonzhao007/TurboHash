@@ -106,7 +106,7 @@ def PlotNormal(df, ax, filename):
     # add_value_labels(ax, 7, amplification1, 1)
     # draw legend
     ax.get_legend().remove()
-    ax.legend(legend_name, fontsize=14, loc='upper left', edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=4, bbox_to_anchor=(0, 1.2, 1, 0))
+    ax.legend(legend_name, fontsize=14, loc='upper left', edgecolor='k',facecolor='w', framealpha=0, mode="expand", ncol=4, bbox_to_anchor=(0, 1.24, 1, 0))
     ax.yaxis.grid(linewidth=0.5, dashes=[8,8], color='gray', alpha=0.5)
     ax.set_axisbelow(True)
     ax.set_ylabel('Normalized Throughput', fontsize=22)
@@ -123,7 +123,7 @@ def PlotNormalYCSB():
     data.index = hashtables
     data.columns = ['Load', 'A', 'B', 'C', 'D', 'F']
     # Plot positive
-    ax = plt.figure(figsize=(9, 4.5)).add_subplot(111)
+    ax = plt.figure(figsize=(9, 3.6)).add_subplot(111)
     df = data
     print(df)
     PlotNormal(df, ax, 'ycsb.pdf')

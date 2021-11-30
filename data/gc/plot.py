@@ -17,7 +17,7 @@ legend_name = ('Load', 'Overwrite', 'GC')
 def PlotLat():
     
     for i in hashtables:
-        fig, axes = plt.subplots(ncols=2, sharey=True, figsize=(4, 4))
+        fig, axes = plt.subplots(ncols=2, sharey=True, figsize=(4, 3))
 
         file_readlat = "readlat_" + str(i) + "_exist.parse"
         file_readnonlat = "readlat_" + str(i) + "_non.parse"
@@ -46,11 +46,11 @@ def PlotLat():
             horizontalalignment='center',
             verticalalignment='center',
             transform = ax.transAxes, fontsize=mysize)
-        ax.text(0.43, 0.89, " mid: " + '%.2f' % (df_data.iloc[0]['median'] / 1000.0),
+        ax.text(0.43, 0.85, " p50: " + '%.2f' % (df_data.iloc[0]['median'] / 1000.0),
             horizontalalignment='center',
             verticalalignment='center',
             transform = ax.transAxes, fontsize=mysize)
-        ax.text(0.43, 0.83, " p99: " + '%.2f' % (df_data.iloc[0]['p99'] / 1000.0),
+        ax.text(0.43, 0.75, " p99: " + '%.2f' % (df_data.iloc[0]['p99'] / 1000.0),
             horizontalalignment='center',
             verticalalignment='center',
             transform = ax.transAxes, fontsize=mysize)       
@@ -75,11 +75,11 @@ def PlotLat():
             horizontalalignment='center',
             verticalalignment='center',
             transform = ax2.transAxes, fontsize=mysize)
-        ax2.text(0.57, 0.89, " mid: " + '%.2f' % (df2_data.iloc[0]['median'] / 1000.0),
+        ax2.text(0.57, 0.85, " p50: " + '%.2f' % (df2_data.iloc[0]['median'] / 1000.0),
             horizontalalignment='center',
             verticalalignment='center',
             transform = ax2.transAxes, fontsize=mysize)
-        ax2.text(0.57, 0.83, " p99: " + '%.2f' % (df2_data.iloc[0]['p99'] / 1000.0),
+        ax2.text(0.57, 0.75, " p99: " + '%.2f' % (df2_data.iloc[0]['p99'] / 1000.0),
             horizontalalignment='center',
             verticalalignment='center',
             transform = ax2.transAxes, fontsize=mysize)
@@ -89,10 +89,10 @@ def PlotLat():
         axes[0].invert_xaxis()
         axes[0].yaxis.tick_right()
         fig.subplots_adjust(wspace=0.32)
-        plt.text(1.17, 0.98,'us',
+        plt.text(1.17, 0.93,'micro\nsecond',
             horizontalalignment='center',
             verticalalignment='center',
-            transform = ax.transAxes, fontsize=16)
+            transform = ax.transAxes, fontsize=8)
         
         fig.savefig('read_latency_' + i + '.pdf', bbox_inches='tight', pad_inches=0.05)
 

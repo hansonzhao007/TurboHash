@@ -184,7 +184,7 @@ def PlotIO(ax):
     ax.yaxis.grid(linewidth=0.5, dashes=[8,8], color='gray', alpha=0.5)
     ax.set_axisbelow(True)
     ax.set_ylabel('Pmem I/O (GB)', fontsize=23)
-    ax.set_xticklabels(['Insert', 'Positive\nSearch', 'Negative\nSearch'])
+    ax.set_xticklabels(['Insert', 'Positive\nRead', 'Negative\nRead'])
     ax.tick_params(axis='y', labelsize=19)
     plt.xticks(rotation=0)
     
@@ -199,7 +199,7 @@ def PlotNormalThroughput():
         data = data.append(df.iloc[0])
     
     data.index = hashtables
-    data.columns = ['Insert', 'Positive\nSearch', 'Negative\nSearch']
+    data.columns = ['Insert', 'Positive\nRead', 'Negative\nRead']
     # Plot 
     fig, (ax1, ax2) = plt.subplots(1,2,figsize=(15,6))
     df = data

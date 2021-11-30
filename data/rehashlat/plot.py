@@ -16,17 +16,17 @@ def PlotLat():
     print(df) 
    
     # Plot 
-    fig, ax = plt.subplots(figsize=(6, 2.5))
+    fig, ax = plt.subplots(figsize=(6, 2.2))
     df.plot(ax=ax, x='bucket_count', style=['|--', 'o-', '-.'], alpha=0.8, colormap='Spectral', fontsize=12, linewidth=3)
 
     ax.legend(
         ['Rehash Small Key', 'Rehash Large Key'],
         loc="upper left", 
-        fontsize=10, 
+        fontsize=12, 
         edgecolor='k',
         facecolor='white',
         )
-    ax.set_ylabel('Average Rehash Time (us)', fontsize=12, color='k')
+    ax.set_ylabel('Avg Rehash Time (us)', fontsize=12, color='k')
     ax.set_xlabel("Number of Buckets", fontsize=16)
     # ax.set_xscale('log')
     # ax.yaxis.grid(linewidth=1, linestyle='--')
