@@ -32,19 +32,19 @@ public:
         count_ = count;
         keys_.resize (count);
 
-        printf ("generate %lu keys exp distribution\n", count);
-        util::TraceExponential trace (123, 1, 4 * count);
+        printf ("generate %lu keys\n", count);
+        // util::TraceExponential trace (123, 1, 4 * count);
         auto starttime = std::chrono::system_clock::now ();
-        // tbb::parallel_for (tbb::blocked_range<uint64_t> (0, count),
-        //                    [&] (const tbb::blocked_range<uint64_t>& range) {
-        //                        for (uint64_t i = range.begin (); i != range.end (); i++) {
-        //                            //    uint64_t num = u64Rand (1LU, kRandNumMax);
-        //                            keys_[i] = i;
-        //                        }
-        //                    });
-        for (uint64_t i = 0; i < count; i++) {
-            keys_[i] = trace.Next ();
-        }
+        tbb::parallel_for (tbb::blocked_range<uint64_t> (0, count),
+                           [&] (const tbb::blocked_range<uint64_t>& range) {
+                               for (uint64_t i = range.begin (); i != range.end (); i++) {
+                                   //    uint64_t num = u64Rand (1LU, kRandNumMax);
+                                   keys_[i] = i;
+                               }
+                           });
+        // for (uint64_t i = 0; i < count; i++) {
+        //     keys_[i] = trace.Next ();
+        // }
         auto duration = std::chrono::duration_cast<std::chrono::microseconds> (
             std::chrono::system_clock::now () - starttime);
         printf ("generate duration %f s.\n", duration.count () / 1000000.0);
