@@ -18,7 +18,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-long-long -fPIC -march=native")
 set(CMAKE_ENABLE_COMPILE_COMMANDS "ON")
 
-if (${CMAKE_BUILD_TYPE} STREQUAL "Release")
+if (${CMAKE_BUILD_TYPE} MATCHES "Release")
   message("-- Release mode, all optimizations enabled")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG -Ofast")
 endif ()
@@ -43,7 +43,7 @@ ExternalProject_Add(PMDK
         )
 
 include_directories(${PMDK_PREFIX}/src/PMDK/src/include)
-if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+if (${CMAKE_BUILD_TYPE} MATCHES "Debug")
   link_directories(${PMDK_PREFIX}/src/PMDK/src/debug)
 else ()
   link_directories(${PMDK_PREFIX}/src/PMDK/src/nondebug)
