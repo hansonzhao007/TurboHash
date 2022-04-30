@@ -1911,10 +1911,7 @@ public:
     struct PptrToDramPptr<E, false> {
         static inline void Convert (E& des_entry_dram, E& des_entry_pmem, HashSlot* old_slot_dram,
                                     HashSlot* old_slot_pmem) {
-            E* old_slot_entry_addr = (E*)&old_slot_pmem->entry;
-            char* old_entry_addr = from_pptr_off (old_slot_dram->entry.off, old_slot_entry_addr);
-            uint64_t off = to_pptr_off (old_entry_addr, &des_entry_pmem);
-            des_entry_dram.off = off;
+            des_entry_dram = old_slot_dram->entry;
         }
     };
 
@@ -2004,11 +2001,8 @@ public:
             // move slot content, including H1 and pointer
             HashSlot* des_slot_dram =
                 CellMeta::LocateSlot (des_cell_addr_dram, des_slot_info.slot_index);
-            HashSlot* des_slot_pmem =
-                CellMeta::LocateSlot (des_cell_addr_pmem, des_slot_info.slot_index);
-            PptrToDramPptr<Entry, is_key_flat && is_value_flat>::Convert (
-                des_slot_dram->entry, des_slot_pmem->entry, old_slot_dram, old_slot_pmem);
             des_slot_dram->H1 = old_info.H1;
+            des_slot_dram->entry = old_slot_dram->entry;
 
             // locate H2 and set H2
             H2Tag* h2_tag_ptr =
@@ -2029,7 +2023,7 @@ public:
             char* des_cell_addr = new_bucket_addr_dram + (ci << kCellSizeLeftShift);
             for (uint8_t si = slot_vec[ci]; si <= CellMeta::SlotMaxRange (); si++) {
                 HashSlot* des_slot = CellMeta::LocateSlot (des_cell_addr, si);
-                des_slot->entry = 0;
+                des_slot->entry = 0LU;
                 des_slot->H1 = 0;
             }
         }

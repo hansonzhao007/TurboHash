@@ -60,6 +60,7 @@ private:
 
 public:
     pptr () : _raw (0) {}
+    pptr (uint64_t v) : _raw (v) {}
     pptr (uint16_t _pool_id, uint64_t _off) : pool_id (_pool_id), offset (_off) {}
     pptr (void* ptr) : _raw (reinterpret_cast<uint64_t> (ptr)) {}
 
