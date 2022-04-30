@@ -45,7 +45,7 @@ DEFINE_bool(hist, false, "");
 DEFINE_string(benchmarks, "load,readrandom", "");
 
 // #define TYPE_CCEH
-#define TYPE_CLEVEL
+// #define TYPE_CLEVEL
 // #define TYPE_LEVEL
 // #define TYPE_CLHT
 

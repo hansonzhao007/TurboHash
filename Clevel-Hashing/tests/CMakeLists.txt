@@ -362,8 +362,11 @@ if(PMEMVLT_PRESENT AND ENABLE_CONCURRENT_HASHMAP)
 	build_test(clevel_hash_ycsb clevel_hash/clevel_hash_ycsb.cpp)
 	add_test_generic(NAME clevel_hash_ycsb TRACERS none memcheck pmemcheck drd helgrind)
 
-	build_test(ycsb_bench ycsb_bench.cpp)
-	add_test_generic(NAME ycsb_bench TRACERS none memcheck pmemcheck drd helgrind)
+	build_test_with_bin_macro(ycsb_bench ycsb_bench_cceh30 TYPE_CCEH)
+
+	build_test_with_bin_macro(ycsb_bench ycsb_bench_clht30 TYPE_CLHT)
+
+	build_test_with_bin_macro(ycsb_bench ycsb_bench_clevel30 TYPE_CLEVEL)
 
 	build_test(clevel_hash_ycsb_macro clevel_hash/clevel_hash_ycsb_macro.cpp)
 	add_test_generic(NAME clevel_hash_ycsb_macro TRACERS none memcheck pmemcheck drd helgrind)

@@ -114,6 +114,36 @@ function(find_packages)
 	endif()
 endfunction()
 
+function(build_test_with_bin_macro src_file)	
+	get_filename_component(target_name "${src_file}" NAME_WE)
+	set (name ${ARGV1})       
+	
+	set(srcs "${src_file}")
+	prepend(srcs ${CMAKE_CURRENT_SOURCE_DIR} ${srcs})
+
+	add_cppstyle(tests-${name} ${srcs})
+	add_check_whitespace(tests-${name} ${srcs})
+
+	add_executable(${name} ${srcs})
+	target_link_libraries(${name} ${LIBPMEMOBJ_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} test_backtrace valgrind_internal gflags tbb)
+	foreach(macro_arg IN LISTS ARGN)
+      if (${macro_arg} MATCHES ${ARGV1} )        
+      else ()
+        target_compile_definitions("${name}" PRIVATE ${macro_arg}=1)   
+        # message(STATUS ">= 3 args. " ${ARGV1} " " ${macro_arg}) 
+      endif()
+    endforeach()
+	if(LIBUNWIND_FOUND)
+		target_link_libraries(${name} ${LIBUNWIND_LIBRARIES} ${CMAKE_DL_LIBS})
+	endif()
+	if(WIN32)
+		target_link_libraries(${name} dbghelp)
+	endif()
+	target_compile_definitions(${name} PRIVATE TESTS_LIBPMEMOBJ_VERSION=0x${LIBPMEMOBJ_VERSION_NUM})
+
+	add_dependencies(tests ${name})
+endfunction()
+
 function(build_test name)
 	# skip posix tests
 	if(${name} MATCHES "posix$" AND WIN32)

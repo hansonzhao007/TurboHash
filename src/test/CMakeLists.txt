@@ -5,6 +5,7 @@ db_exe(example)
 db_test(turbo_hash_test)
 
 db_exe(hash_bench)
+db_exe(hash_bench_pmdk)
 db_exe(hash_bench_30)
 db_exe(turbo_hash_test)
 db_exe(motivation)
