@@ -27,8 +27,8 @@ static bool RegistPool (uint16_t pool_id, const std::string& path, size_t size, 
     } else {
         pop = pmemobj_open (path.c_str (), layout);
         if (pop == nullptr) {
-            std::cerr << "Register error!"
-                      << "pooId: " << pool_id << " path : " << path << std::endl;
+            std::cerr << "Register error! "
+                      << "path : " << path << std::endl;
             return false;
         }
         printf ("open pool_id: %d, %s\n", pool_id, path.c_str ());
@@ -49,7 +49,7 @@ static bool UnRegistPool (uint16_t pool_id) {
 
 template <typename T>
 class pptr {
-private:
+public:
     union {
         struct {
             uint64_t offset : 48;
@@ -70,44 +70,31 @@ public:
         this->offset = oid.off;
     };
 
-    pptr (const pptr<T>& p) noexcept {  // copy constructor
-        this->_raw = p->_raw;
-    }
-
     template <class F>
     inline operator F* () const {  // cast to transient pointer
         void* base_addr = GetBaseAddr (pool_id);
-        return reinterpret_cast<F*> (base_addr + this->offset);
+        return reinterpret_cast<F*> ((char*)base_addr + this->offset);
     }
+
+    template <class F>
+    inline pptr& operator= (const F* v) {  // assignment
+        PMEMoid oid = pmemobj_oid (v);
+        this->pool_id = 0;  // turbo always set pool_id as 0
+        this->offset = oid.off;
+        return *this;
+    }
+
+    // explicit conversion
+    inline operator uint64_t () const { return _raw; }
 
     T* operator-> () {
         void* base_addr = GetBaseAddr (pool_id);
-        return reinterpret_cast<T*> (base_addr + this->offset);
+        return reinterpret_cast<T*> ((char*)base_addr + this->offset);
     }
 
     T* getVaddr () {
         if (this->offset == 0) return nullptr;
         return reinterpret_cast<T*> (_raw);
-    }
-};
-
-class TurboAllocator {
-private:
-public:
-    static bool alloc (uint16_t pool_id, size_t size, void** ptr, PMEMoid* oid) {
-        PMEMobjpool* pop = (PMEMobjpool*)GetBaseAddr (pool_id);
-        int ret = pmemobj_alloc (pop, oid, size, 0, NULL, NULL);
-        if (ret) {
-            // alloc erro
-            return false;
-        }
-        *ptr = reinterpret_cast<void*> (((unsigned long)pool_id) << 48 | oid->off);
-        return true;
-    }
-
-    static void free (void* addr) {
-        PMEMoid ptr = pmemobj_oid (addr);
-        pmemobj_free (&ptr);
     }
 };
 

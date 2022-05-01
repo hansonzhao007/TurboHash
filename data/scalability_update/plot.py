@@ -98,6 +98,17 @@ def PlotScalability():
     # Plot bw
     Plot("scalability_update_bw", "scalability_update_bw.pdf", -4, "", "Pmem Bandwidth (GB/s)", 1024.0)
 
+
+
+# combine read and write
+for name in ["update_io", "update_bw"]:
+    df0 = pd.read_csv("scalability_" + name + "_r.parse")
+    df0 = df0.set_index('thread')
+    df1 = pd.read_csv("scalability_" + name + "_w.parse")
+    df1 = df1.set_index('thread')
+    df2 = df0.add(df1, fill_value=0)
+    df2.to_csv("scalability_" + name + ".parse")
+
 PlotScalability()
 
 

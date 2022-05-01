@@ -190,13 +190,15 @@ public:
         if (outer_imc_write_addr) *outer_imc_write_addr = imc_write_size_MB;
         if (outer_media_read_addr) *outer_media_read_addr = media_read_size_MB;
         if (outer_media_write_addr) *outer_media_write_addr = media_write_size_MB;
+
+        printf (
+            "--------------------------------------------------------------------------------------"
+            "\n");
+        printf (
+            "DIMM  | Read from IMC | Write from IMC |   Read DIMM |   Write DIMM |     RA |     WA "
+            "|\n");
         for (int i = 0; i < dimm_num; i++) {
-            printf (
-                "DIMM%d | Read from IMC | Write from IMC |  Read DIMM  |  Write "
-                "DIMM  |   "
-                "RA   |   WA   |\n",
-                i);
-            printf ("  MB  | %13.2f | %14.2f | %11.2f | %12.2f | %6.2f | %6.2f |\n",
+            printf ("  %-2d  | %13.2f | %14.2f | %11.2f | %12.2f | %6.2f | %6.2f |\n", i,
                     TotalReadRequests_.at (i), TotalWriteRequests_.at (i), TotalMediaReads_.at (i),
                     TotalMediaWrites_.at (i), (TotalMediaReads_.at (i) / TotalReadRequests_.at (i)),
                     (TotalMediaWrites_.at (i) / TotalWriteRequests_.at (i)));
@@ -204,11 +206,18 @@ public:
 
         double seconds = duration.count () / 1000.0;
         printf (
-            "*SUM* | DIMM-R: %7.1f MB/s. User-R: %7.1f MB/s   | DIMM-W: %7.1f "
-            "MB/s, "
-            "User-W: %7.1f MB/s. Time: %6.2fs\n",
-            media_read_size_MB / seconds, imc_read_size_MB / seconds, media_write_size_MB / seconds,
-            imc_write_size_MB / seconds, seconds);
+            "--------------------------------------------------------------------------------------"
+            "\n");
+        printf (
+            " SUM:\n"
+            " DIMM-R: %7.1f MB/s, %7.1f MB\n"
+            " User-R: %7.1f MB/s, %7.1f MB\n"
+            " DIMM-W: %7.1f MB/s, %7.1f MB\n"
+            " User-W: %7.1f MB/s, %7.1f MB\n"
+            "   Time: %7.1f s\n",
+            media_read_size_MB / seconds, media_read_size_MB, imc_read_size_MB / seconds,
+            imc_read_size_MB, media_write_size_MB / seconds, media_write_size_MB,
+            imc_write_size_MB / seconds, imc_write_size_MB, seconds);
 
         delete start;
         delete end;

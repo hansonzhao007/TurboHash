@@ -103,6 +103,15 @@ def PlotScalability():
 
 
 
+# combine read and write
+for name in ["load_io", "read_io", "readnon_io", "load_bw", "read_bw", "readnon_bw"]:
+    df0 = pd.read_csv("scalability_" + name + "_r.parse")
+    df0 = df0.set_index('thread')
+    df1 = pd.read_csv("scalability_" + name + "_w.parse")
+    df1 = df1.set_index('thread')
+    df2 = df0.add(df1, fill_value=0)
+    df2.to_csv("scalability_" + name + ".parse")
+
 PlotScalability()
 
 

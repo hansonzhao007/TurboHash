@@ -40,7 +40,7 @@ DEFINE_string(filepath, "/mnt/pmem/dash.data", "");
 
 DEFINE_int32(segments, 64,
              "the initial number of segments in extendible hashing");
-DEFINE_uint32(batch, 1000000, "report batch");
+DEFINE_uint32(batch, 1000, "report batch");
 
 DEFINE_uint32(readtime, 0, "if 0, then we read all keys");
 DEFINE_uint32(thread, 1, "");

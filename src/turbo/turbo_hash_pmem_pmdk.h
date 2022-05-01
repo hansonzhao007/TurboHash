@@ -1236,7 +1236,7 @@ public:
             size_t size = cell_count * kCellSize;
             PMEMobjpool* pop = (PMEMobjpool*)baseAddr[0];
             PMEMoid oid;
-            int ret = pmemobj_alloc (pop, &oid, size, 0, NULL, NULL);
+            pmemobj_alloc (pop, &oid, size, 0, NULL, NULL);
             return static_cast<char*> (pmemobj_direct (oid));
         }
 
@@ -1254,7 +1254,7 @@ public:
         inline char* Allocate (size_t size) {
             PMEMobjpool* pop = (PMEMobjpool*)baseAddr[0];
             PMEMoid oid;
-            int ret = pmemobj_alloc (pop, &oid, size, 0, NULL, NULL);
+            pmemobj_alloc (pop, &oid, size, 0, NULL, NULL);
             return static_cast<char*> (pmemobj_direct (oid));
         }
 
@@ -1291,11 +1291,10 @@ public:
                            RecordAllocator& allocator) {
             HashSlot::H1 = key;
             HashSlot::entry = value;
-            FLUSH (this);
-            FLUSHFENCE;
         }
 
         inline char* ReleaseAddress () { return nullptr; }
+        void Reset () {}
 
         inline Key first (void) { return HashSlot::H1; }
 
@@ -1337,12 +1336,13 @@ public:
 
             HashSlot::H1 = key;
             HashSlot::entry = addr;
-            FLUSH (addr);
-            FLUSH (this);
-            FLUSHFENCE;
         }
 
         inline char* ReleaseAddress () { return HashSlot::entry; }
+        void Reset () {
+            HashSlot::H1 = 0;
+            HashSlot::entry = (char*)nullptr;
+        }
 
         inline Key first (void) { return HashSlot::H1; }
 
@@ -1385,12 +1385,13 @@ public:
 
             HashSlot::H1 = hash;
             HashSlot::entry = addr;
-            FLUSH (addr);
-            FLUSH (this);
-            FLUSHFENCE;
         }
 
         inline char* ReleaseAddress () { return HashSlot::entry; }
+        void Reset () {
+            HashSlot::H1 = 0;
+            HashSlot::entry = (char*)nullptr;
+        }
 
         inline Key first (void) {
             return DecodeInRecord2<false, true, true, Key, T>::Decode (HashSlot::entry);
@@ -1438,12 +1439,13 @@ public:
 
             HashSlot::H1 = hash;
             HashSlot::entry = addr;
-            FLUSH (addr);
-            FLUSH (this);
-            FLUSHFENCE;
         }
 
         inline char* ReleaseAddress () { return HashSlot::entry; }
+        void Reset () {
+            HashSlot::H1 = 0;
+            HashSlot::entry = (char*)nullptr;
+        }
 
         inline Key first (void) {
             return DecodeInRecord2<false, false, true, Key, T>::Decode (HashSlot::entry);
@@ -1760,7 +1762,10 @@ public:
         TurboRoot* turbo_root = nullptr;
         bool succ = RegistPool (0, "/mnt/pmem/turbohash", TURBO_PMEM_LOG_SIZE, (void**)&turbo_root,
                                 sizeof (TurboRoot));
-
+        if (!succ) {
+            printf ("Recover fail\n");
+            exit (1);
+        }
         // Step2. Obtain the bucket_count and buckets meta from pmem
         bucket_count_ = turbo_root->bucket_count_;
         bucket_mask_ = bucket_count_ - 1;
@@ -1984,8 +1989,7 @@ public:
             //      b) obtain des cell addr
             char* des_cell_addr_dram =
                 new_bucket_addr_dram + (des_slot_info.cell_index << kCellSizeLeftShift);
-            char* des_cell_addr_pmem =
-                new_bucket_addr_pmem + (des_slot_info.cell_index << kCellSizeLeftShift);
+
             if (des_slot_info.slot_index >= CellMeta::SlotMaxRange ()) {
                 printf ("rehash fail: %s\n", res.slot_info.ToString ().c_str ());
                 TURBO_PMEM_ERROR ("Rehash fail: " << res.slot_info.ToString ());
@@ -1995,8 +1999,6 @@ public:
             //      c) move the old slot to new slot
             const SlotInfo& old_info = res.slot_info;
             HashSlot* old_slot_dram = res.hash_slot;
-            char* old_cell_addr_pmem = old_bucket_addr_pmem + (old_info.cell << kCellSizeLeftShift);
-            HashSlot* old_slot_pmem = CellMeta::LocateSlot (old_cell_addr_pmem, old_info.slot);
 
             // move slot content, including H1 and pointer
             HashSlot* des_slot_dram =
@@ -2232,8 +2234,16 @@ private:
         H2Tag* h2_tag_ptr = CellMeta::LocateH2Tag (cell_addr, info.slot);
         *h2_tag_ptr = info.H2;
 
-        // store the key value to slot, contain sfence
-        slot->Store (hash_value, key, value, record_allocator_);
+        if (is_key_flat && is_value_flat) {
+            slot->Store (hash_value, key, value, record_allocator_);
+        } else {
+            PMEMobjpool* pop = (PMEMobjpool*)baseAddr[0];
+            TX_BEGIN (pop) {
+                // store the key value to slot, contain sfence
+                slot->Store (hash_value, key, value, record_allocator_);
+            }
+            TX_END;
+        }
 
         // obtain bitmap and set bitmap
         auto version = CellMeta::LoadVersion (cell_addr);
@@ -2261,7 +2271,6 @@ private:
 
         version.seq_no_++;
 
-        TURBO_PMEM_COMPILER_FENCE ();
         CellMeta::StoreVersion (cell_addr, version);
 
         FLUSH (cell_addr);
@@ -2359,21 +2368,25 @@ private:
         } else {
             // cannot find a valid slot for insertion, rehash current bucket
             // then retry
+            PMEMobjpool* pop = (PMEMobjpool*)baseAddr[0];
+            TX_BEGIN (pop) {
 #ifndef PIN_KEY_TO_THREAD
-            MinorRehash (res.target_slot.bucket, thread_info);
-#else
-            // Obtain the Bucket rehash lock. Otherwise, other thread is already
-            // rehashing.
-            if (bucket_meta->TryRehashLock ()) {
-                // Obtain the bucket lock, so other thread will not insert during
-                // rehashing
-                BucketLockScope meta_lock (bucket_meta);
-
-                // minor rehash will change the address part of bucket_meta
                 MinorRehash (res.target_slot.bucket, thread_info);
-                bucket_meta->RehashUnlock ();
-            }
+#else
+                // Obtain the Bucket rehash lock. Otherwise, other thread is already
+                // rehashing.
+                if (bucket_meta->TryRehashLock ()) {
+                    // Obtain the bucket lock, so other thread will not insert during
+                    // rehashing
+                    BucketLockScope meta_lock (bucket_meta);
+
+                    // minor rehash will change the address part of bucket_meta
+                    MinorRehash (res.target_slot.bucket, thread_info);
+                    bucket_meta->RehashUnlock ();
+                }
 #endif
+            }
+            TX_END;
             goto after_rehash;
         }
 
@@ -2598,6 +2611,7 @@ private:
                         // it is possible after obtain the bucket lock,
                         // the bucket has already been rehashed. we need to compare the old
                         // address
+
                         char* bucket_addr = bucket_meta->Address ();
                         if (bucket_addr != search_bucket_addr) {
                             goto after_rehash;
@@ -2615,6 +2629,7 @@ private:
                         CellMeta::StoreVersion (cell_addr, version);
                         FLUSH (cell_addr);
                         FLUSHFENCE;
+
                         return true;
                     }
                 }
