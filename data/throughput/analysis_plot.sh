@@ -7,29 +7,32 @@ for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
 do
     datafile="thread.${i}_16"
     outfile="io_${i}.parse"    
-    read_io=0.0
-    write_io=0.0
+    echo $outfile
 
     index=0
     echo "load_r,load_w,read_r,read_w,readnon_r,readnon_w" >> $outfile
-    while read line; do
-        if [ -n "$(echo $line | grep "Start IPMWatcher for")" ]; then   
-            if [[ $read_io != 0.0 ]]; then                
-                printf "$read_io,$write_io," >> $outfile
-            fi
-            read_io=0.0
-            write_io=0.0
-            index=$((index + 1))
-        fi
+    
+    # all data
+    raw=`grep "DIMM-R:" $datafile | awk '{print$4}'`        
+    echo $raw
+    arr=(${raw//:/ })    
+    load_r="${arr[0]}"
+    # readlat_r
+    read_r="${arr[1]}"
+    # readnonlat_r
+    readnon_r="${arr[2]}"  
 
-        if [ -n "$(echo $line | grep "MB |")" ]; then  
-            tmp_read=`echo $line | awk '{print $7}'`
-            tmp_write=`echo $line | awk '{print $9}'`
-            read_io=`echo $read_io + $tmp_read | bc`
-            write_io=`echo $write_io + $tmp_write | bc`
-        fi
-    done < $datafile
-    echo "$read_io,$write_io" >> $outfile
+    # all data
+    raw=`grep "DIMM-W:" $datafile | awk '{print$4}'`  
+    echo $raw      
+    arr=(${raw//:/ })
+    load_w="${arr[0]}"
+    # readlat_w
+    read_w="${arr[1]}"
+    # readnonlat_w
+    readnon_w="${arr[2]}"  
+
+    echo "$load_r,$load_w,$read_r,$read_w,$readnon_r,$readnon_w" >> $outfile
 done
 
 

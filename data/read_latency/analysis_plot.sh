@@ -70,29 +70,27 @@ do
     
     datafile="read_latency.${i}"
     outfile="readio_${i}.parse"    
-    read_io=0.0
-    write_io=0.0
-
-    index=0
+    
     echo "readlat_r,readlat_w,readnonlat_r,readnonlat_w" >> $outfile
-    while read line; do
-        if [ -n "$(echo $line | grep "Start IPMWatcher for")" ]; then   
-            if [[ $index > 2 ]]; then                
-                printf "$read_io,$write_io," >> $outfile
-            fi
-            read_io=0.0
-            write_io=0.0
-            index=$((index + 1))
-        fi
 
-        if [ -n "$(echo $line | grep "MB |")" ]; then  
-            tmp_read=`echo $line | awk '{print $7}'`
-            tmp_write=`echo $line | awk '{print $9}'`
-            read_io=`echo $read_io + $tmp_read | bc`
-            write_io=`echo $write_io + $tmp_write | bc`
-        fi
-    done < $datafile
-    echo "$read_io,$write_io" >> $outfile
+    # all data
+    raw=`grep "DIMM-R:" $datafile | awk '{print$2}'`        
+    arr=(${raw//:/ })
+    
+    # readlat_r
+    read_r="${arr[2]}"
+    # readnonlat_r
+    readnon_r="${arr[3]}"  
+
+    raw=`grep "DIMM-W:" $datafile | awk '{print$2}'`        
+    arr=(${raw//:/ })
+
+    # readlat_w
+    read_w="${arr[2]}"
+    # readnonlat_w
+    readnon_w="${arr[3]}"  
+
+    echo "$read_r,$read_w,$readnon_r,$readnon_w" >> $outfile
 done
 
 

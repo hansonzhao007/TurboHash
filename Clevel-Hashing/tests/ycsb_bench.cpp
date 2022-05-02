@@ -1027,6 +1027,7 @@ public:
 			for (; j < batch && key_iterator.Valid(); j++) {
 				auto &key = key_iterator.Next();
 				if (thread->ycsb_gen.NextA() == kYCSB_Write) {
+					key.back() = 'a';
 					Insert({key.data(), key.size()},
 					       {key.data(), key.size()},
 					       thread->tid);

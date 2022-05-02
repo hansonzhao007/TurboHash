@@ -950,6 +950,7 @@ public:
             for (; j < batch && key_iterator.Valid (); j++) {
                 auto& key = key_iterator.Next ();
                 if (thread->ycsb_gen.NextA () == kYCSB_Write) {
+                    key.back () = 'a';
                     hashtable_->Put (key, key, tinfo);
                     insert++;
                 } else {

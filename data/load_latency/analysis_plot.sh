@@ -6,25 +6,17 @@ rm *.parse
 # Parse the latency frequency
 for i in cceh cceh30 clevel30 clht30 turbo turbo30 dash
 do
-    index=0
     datafile="load_latency.${i}"
-    outfile="loadlat_${i}_$index.parse"
-    while read line; do
-        if [ -n "$(echo $line | grep "Nanoseconds per op")" ]; then          
-            index=$((index + 1))
-            if [[ $index == 1 ]]; then
-                outfile="loadlat_${i}_exist.parse"
-            else
-                outfile="loadlat_${i}_non.parse"
-            fi
-            echo "ns,frequency" >> $outfile
-        fi
+    outfile="loadlat_${i}.parse"
 
+    cat ${datafile} | grep -i -A 30 "loadlat      :" > "tmp.log"
+    # outfile=load_$datafile.parse
+    while read line; do
         if [[ $line = \(* ]]; then 
             tmp=`echo $line | awk '{print $3 "," $5}'`
             echo $tmp >> $outfile
-        fi
-    done < $datafile
+            fi
+    done < "tmp.log"
 done
 
 
@@ -70,28 +62,11 @@ do
     
     datafile="load_latency.${i}"
     outfile="loadio_${i}.parse"    
-    read_io=0.0
-    write_io=0.0
-
-    index=0
+  
     echo "loadlat_r,loadlat_w" >> $outfile
-    while read line; do
-        if [ -n "$(echo $line | grep "Start IPMWatcher for")" ]; then   
-            if [[ $index > 2 ]]; then                
-                printf "$read_io,$write_io," >> $outfile
-            fi
-            read_io=0.0
-            write_io=0.0
-            index=$((index + 1))
-        fi
-
-        if [ -n "$(echo $line | grep "MB |")" ]; then  
-            tmp_read=`echo $line | awk '{print $7}'`
-            tmp_write=`echo $line | awk '{print $9}'`
-            read_io=`echo $read_io + $tmp_read | bc`
-            write_io=`echo $write_io + $tmp_write | bc`
-        fi
-    done < $datafile
+    
+    read_io=`grep "DIMM-R" $datafile | awk '{print $4}'`
+    write_io=`grep "DIMM-W" $datafile | awk '{print $4}'`   
     echo "$read_io,$write_io" >> $outfile
 done
 

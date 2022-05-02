@@ -10,37 +10,25 @@ do
     oneline=""
     index=0
     echo "load,ycsbd,ycsba,ycsbb,ycsbc,ycsbf" >> $outfile
-    while read line; do
-        if [ -n "$(echo $line | grep "load ")" ]; then  
-            iops=`echo $line |  awk '{print $5}'`
-            oneline="$iops"
-        fi
 
-        if [ -n "$(echo $line | grep "ycsba ")" ]; then  
-            iops=`echo $line |  awk '{print $5}'`
-            oneline="$oneline,$iops"
-        fi
+    tmp=`grep "load " $datafile | awk '{print $5}'`
+    oneline="$oneline,$tmp"
 
-        if [ -n "$(echo $line | grep "ycsbb ")" ]; then  
-            iops=`echo $line |  awk '{print $5}'`
-            oneline="$oneline,$iops"
-        fi
+    tmp=`grep "ycsbd " $datafile | awk '{print $5}'`
+    oneline="$oneline,$tmp"
 
-        if [ -n "$(echo $line | grep "ycsbc ")" ]; then  
-            iops=`echo $line |  awk '{print $5}'`
-            oneline="$oneline,$iops"
-        fi
+    tmp=`grep "ycsba " $datafile | awk '{print $5}'`
+    oneline="$oneline,$tmp"
 
-        if [ -n "$(echo $line | grep "ycsbd ")" ]; then  
-            iops=`echo $line |  awk '{print $5}'`
-            oneline="$oneline,$iops"
-        fi
+    tmp=`grep "ycsbb " $datafile | awk '{print $5}'`
+    oneline="$oneline,$tmp"
 
-        if [ -n "$(echo $line | grep "ycsbf ")" ]; then  
-            iops=`echo $line |  awk '{print $5}'`
-            oneline="$oneline,$iops"
-        fi
-    done < $datafile
+    tmp=`grep "ycsbc " $datafile | awk '{print $5}'`
+    oneline="$oneline,$tmp"
+
+    tmp=`grep "ycsbf " $datafile | awk '{print $5}'`
+    oneline="$oneline,$tmp"
+
     echo "$oneline" >> $outfile
 done
 

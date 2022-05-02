@@ -80,7 +80,7 @@ def PlotNormal(df, ax, filename, rotation = 0, pick = 1, units="Mops/s", ytitle=
     normalized.plot(ax=ax, kind="bar", rot=0, color='White', width=0.85, edgecolor='k', linewidth=2, fontsize=23, alpha=1)
     # plot marker in bar
     bars = ax.patches
-    patterns =('//', ' ', '\\\\', '//', '..', 'xx', ' ')
+    patterns =('//', None , '\\\\', '//', '..', 'xx', None)
     patterns_color = list(colors.values())
     hatches_color = [p for p in patterns_color for i in range(len(normalized))]
     hatches = [p for p in patterns for i in range(len(normalized))]
@@ -139,7 +139,7 @@ def PlotIO(ax):
     normalizedT.plot(ax=ax, kind="bar", rot=0, color='White', width=0.85, edgecolor='k', linewidth=2, fontsize=23)
     # plot marker in bar
     bars = ax.patches
-    patterns =('//', ' ', '\\\\', '//', '..', 'xx', ' ')
+    patterns =('//', None , '\\\\', '//', '..', 'xx', None)
     patterns_color = list(colors.values())
     hatches_color = [p for p in patterns_color for i in range(len(normalizedT))]
     hatches = [p for p in patterns for i in range(len(normalizedT))]

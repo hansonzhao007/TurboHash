@@ -2,11 +2,19 @@
 
 rm *.parse
 
+# 
+csplit -k gc.data -f load --elide-empty-files '/Start IPMWatcher for delete/1' '{*}'
+csplit -k load01 -f deleteoverwrite --elide-empty-files '/Start IPMWatcher for gc/1' '{*}'
+
+mv load00 load.parse
+mv deleteoverwrite00 deleteoverwrite.parse
+mv deleteoverwrite01 gc.parse
+
 # Parse the latency frequency
 for i in load deleteoverwrite gc
 do
     index=0
-    datafile="${i}.data"
+    datafile="${i}.parse"
     outfile="readlat_${i}_$index.parse"
     while read line; do
         if [ -n "$(echo $line | grep "Nanoseconds per op")" ]; then          
@@ -32,7 +40,7 @@ done
 for i in load deleteoverwrite gc
 do
     index=0
-    datafile="${i}.data"
+    datafile="${i}.parse"
     outfile="readlat_${i}_$index.parse"
     while read line; do
         if [ -n "$(echo $line | grep "Nanoseconds per op")" ]; then          
@@ -63,3 +71,4 @@ do
     done < $datafile
 done
 
+python3 plot.py
