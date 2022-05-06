@@ -8,3 +8,5 @@ do
 done
 
 python3 probe.py
+
+rm *.parse

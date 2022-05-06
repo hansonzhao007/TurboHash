@@ -20,7 +20,7 @@ def PlotMiss(data, bw, r_w, latency, filename, islog):
     # Plot bar
     data[latency].plot.barh(ax=ax2, alpha=0.8, color=("white", "grey"), edgecolor='k', fontsize=14)
     bars = ax2.patches
-    hatches = ''.join(h*len(data) for h in " x")
+    hatches = ''.join(h*len(data) for h in "-x")
     for bar, hatch in zip(bars, hatches):
         bar.set_hatch(hatch)
     ax2.grid(axis='x', linestyle='-.', linewidth=0.5)
@@ -38,7 +38,7 @@ def PlotMiss(data, bw, r_w, latency, filename, islog):
     bw['seq_bandwidth'] = bw[seq_r] + bw[seq_w]
     bw[['rnd_bandwidth', 'seq_bandwidth']].plot.barh(ax=ax, alpha=0.8, color=("white", "grey"), edgecolor='k', fontsize=14)
     bars = ax.patches
-    hatches = ''.join(h*len(data) for h in " x")
+    hatches = ''.join(h*len(data) for h in "-x")
     for bar, hatch in zip(bars, hatches):
         bar.set_hatch(hatch)
     ax.grid(axis='x', linestyle='-.', linewidth=0.5)

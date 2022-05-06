@@ -84,3 +84,5 @@ do
 done
 
 python3 plot.py
+
+rm *.parse
