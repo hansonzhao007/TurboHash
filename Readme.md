@@ -31,8 +31,26 @@ install gflags to run test benchmark
 sudo apt install libgflags-dev g++-10 gcc-10
 sudo apt reinstall g++
 
-# compile the code
+# compile the all the code (TurboHash, CCEH, Clevel, CLHT, Dash)
 bash buildall.sh
+
+# configure performance mode
+sudo bash config_cpu_performance_mode.sh
 ```
+
+# Run benchmarks
+
+Go to folder `testbench`, and run the script start with `testbench_*.sh`
+
+For example:
+
+```
+cd testbench
+
+sudo bash testbench_scalability.sh
+
+```
+
+You may modify the number of threads in the scripts to match the CPU cores in your server.
 
 
