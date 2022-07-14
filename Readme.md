@@ -1,6 +1,6 @@
 # TurboHash
 
-A high performance concurrent hash table for pesistent memory. It uses Ralloc persistent memory allocator.
+A high performance concurrent hash table for pesistent memory.
 
 # Directory
 
